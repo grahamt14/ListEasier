@@ -19,7 +19,7 @@ function App() {
       //},
       //body: JSON.stringify(postData), // Convert object to JSON string
     })
-      //.then((response) => response.json()) // Parse the JSON response
+      .then((response) => response.json()) // Parse the JSON response
       .then((data) => {
         //setResponseData(data); // Set response data in state
         console.log(data);

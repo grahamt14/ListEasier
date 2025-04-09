@@ -4,7 +4,7 @@ import viteLogo from '/vite.svg'
 import './App.css'
 
 function App() {
-  
+    const [responseData, setResponseData] = useState(null);
     const handleClick = () => {
     // Data you want to send with the POST request
     const postData = {
@@ -21,7 +21,7 @@ function App() {
     })
       .then((response) => response.json()) // Parse the JSON response
       .then((data) => {
-        //setResponseData(data); // Set response data in state
+        setResponseData(data); // Set response data in state
         console.log(data);
       })
       .catch((error) => console.error("Error CALLING API:", error));
@@ -41,6 +41,7 @@ function App() {
         <button onClick={handleClick}>
           Generate Listing
         </button>
+		 {responseData && <pre>{JSON.stringify(responseData, null, 2)}</pre>}
 
 
       </div>

@@ -25,23 +25,17 @@ function App() {
 		,imageCount:{count}
 		};
 
-   const [filesBase64, setFilesBase64] = useState([]);
+ const [base64, setBase64] = useState('');
 
-  const handleFileChange = async (event) => {
-    const files = Array.from(event.target.files); // Convert FileList to array
-    const base64List = await Promise.all(
-      files.map(file => convertToBase64(file))
-    );
-    setFilesBase64(base64List);
-  };
-
-  const convertToBase64 = (file) => {
-    return new Promise((resolve, reject) => {
+  const handleFileChange = (e) => {
+    const file = e.target.files[0];
+    if (file) {
       const reader = new FileReader();
       reader.readAsDataURL(file);
-      reader.onload = () => resolve(reader.result);
-      reader.onerror = (err) => reject(err);
-    });
+      reader.onload = () => setBase64(reader.result);
+    }
+  };
+  
   };
   
 
@@ -53,6 +47,12 @@ function App() {
       </div>
 	  
       <div className="card">
+	      <div>
+      <input type="file" accept="image/*" onChange={handleFileChange} />
+      {base64 && <img src={base64} alt="Preview" style={{ width: 200 }} />}
+    </div>
+	  
+	  
 	      <div>
       <input type="file" multiple accept="image/*" onChange={handleFileChange} />
      <div

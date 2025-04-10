@@ -33,7 +33,7 @@ function App() {
   const handleFileChange = async (event) => {
     const files = Array.from(event.target.files); // Convert FileList to array
     const base64List = await Promise.all(
-      files.map(file => convertToBase64(file))
+      files.map(file => convertToBase64(file).split(',')[1])
     );
     setFilesBase64(base64List);
   };
@@ -64,12 +64,11 @@ function App() {
         ))}
       </div>
 	  
-	        <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', marginTop: '1rem' }}>
+	  <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', marginTop: '1rem' }}>
         {filesBase64.map((src, index) => (
           <p>{src.split(',')[1]}</p>
         ))}
       </div>
-	  
     </div>
 	
 <br></br>

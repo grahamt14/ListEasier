@@ -66,7 +66,7 @@ function App() {
 	  
 	  <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', marginTop: '1rem' }}>
         {filesBase64.map((src, index) => (
-          <p>{src.split(',')[1]}</p>
+          <p>{src}</p>
         ))}
       </div>
     </div>

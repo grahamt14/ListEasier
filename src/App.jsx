@@ -69,6 +69,8 @@ function App() {
           <p>{src}</p>
         ))}
       </div>
+	  
+	  <p>{filesBase64[0]}</p>
     </div>
 	
 <br></br>

@@ -49,8 +49,6 @@ function App() {
       <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', marginTop: '1rem' }}>
         {filesBase64.map((src, index) => (
           <img key={index} src={src} alt={`preview ${index}`} style={{ width: 100 }} />
-			  <p>{index}</p>
-			  <p>{src}</p>
         ))}
       </div>
     </div>

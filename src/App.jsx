@@ -23,19 +23,7 @@ function App() {
 		,imageCount:{count}
 		};
 
-    fetch("https://7f26uyyjs5.execute-api.us-east-2.amazonaws.com/ListEasily/ListEasilyAPI", {
-      method: "POST",
-      //headers: {
-        "Content-Type": "application/json", // Content-Type for JSON data
-      //},
-      body: JSON.stringify(postData), // Convert object to JSON string
-    })
-      .then((response) => response.json()) // Parse the JSON response
-      .then((data) => {
-        setResponseData(data); // Set response data in state
-        console.log(data);
-      })
-      .catch((error) => console.error("Error CALLING API:", error));
+ 
   };
 
   return (
@@ -48,11 +36,16 @@ function App() {
   <input onClick={handleClickUpload} type="file" name="fileToUpload" id="fileToUpload" />
 </div>
 <br></br>
+        <button onClick={handleClickUpload}>
+          Assign to State
+        </button>
 
         <button onClick={handleClick}>
           Generate Listing
         </button>
 		 {<pre>{JSON.stringify(responseData, null, 2)}</pre>}
+		 {<pre>{base64ImageArray}</pre>}
+		 {<pre>{count}</pre>}
 
 
       </div>

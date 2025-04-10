@@ -27,6 +27,26 @@ function App() {
 
  
   };
+  
+  const [base64, setBase64] = useState('');
+
+  const handleFileChange = (event) => {
+    const file = event.target.files[0];
+    if (file) {
+      convertToBase64(file)
+        .then((result) => setBase64(result))
+        .catch((err) => console.error(err));
+    }
+  };
+
+  const convertToBase64 = (file) => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.readAsDataURL(file); // this reads it as base64
+      reader.onload = () => resolve(reader.result);
+      reader.onerror = (error) => reject(error);
+    });
+  };
 
   return (
     <>
@@ -36,27 +56,17 @@ function App() {
       <div className="card">
 	 <div class="file-upload">
 		<input type="file" name="fileToUpload" id="fileToUpload" />
-		// Be aware! We are handling only the first <input type="file" /> element
-		<script>
-// To avoid errors, it should be placed before this piece of code
-var input = document.querySelector('input[type=file]');
-
-// You will receive the Base64 value every time a user selects a file from his device
-// As an example I selected a one-pixel red dot GIF file from my computer
-input.onchange = function () {
-  var file = input.files[0],
-    reader = new FileReader();
-
-  reader.onloadend = function () {
-    // Since it contains the Data URI, we should remove the prefix and keep only Base64 string
-    var b64 = reader.result.replace(/^data:.+;base64,/, '');
-    console.log(b64); //-> "R0lGODdhAQABAPAAAP8AAAAAACwAAAAAAQABAAACAkQBADs="
-  };
-
-  reader.readAsDataURL(file);
-};
-</script>
 	</div>
+	
+	<div>
+      <input type="file" onChange={handleFileChange} />
+      {base64 && (
+        <div>
+          <p>Base64 string:</p>
+          <textarea value={base64} readOnly rows={5} cols={50} />
+        </div>
+      )}
+    </div>
 <br></br>
         <button onClick={handleClickUpload}>
           Upload File(s)

@@ -12,6 +12,20 @@ function App() {
 		Base64Key: {base64ImageArray}
 		,imageCount:{count}
 		};
+		
+		   fetch("https://7f26uyyjs5.execute-api.us-east-2.amazonaws.com/ListEasily/ListEasilyAPI", {
+      method: "POST",
+      //headers: {
+        "Content-Type": "application/json", // Content-Type for JSON data
+      //},
+      body: JSON.stringify(postData), // Convert object to JSON string
+    })
+      .then((response) => response.json()) // Parse the JSON response
+      .then((data) => {
+        setResponseData(data); // Set response data in state
+        console.log(data);
+      })
+      .catch((error) => console.error("Error CALLING API:", error));
 	};
 
   const [filesBase64, setFilesBase64] = useState([]);
@@ -55,6 +69,8 @@ function App() {
           <p>{src.split(',')[1]}</p>
         ))}
       </div>
+	  <p>{filesBase64[0].split(',')[1]}</p>
+	  
     </div>
 	
 <br></br>

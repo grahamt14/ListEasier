@@ -51,6 +51,12 @@ function App() {
           <img key={index} src={src} alt={`preview ${index}`} style={{ width: 100 }} />
         ))}
       </div>
+	  
+	        <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', marginTop: '1rem' }}>
+        {filesBase64.map((src, index) => (
+          <p>{src}</p>
+        ))}
+      </div>
     </div>
 	
 <br></br>

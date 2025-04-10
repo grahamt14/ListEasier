@@ -36,6 +36,7 @@ function App() {
       convertToBase64(file)
         .then((result) => setBase64(result))
         .catch((err) => console.error(err));
+		setCount(count+1);
     }
   };
 
@@ -55,11 +56,10 @@ function App() {
       </div>
       <div className="card">
 	 <div class="file-upload">
-		<input type="file" name="fileToUpload" id="fileToUpload" />
 	</div>
 	
 	<div>
-      <input type="file" onChange={handleFileChange} />
+      <input type="file" onChange={handleFileChange} accept="image/png, image/webp, image/jpg, image/jpeg, image/gif" />
       {base64 && (
         <div>
           <p>Base64 string:</p>
@@ -76,7 +76,7 @@ function App() {
           Generate Listing
         </button>
 		 {<pre>{JSON.stringify(responseData, null, 2)}</pre>}
-		 {<pre>{base64ImageArray}</pre>}
+		 {<pre>{base64}</pre>}
 		 {<pre>{count}</pre>}
 
 

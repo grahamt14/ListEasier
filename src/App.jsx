@@ -28,13 +28,16 @@ function App() {
       .catch((error) => console.error("Error CALLING API:", error));
 	};
 
+  const [filesBase64Img, setFilesBase64Img] = useState([]);
   const [filesBase64, setFilesBase64] = useState([]);
 
   const handleFileChange = async (event) => {
     const files = Array.from(event.target.files); // Convert FileList to array
-    const base64List = await Promise.all(
+    const base64ListImg = await Promise.all(
       files.map(file => convertToBase64(file))
     );
+    setFilesBase64Img(base64ListImg);
+	const Base64List = base64ListImg.map(dataUrl => dataUrl.split(',')[1]);
     setFilesBase64(base64List);
   };
 
@@ -42,7 +45,7 @@ function App() {
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
       reader.readAsDataURL(file);
-      reader.onload = () => resolve(reader.result.split(',')[1]);
+      reader.onload = () => resolve(reader.result);
       reader.onerror = (err) => reject(err);
     });
   };
@@ -59,7 +62,7 @@ function App() {
     <div>
       <input type="file" multiple accept="image/*" onChange={handleFileChange} />
       <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', marginTop: '1rem' }}>
-        {filesBase64.map((src, index) => (
+        {filesBase64Img.map((src, index) => (
           <img key={index} src={src} alt={`preview ${index}`} style={{ width: 100 }} />
         ))}
       </div>

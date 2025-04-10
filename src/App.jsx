@@ -32,8 +32,6 @@ function App() {
       reader.onerror = (err) => reject(err);
     });
   };
-  
-  
 
 
   return (
@@ -54,7 +52,7 @@ function App() {
 	  
 	        <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', marginTop: '1rem' }}>
         {filesBase64.map((src, index) => (
-          <p>{src}</p>
+          <p>{src.split(',')[1]}</p>
         ))}
       </div>
     </div>

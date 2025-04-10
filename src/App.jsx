@@ -51,28 +51,21 @@ function App() {
       <div>
         <img src="src/assets/ListEasier.jpg" alt="ListEasier Image" class="logoCSS" />
       </div>
+	  
       <div className="card">
-	 <div class="file-upload">
-		 <input type="file" multiple accept="image/*" onChange={handleFileChange} />
-		  <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', marginTop: '1rem' }}>
-			{filesBase64.map((src, index) => (
-			  <img key={index} src={src} alt={`preview ${index}`} style={{ width: 100 }} />
-			))}
-		  </div>
-	</div>
+	      <div>
+      <input type="file" multiple accept="image/*" onChange={handleFileChange} />
+      <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', marginTop: '1rem' }}>
+        {filesBase64.map((src, index) => (
+          <img key={index} src={src} alt={`preview ${index}`} style={{ width: 100 }} />
+        ))}
+      </div>
+    </div>
 <br></br>
-        <button onClick={handleClickUpload}>
-          Upload File(s)
-        </button>
-
         <button onClick={handleClick}>
           Generate Listing
         </button>
 		 {<pre>{JSON.stringify(responseData, null, 2)}</pre>}
-		 {<pre>{base64}</pre>}
-		 {<pre>{count}</pre>}
-
-
       </div>
 
     </>

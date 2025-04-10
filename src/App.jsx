@@ -45,7 +45,7 @@ function App() {
         <button onClick={handleClick}>
           Generate Listing
         </button>
-		 {responseData && <pre>{JSON.stringify(responseData, null, 2)}</pre>}
+		 {count && responseData && <pre>{JSON.stringify(responseData, null, 2)}</pre>}
 
 
       </div>

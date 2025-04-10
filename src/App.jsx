@@ -19,13 +19,14 @@ function App() {
 	
 	
     const handleClick = () => {
-    // Data you want to send with the POST request
-	const postData = {
+		// Data you want to send with the POST request
+		const postData = {
 		Base64Key: {base64ImageArray}
 		,imageCount:{count}
 		};
+	};
 
-const [base64, setBase64] = useState('');
+  const [base64, setBase64] = useState('');
 
   const handleFileChange = (e) => {
     const file = e.target.files[0];
@@ -34,8 +35,8 @@ const [base64, setBase64] = useState('');
       reader.readAsDataURL(file);
       reader.onload = () => setBase64(reader.result);
     }
-  
   };
+  
   
 
 

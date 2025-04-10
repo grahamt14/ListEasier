@@ -33,7 +33,7 @@ function App() {
       </div>
       <div className="card">
 	  <div class="file-upload">
-  <input onClick={handleClickUpload} type="file" name="fileToUpload" id="fileToUpload" />
+  <input onchange={handleClickUpload} type="file" name="fileToUpload" id="fileToUpload" />
 </div>
 <br></br>
         <button onClick={handleClickUpload}>

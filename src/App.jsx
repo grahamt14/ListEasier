@@ -25,29 +25,26 @@ function App() {
 		,imageCount:{count}
 		};
 
- 
-  };
-  
-  const [base64, setBase64] = useState('');
+   const [filesBase64, setFilesBase64] = useState([]);
 
-  const handleFileChange = (event) => {
-    const file = event.target.files[0];
-    if (file) {
-      convertToBase64(file)
-        .then((result) => setBase64(result))
-        .catch((err) => console.error(err));
-		setCount(count+1);
-    }
+  const handleFileChange = async (event) => {
+    const files = Array.from(event.target.files); // Convert FileList to array
+    const base64List = await Promise.all(
+      files.map(file => convertToBase64(file))
+    );
+    setFilesBase64(base64List);
   };
 
   const convertToBase64 = (file) => {
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
-      reader.readAsDataURL(file); // this reads it as base64
+      reader.readAsDataURL(file);
       reader.onload = () => resolve(reader.result);
-      reader.onerror = (error) => reject(error);
+      reader.onerror = (err) => reject(err);
     });
   };
+  
+
 
   return (
     <>
@@ -56,17 +53,13 @@ function App() {
       </div>
       <div className="card">
 	 <div class="file-upload">
+		 <input type="file" multiple accept="image/*" onChange={handleFileChange} />
+		  <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', marginTop: '1rem' }}>
+			{filesBase64.map((src, index) => (
+			  <img key={index} src={src} alt={`preview ${index}`} style={{ width: 100 }} />
+			))}
+		  </div>
 	</div>
-	
-	<div>
-      <input type="file" onChange={handleFileChange} accept="image/png, image/webp, image/jpg, image/jpeg, image/gif" />
-      {base64 && (
-        <div>
-          <p>Base64 string:</p>
-          <textarea value={base64} readOnly rows={5} cols={50} />
-        </div>
-      )}
-    </div>
 <br></br>
         <button onClick={handleClickUpload}>
           Upload File(s)

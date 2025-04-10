@@ -10,10 +10,6 @@ function App() {
 	const [base64ImageArray, setbase64ImageArray] = useState(null);
 	
 	
-  
-    const handleClickUpload = () => {};
-	
-	
     const handleClick = () => {
     // Data you want to send with the POST request
 	const postData = {
@@ -34,7 +30,7 @@ function App() {
   <input type="file" name="fileToUpload" id="fileToUpload" />
 </div>
 <br></br>
-        <button onClick={handleClickUpload}>
+        <button>
           Assign to State
         </button>
 

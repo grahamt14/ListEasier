@@ -45,8 +45,6 @@ function App() {
           Generate Listing
         </button>
 		 {<pre>{JSON.stringify(responseData, null, 2)}</pre>}
-		 {<pre>{base64ImageArray}</pre>}
-		 {<pre>{count}</pre>}
 
 
       </div>

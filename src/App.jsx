@@ -26,15 +26,23 @@ function App() {
 		};
 	};
 
-  const [base64, setBase64] = useState('');
+  const [filesBase64, setFilesBase64] = useState([]);
 
-  const handleFileChange = (e) => {
-    const file = e.target.files[0];
-    if (file) {
+  const handleFileChange = async (event) => {
+    const files = Array.from(event.target.files); // Convert FileList to array
+    const base64List = await Promise.all(
+      files.map(file => convertToBase64(file))
+    );
+    setFilesBase64(base64List);
+  };
+
+  const convertToBase64 = (file) => {
+    return new Promise((resolve, reject) => {
       const reader = new FileReader();
       reader.readAsDataURL(file);
-      reader.onload = () => setBase64(reader.result);
-    }
+      reader.onload = () => resolve(reader.result);
+      reader.onerror = (err) => reject(err);
+    });
   };
   
   
@@ -48,9 +56,13 @@ function App() {
 	  
       <div className="card">
 	  
-	      <div>
-      <input type="file" accept="image/*" onChange={handleFileChange} />
-      {base64 && <img src={base64} alt="Preview" style={{ width: 200 }} />}
+    <div>
+      <input type="file" multiple accept="image/*" onChange={handleFileChange} />
+      <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', marginTop: '1rem' }}>
+        {filesBase64.map((src, index) => (
+          <img key={index} src={src} alt={`preview ${index}`} style={{ width: 100 }} />
+        ))}
+      </div>
     </div>
 	
 <br></br>

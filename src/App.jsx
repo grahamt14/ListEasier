@@ -69,8 +69,7 @@ function App() {
           <p>{src.split(',')[1]}</p>
         ))}
       </div>
-	  
-	  <p>{filesBase64[0].split(',')[1]}</p>
+	 
     </div>
 	
 <br></br>

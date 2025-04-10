@@ -33,7 +33,7 @@ function App() {
   const handleFileChange = async (event) => {
     const files = Array.from(event.target.files); // Convert FileList to array
     const base64List = await Promise.all(
-      files.map(file => convertToBase64(file).split(',')[1])
+      files.map(file => convertToBase64(file))
     );
     setFilesBase64(base64List);
   };
@@ -42,7 +42,7 @@ function App() {
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
       reader.readAsDataURL(file);
-      reader.onload = () => resolve(reader.result);
+      reader.onload = () => resolve(reader.result.split(',')[1]);
       reader.onerror = (err) => reject(err);
     });
   };

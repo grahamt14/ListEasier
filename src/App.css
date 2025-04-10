@@ -30,6 +30,7 @@
 .logoCSS {
   width: 25%;
   height: 25%;
+  border-radius: 10px;
   object-fit: cover; /* Ensures the image covers the whole screen without stretching */
 }
 

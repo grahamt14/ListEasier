@@ -37,6 +37,7 @@ function App() {
 	 <div class="file-upload">
 		<input type="file" name="fileToUpload" id="fileToUpload" />
 		// Be aware! We are handling only the first <input type="file" /> element
+		<script>
 // To avoid errors, it should be placed before this piece of code
 var input = document.querySelector('input[type=file]');
 
@@ -54,6 +55,7 @@ input.onchange = function () {
 
   reader.readAsDataURL(file);
 };
+</script>
 	</div>
 <br></br>
         <button onClick={handleClickUpload}>

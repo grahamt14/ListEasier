@@ -25,24 +25,15 @@ function App() {
 		,imageCount:{count}
 		};
 
-  const [base64, setBase64] = useState('');
+const [base64, setBase64] = useState('');
 
-  const handleFileChange = (event) => {
-    const file = event.target.files[0];
+  const handleFileChange = (e) => {
+    const file = e.target.files[0];
     if (file) {
-      convertToBase64(file)
-        .then((result) => setBase64(result))
-        .catch((err) => console.error(err));
-    }
-  };
-
-  const convertToBase64 = (file) => {
-    return new Promise((resolve, reject) => {
       const reader = new FileReader();
-      reader.readAsDataURL(file); // this reads it as base64
-      reader.onload = () => resolve(reader.result);
-      reader.onerror = (error) => reject(error);
-    });
+      reader.readAsDataURL(file);
+      reader.onload = () => setBase64(reader.result);
+    }
   
   };
   
@@ -57,25 +48,10 @@ function App() {
       <div className="card">
 	  
 	      <div>
-      <input type="file" multiple accept="image/*" onChange={handleFileChange} />
-     <div
-  style={{
-    display: 'flex',
-    gap: '1rem',
-    flexWrap: 'wrap',
-    marginTop: '1rem',
-  }}
->
-  {filesBase64.map((src, index) => (
-    <img
-      key={index}
-      src={src}
-      alt={`preview ${index}`}
-      style={{ width: 100 }}
-    />
-  ))}
-</div>
+      <input type="file" accept="image/*" onChange={handleFileChange} />
+      {base64 && <img src={base64} alt="Preview" style={{ width: 200 }} />}
     </div>
+	
 <br></br>
         <button onClick={handleClick}>
           Generate Listing

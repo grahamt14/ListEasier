@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import reactLogo from './assets/react.svg'
 import viteLogo from '/vite.svg'
+import logo from './src/assets/ListEasier.jpg';
 import './App.css'
 
 function App() {
@@ -29,7 +30,7 @@ function App() {
   return (
     <>
       <div>
-        <img src="src/assets/ListEasier.jpg" alt="ListEasier Image" class="logoCSS" />
+		<img src={logo} alt="ListEasier Image" class="logoCSS" />
       </div>
       <div className="card">
 	  <div class="file-upload">

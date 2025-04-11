@@ -42,6 +42,40 @@ function App() {
     );
     setFilesBase64(base64List);
   };
+  
+  const Dropdowns = () => {
+  // Data representing the categories and their associated subcategories
+  const data = {
+    "Movies & TV": [
+      "Other Formats", "VHS Tapes", "UMDs", "Laserdiscs", "DVDs & Blu-ray Discs"
+    ],
+    "Books & Magazines": [
+      "Textbooks", "Magazines", "Catalogs", "Books"
+    ],
+    "Photographic Images": [
+      "Stereoviews & Stereoscopes", "Photographs", "Negatives", "Magic Lantern Slides", "Film Slides"
+    ],
+    "Music": [
+      "Other Formats", "Vinyl Records", "CDs", "Cassettes"
+    ],
+    "Video Games": [
+      "None"
+    ],
+    "Postcards": [
+      "Non-Topographical Postcards", "Topographical Postcards"
+    ]
+  };
+
+  // Set initial state for selected category and its related subcategories
+  const [selectedCategory, setSelectedCategory] = useState("Movies & TV");
+  const [subcategories, setSubcategories] = useState(data[selectedCategory]);
+
+  // Handle category change
+  const handleCategoryChange = (e) => {
+    const category = e.target.value;
+    setSelectedCategory(category);
+    setSubcategories(data[category]);  // Update subcategories based on selected category
+  };
 
   const convertToBase64 = (file) => {
     return new Promise((resolve, reject) => {
@@ -70,7 +104,29 @@ function App() {
 
 	  
     <div>
+		<div>
+      {/* First dropdown for categories */}
+      <select onChange={handleCategoryChange} value={selectedCategory}>
+        {Object.keys(data).map((category) => (
+          <option key={category} value={category}>
+            {category}
+          </option>
+        ))}
+      </select>
+
+      {/* Second dropdown for subcategories */}
+      <select>
+        {subcategories.map((subcategory, index) => (
+          <option key={index} value={subcategory}>
+            {subcategory}
+          </option>
+        ))}
+      </select>
+    </div>
       <input type="file" multiple accept="image/*" onChange={handleFileChange} />
+        <button onClick={handleClick}>
+          Generate Listing
+        </button>
       <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', marginTop: '1rem' }}>
         {filesBase64.map((src, index) => (
           <img key={index} src={src} alt={`preview ${index}`} style={{ width: 200 }} />
@@ -80,9 +136,6 @@ function App() {
     </div>
 	
 <br></br>
-        <button onClick={handleClick}>
-          Generate Listing
-        </button>
 		 {<pre>{JSON.stringify(responseData, null, 2)}</pre>}
       </div>
 

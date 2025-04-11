@@ -29,6 +29,14 @@ function App() {
     setsubCategory(data[category]);
     setCategory(category); // optional: sets for POST data
   };
+  
+  useEffect(() => {
+  const category = "Postcards"; // or whatever default you want
+ setSelectedCategory(category);
+    setSubcategories(data[category]);
+    setsubCategory(data[category]);
+    setCategory(category); // optional: sets for POST data
+}, []);
 
   const handleSubCategoryChange = (e) => {
     const subCategory = e.target.value;

@@ -50,9 +50,8 @@ function App() {
       reader.onload = () => resolve(reader.result);
       reader.onerror = (err) => reject(err);
     });
-  };
-  
-const Dropdowns = () => {
+	
+	const Dropdowns = () => {
   // Data representing the categories and their associated subcategories
   const data = {
     "Movies & TV": [
@@ -85,6 +84,12 @@ const Dropdowns = () => {
     setSelectedCategory(category);
     setSubcategories(data[category]);  // Update subcategories based on selected category
   };
+	
+	
+	
+  };
+  
+
 
   return (
     <>

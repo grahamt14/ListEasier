@@ -52,12 +52,6 @@ function App() {
     });
   };
   
-  const [selectedOption, setSelectedOption] = useState('');
-
-  const handleChange = (event) => {
-    setSelectedOption(event.target.value);
-  };
-  
 const Dropdowns = () => {
   // Data representing the categories and their associated subcategories
   const data = {

@@ -47,6 +47,42 @@ function App() {
       reader.onerror = (err) => reject(err);
     });
   };
+  
+  const [selectedOption, setSelectedOption] = useState('');
+
+  const handleChange = (event) => {
+    setSelectedOption(event.target.value);
+  };
+  
+  const Dropdown = () => {
+    const [options, setOptions] = useState([]); // This will store the data for the dropdown
+    const [loading, setLoading] = useState(true); // For loading state
+    const [error, setError] = useState(null); // For error state
+
+    useEffect(() => {
+        // Fetch data from your backend (e.g., API Gateway or Lambda function)
+        const fetchData = async () => {
+            try {
+                const response = await fetch('/your-api-endpoint'); // Replace with your API URL
+                const data = await response.json();
+                setOptions(data); // Set the fetched data to options
+                setLoading(false); // Set loading to false when data is fetched
+            } catch (error) {
+                setError(error);
+                setLoading(false);
+            }
+        };
+
+        fetchData();
+    }, []); // Empty dependency array means this runs once when the component mounts
+
+    if (loading) {
+        return <div>Loading...</div>;
+    }
+
+    if (error) {
+        return <div>Error: {error.message}</div>;
+    }
 
 
   return (
@@ -56,6 +92,14 @@ function App() {
       </div>
 	  
       <div className="card">
+	  
+	  <select>
+            {options.map((option, index) => (
+                <option key={index} value={option.id}> {/* Assume `id` is the unique key */}
+                    {option.name} {/* Assume `name` is the display value */}
+                </option>
+            ))}
+        </select>
 	  
     <div>
       <input type="file" multiple accept="image/*" onChange={handleFileChange} />

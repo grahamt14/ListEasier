@@ -11,6 +11,7 @@ function App() {
 
   // Data representing the categories and their associated subcategories
   const data = {
+    "--": ["--"],
     "Movies & TV": ["Other Formats", "VHS Tapes", "UMDs", "Laserdiscs", "DVDs & Blu-ray Discs"],
     "Books & Magazines": ["Textbooks", "Magazines", "Catalogs", "Books"],
     "Photographic Images": ["Stereoviews & Stereoscopes", "Photographs", "Negatives", "Magic Lantern Slides", "Film Slides"],
@@ -19,8 +20,8 @@ function App() {
     "Postcards": ["Non-Topographical Postcards", "Topographical Postcards"]
   };
 
-  const [selectedCategory, setSelectedCategory] = useState("Postcards");
-  const [subcategories, setSubcategories] = useState(data["Postcards"]);
+  const [selectedCategory, setSelectedCategory] = useState("--");
+  const [subcategories, setSubcategories] = useState(data["--"]);
 
   const handleCategoryChange = (e) => {
     const category = e.target.value;
@@ -29,14 +30,6 @@ function App() {
     setsubCategory(data[category]);
     setCategory(category); // optional: sets for POST data
   };
-  
-  useEffect(() => {
-  const category = "Postcards"; // or whatever default you want
- setSelectedCategory(category);
-    setSubcategories(data[category]);
-    setsubCategory(data[category]);
-    setCategory(category); // optional: sets for POST data
-}, []);
 
   const handleSubCategoryChange = (e) => {
     const subCategory = e.target.value;

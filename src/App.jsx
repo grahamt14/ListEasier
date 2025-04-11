@@ -103,26 +103,7 @@ function App() {
 	  
 
 	  
-    <div>
-		<div>
-      {/* First dropdown for categories */}
-      <select onChange={handleCategoryChange} value={selectedCategory}>
-        {Object.keys(data).map((category) => (
-          <option key={category} value={category}>
-            {category}
-          </option>
-        ))}
-      </select>
 
-      {/* Second dropdown for subcategories */}
-      <select>
-        {subcategories.map((subcategory, index) => (
-          <option key={index} value={subcategory}>
-            {subcategory}
-          </option>
-        ))}
-      </select>
-    </div>
       <input type="file" multiple accept="image/*" onChange={handleFileChange} />
         <button onClick={handleClick}>
           Generate Listing

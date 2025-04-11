@@ -19,8 +19,8 @@ function App() {
     "Postcards": ["Non-Topographical Postcards", "Topographical Postcards"]
   };
 
-  const [selectedCategory, setSelectedCategory] = useState("Movies & TV");
-  const [subcategories, setSubcategories] = useState(data["Movies & TV"]);
+  const [selectedCategory, setSelectedCategory] = useState("Postcards");
+  const [subcategories, setSubcategories] = useState(data["Postcards"]);
 
   const handleCategoryChange = (e) => {
     const category = e.target.value;

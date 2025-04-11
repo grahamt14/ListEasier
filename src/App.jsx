@@ -56,8 +56,8 @@ function App() {
     const postData = {
       Base64Key: { filesBase64 },
       imageCount: { count },
-      category: { category },
-      subCategory: { subCategory }
+      category: { selectedCategory },
+      subCategory: { subcategories }
     };
 
     fetch("https://7f26uyyjs5.execute-api.us-east-2.amazonaws.com/ListEasily/ListEasilyAPI", {

@@ -26,6 +26,7 @@ function App() {
     const category = e.target.value;
     setSelectedCategory(category);
     setSubcategories(data[category]);
+    setsubCategory(data[category]);
     setCategory(category); // optional: sets for POST data
   };
 

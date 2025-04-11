@@ -42,7 +42,6 @@ function App() {
     );
     setFilesBase64(base64List);
   };
-  
 
   const convertToBase64 = (file) => {
     return new Promise((resolve, reject) => {
@@ -70,8 +69,9 @@ function App() {
 	  
 
 	  
-
+    <div>
       <input type="file" multiple accept="image/*" onChange={handleFileChange} />
+	  
         <button onClick={handleClick}>
           Generate Listing
         </button>

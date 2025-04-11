@@ -29,6 +29,7 @@ function App() {
 
   const handleSubCategoryChange = (e) => {
     const subCategory = e.target.value;
+	
     setSubcategories(e.target.value);
   };
 

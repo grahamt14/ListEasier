@@ -100,25 +100,7 @@ const Dropdowns = () => {
 	  
       <div className="card">
 	  
-<div>
-      {/* First dropdown for categories */}
-      <select onChange={handleCategoryChange} value={selectedCategory}>
-        {Object.keys(data).map((category) => (
-          <option key={category} value={category}>
-            {category}
-          </option>
-        ))}
-      </select>
 
-      {/* Second dropdown for subcategories */}
-      <select>
-        {subcategories.map((subcategory, index) => (
-          <option key={index} value={subcategory}>
-            {subcategory}
-          </option>
-        ))}
-      </select>
-    </div>
 	  
     <div>
       <input type="file" multiple accept="image/*" onChange={handleFileChange} />

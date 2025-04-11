@@ -43,12 +43,6 @@
   transition: transform 0.3s ease, box-shadow 0.3s ease;
 }
 
-.logoCSS:hover {
-  /* Pop out more on hover */
-  transform: perspective(1000px) rotateX(0deg) rotateY(0deg) scale(1.05);
-  box-shadow: 0 15px 35px rgba(0, 0, 0, 0.5);
-}
-
 .centered-container {
   display: flex;
   flex-direction: column;
@@ -60,7 +54,7 @@
 }
 
 .card {
-  background-color: #26aae1;
+  background-color: #242424;
   padding: 2rem;
   border-radius: 12px;
   box-shadow: 0 0 12px rgba(0, 0, 0, 0.1);

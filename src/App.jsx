@@ -30,6 +30,7 @@ function App() {
   };
 
   const handleSubCategoryChange = (e) => {
+    const subCategory = e.target.value;
     setsubCategory(e.target.value);
   };
 

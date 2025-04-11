@@ -34,6 +34,26 @@
   object-fit: cover; /* Ensures the image covers the whole screen without stretching */
 }
 
+.centered-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem;
+  min-height: 100vh;
+  text-align: center;
+}
+
+.card {
+  background-color: #ffffff;
+  padding: 2rem;
+  border-radius: 12px;
+  box-shadow: 0 0 12px rgba(0, 0, 0, 0.1);
+  max-width: 600px;
+  width: 100%;
+}
+
+
 
 @media (prefers-reduced-motion: no-preference) {
   a:nth-of-type(2) .logo {

@@ -6,6 +6,8 @@ import './App.css';
 function App() {
   const [responseData, setResponseData] = useState(null);
   const [filesBase64, setFilesBase64] = useState([]);
+  const [category, setCategory] = useState();
+  const [subCategory, setsubCategory] = useState();
 
   // Data representing the categories and their associated subcategories
   const data = {
@@ -28,9 +30,7 @@ function App() {
   };
 
   const handleSubCategoryChange = (e) => {
-    const subCategory = e.target.value;
-	
-    setSubcategories(e.target.value);
+    setsubCategory(e.target.value);
   };
 
   const convertToBase64 = (file) => {

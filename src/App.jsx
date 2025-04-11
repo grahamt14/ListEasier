@@ -10,8 +10,10 @@ function App() {
 		// Data you want to send with the POST request
 		const count = filesBase64.length;
 		const postData = {
-		Base64Key: {filesBase64}
-		,imageCount:{count}
+		Base64Key: {filesBase64},
+		imageCount:{count},
+		category:{category},
+		subCategory:{subCategory}
 		};
 		
 		   fetch("https://7f26uyyjs5.execute-api.us-east-2.amazonaws.com/ListEasily/ListEasilyAPI", {
@@ -30,6 +32,8 @@ function App() {
 	};
 
   const [filesBase64, setFilesBase64] = useState([]);
+  const [category, setCategory] = useState();
+  const [subCategory, setsubCategory] = useState();
 
   const handleFileChange = async (event) => {
     const files = Array.from(event.target.files); // Convert FileList to array
@@ -54,36 +58,39 @@ function App() {
     setSelectedOption(event.target.value);
   };
   
-  const Dropdown = () => {
-    const [options, setOptions] = useState([]); // This will store the data for the dropdown
-    const [loading, setLoading] = useState(true); // For loading state
-    const [error, setError] = useState(null); // For error state
+const Dropdowns = () => {
+  // Data representing the categories and their associated subcategories
+  const data = {
+    "Movies & TV": [
+      "Other Formats", "VHS Tapes", "UMDs", "Laserdiscs", "DVDs & Blu-ray Discs"
+    ],
+    "Books & Magazines": [
+      "Textbooks", "Magazines", "Catalogs", "Books"
+    ],
+    "Photographic Images": [
+      "Stereoviews & Stereoscopes", "Photographs", "Negatives", "Magic Lantern Slides", "Film Slides"
+    ],
+    "Music": [
+      "Other Formats", "Vinyl Records", "CDs", "Cassettes"
+    ],
+    "Video Games": [
+      "None"
+    ],
+    "Postcards": [
+      "Non-Topographical Postcards", "Topographical Postcards"
+    ]
+  };
 
-    useEffect(() => {
-        // Fetch data from your backend (e.g., API Gateway or Lambda function)
-        const fetchData = async () => {
-            try {
-                const response = await fetch('/your-api-endpoint'); // Replace with your API URL
-                const data = await response.json();
-                setOptions(data); // Set the fetched data to options
-                setLoading(false); // Set loading to false when data is fetched
-            } catch (error) {
-                setError(error);
-                setLoading(false);
-            }
-        };
+  // Set initial state for selected category and its related subcategories
+  const [selectedCategory, setSelectedCategory] = useState("Movies & TV");
+  const [subcategories, setSubcategories] = useState(data[selectedCategory]);
 
-        fetchData();
-    }, []); // Empty dependency array means this runs once when the component mounts
-
-    if (loading) {
-        return <div>Loading...</div>;
-    }
-
-    if (error) {
-        return <div>Error: {error.message}</div>;
-    }
-
+  // Handle category change
+  const handleCategoryChange = (e) => {
+    const category = e.target.value;
+    setSelectedCategory(category);
+    setSubcategories(data[category]);  // Update subcategories based on selected category
+  };
 
   return (
     <>
@@ -93,13 +100,25 @@ function App() {
 	  
       <div className="card">
 	  
-	  <select>
-            {options.map((option, index) => (
-                <option key={index} value={option.id}> {/* Assume `id` is the unique key */}
-                    {option.name} {/* Assume `name` is the display value */}
-                </option>
-            ))}
-        </select>
+<div>
+      {/* First dropdown for categories */}
+      <select onChange={handleCategoryChange} value={selectedCategory}>
+        {Object.keys(data).map((category) => (
+          <option key={category} value={category}>
+            {category}
+          </option>
+        ))}
+      </select>
+
+      {/* Second dropdown for subcategories */}
+      <select>
+        {subcategories.map((subcategory, index) => (
+          <option key={index} value={subcategory}>
+            {subcategory}
+          </option>
+        ))}
+      </select>
+    </div>
 	  
     <div>
       <input type="file" multiple accept="image/*" onChange={handleFileChange} />

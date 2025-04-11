@@ -50,8 +50,9 @@ function App() {
       reader.onload = () => resolve(reader.result);
       reader.onerror = (err) => reject(err);
     });
-	
-	// Data representing the categories and their associated subcategories
+  };
+  
+  // Data representing the categories and their associated subcategories
   const data = {
     "Movies & TV": [
       "Other Formats", "VHS Tapes", "UMDs", "Laserdiscs", "DVDs & Blu-ray Discs"
@@ -82,10 +83,6 @@ function App() {
     const category = e.target.value;
     setSelectedCategory(category);
     setSubcategories(data[category]);  // Update subcategories based on selected category
-  };
-	
-	
-	
   };
   
 

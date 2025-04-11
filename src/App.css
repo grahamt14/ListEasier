@@ -31,16 +31,7 @@
   width: 25%;
   height: 25%;
   border-radius: 10px;
-  object-fit: cover;
-
-  /* 3D-like shadow */
-  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.3);
-
-  /* Simulate slight perspective tilt */
-  transform: perspective(1000px) rotateX(5deg) rotateY(-5deg);
-
-  /* Smooth animation on hover */
-  transition: transform 0.3s ease, box-shadow 0.3s ease;
+  object-fit: cover; /* Ensures the image covers the whole screen without stretching */
 }
 
 .centered-container {
@@ -52,17 +43,6 @@
   min-height: 100vh;
   text-align: center;
 }
-
-.card {
-  background-color: #242424;
-  padding: 2rem;
-  border-radius: 12px;
-  box-shadow: 0 0 12px rgba(0, 0, 0, 0.1);
-  max-width: 600px;
-  width: 100%;
-}
-
-
 
 @media (prefers-reduced-motion: no-preference) {
   a:nth-of-type(2) .logo {

@@ -27,7 +27,7 @@ function App() {
     const category = e.target.value;
     setSelectedCategory(category);
     setSubcategories(data[category]);
-    setsubCategory(data[category]);
+    setsubCategory(data[category][0]);
     setCategory(category); // optional: sets for POST data
   };
 
@@ -56,8 +56,8 @@ function App() {
     const postData = {
       Base64Key: { filesBase64 },
       imageCount: { count },
-      category: { selectedCategory },
-      subCategory: { subcategories }
+      category: { category },
+      subCategory: { subCategory }
     };
 
     fetch("https://7f26uyyjs5.execute-api.us-east-2.amazonaws.com/ListEasily/ListEasilyAPI", {

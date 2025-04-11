@@ -9,8 +9,8 @@ function App() {
     const handleClick = () => {
 		// Data you want to send with the POST request
 		const postData = {
-		Base64Key: {base64ImageArray}
-		,imageCount:{count}
+		Base64Key: {filesBase64}
+		,imageCount:{filesBase64.length}
 		};
 		
 		   fetch("https://7f26uyyjs5.execute-api.us-east-2.amazonaws.com/ListEasily/ListEasilyAPI", {

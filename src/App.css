@@ -31,7 +31,22 @@
   width: 25%;
   height: 25%;
   border-radius: 10px;
-  object-fit: cover; /* Ensures the image covers the whole screen without stretching */
+  object-fit: cover;
+
+  /* 3D-like shadow */
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.3);
+
+  /* Simulate slight perspective tilt */
+  transform: perspective(1000px) rotateX(5deg) rotateY(-5deg);
+
+  /* Smooth animation on hover */
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+
+.logoCSS:hover {
+  /* Pop out more on hover */
+  transform: perspective(1000px) rotateX(0deg) rotateY(0deg) scale(1.05);
+  box-shadow: 0 15px 35px rgba(0, 0, 0, 0.5);
 }
 
 .centered-container {

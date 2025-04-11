@@ -51,39 +51,7 @@ function App() {
       reader.onerror = (err) => reject(err);
     });
 	
-	const Dropdowns = () => {
-  // Data representing the categories and their associated subcategories
-  const data = {
-    "Movies & TV": [
-      "Other Formats", "VHS Tapes", "UMDs", "Laserdiscs", "DVDs & Blu-ray Discs"
-    ],
-    "Books & Magazines": [
-      "Textbooks", "Magazines", "Catalogs", "Books"
-    ],
-    "Photographic Images": [
-      "Stereoviews & Stereoscopes", "Photographs", "Negatives", "Magic Lantern Slides", "Film Slides"
-    ],
-    "Music": [
-      "Other Formats", "Vinyl Records", "CDs", "Cassettes"
-    ],
-    "Video Games": [
-      "None"
-    ],
-    "Postcards": [
-      "Non-Topographical Postcards", "Topographical Postcards"
-    ]
-  };
-
-  // Set initial state for selected category and its related subcategories
-  const [selectedCategory, setSelectedCategory] = useState("Movies & TV");
-  const [subcategories, setSubcategories] = useState(data[selectedCategory]);
-
-  // Handle category change
-  const handleCategoryChange = (e) => {
-    const category = e.target.value;
-    setSelectedCategory(category);
-    setSubcategories(data[category]);  // Update subcategories based on selected category
-  };
+	
 	
 	
 	

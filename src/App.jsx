@@ -119,8 +119,8 @@ function App() {
 					onChange={handleFileChange}
 				  />
 				<br />
-				{filesBase64.length > 0 && (
 				<label htmlFor="batchSize-select" style={{ marginRight: '0.5rem' }}>Batch Size:</label>
+				{filesBase64.length > 0 && (
 				  <select id="batchSize-select">
 					{Array.from({ length: filesBase64.length }, (_, i) => i + 1)
 					  .filter(num => filesBase64.length % num === 0)

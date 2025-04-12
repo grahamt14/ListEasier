@@ -80,6 +80,33 @@ function App() {
   const handleImageLoad = (index) => {
     setLoadedImages((prev) => [...prev, index]);
   };
+  
+  const [isDragging, setIsDragging] = useState(false);
+  const inputRef = useRef(null);
+
+  const handleDrop = (event) => {
+    event.preventDefault();
+    setIsDragging(false);
+
+    const files = Array.from(event.dataTransfer.files).filter(file =>
+      file.type.startsWith('image/')
+    );
+    // Reuse your existing handler
+    handleFileChange({ target: { files } });
+  };
+
+  const handleDragOver = (event) => {
+    event.preventDefault(); // Required to allow dropping
+    setIsDragging(true);
+  };
+
+  const handleDragLeave = () => {
+    setIsDragging(false);
+  };
+
+  const openFilePicker = () => {
+    inputRef.current.click();
+  };
  
 
   return (
@@ -118,12 +145,30 @@ function App() {
 
 			{/* File Upload and Generate Button */}
 			<div>
-				  <input
-					type="file"
-					multiple
-					accept="image/*"
-					onChange={handleFileChange}
-				  />
+				      <div
+      onDrop={handleDrop}
+      onDragOver={handleDragOver}
+      onDragLeave={handleDragLeave}
+      onClick={openFilePicker}
+      style={{
+        border: '2px dashed #aaa',
+        padding: '2rem',
+        textAlign: 'center',
+        borderRadius: '8px',
+        backgroundColor: isDragging ? '#f0f8ff' : '#fafafa',
+        cursor: 'pointer'
+      }}
+    >
+      <p>{isDragging ? 'Drop your images here' : 'Click or drag images here to upload'}</p>
+      <input
+        type="file"
+        multiple
+        accept="image/*"
+        onChange={handleFileChange}
+        ref={inputRef}
+        style={{ display: 'none' }}
+      />
+    </div>
 				<br />
 				<label htmlFor="batchSize-select" style={{ marginRight: '0.5rem' }}>Batch Size:</label>
 				{filesBase64.length > 0 && (

@@ -304,27 +304,44 @@ function App() {
         <div style={{ marginTop: '2rem' }}>
           <h3>Image Groups</h3>
           {imageGroups.map((group, groupIndex) => (
-            <div
-              key={groupIndex}
-              style={{
-                display: 'flex',
-                gap: '0.5rem',
-                marginBottom: '1rem',
-                border: '1px solid #ccc',
-                padding: '0.5rem',
-                borderRadius: '8px'
-              }}
-            >
-              {group.map((src, idx) => (
-                <img
-                  key={idx}
-                  src={src}
-                  alt={`group-${groupIndex}-${idx}`}
-                  style={{ width: '100px' }}
-                />
-              ))}
-            </div>
-          ))}
+  <div
+    key={groupIndex}
+    style={{
+      display: 'flex',
+      gap: '0.5rem',
+      marginBottom: '1rem',
+      border: '1px solid #ccc',
+      padding: '0.5rem',
+      borderRadius: '8px',
+      flexWrap: 'wrap'
+    }}
+  >
+    {group.map((src, idx) => (
+      <img
+        key={idx}
+        src={src}
+        alt={`group-${groupIndex}-${idx}`}
+        style={{
+          width: '100px',
+          cursor: 'pointer',
+          border: '2px solid red'
+        }}
+        onClick={() => {
+          // Remove image from group
+          const updatedGroups = [...imageGroups];
+          const removedImage = updatedGroups[groupIndex].splice(idx, 1)[0];
+
+          // Remove empty group if it's now empty
+          const cleanedGroups = updatedGroups.filter(g => g.length > 0);
+
+          setImageGroups(cleanedGroups);
+          setFilesBase64(prev => [...prev, removedImage]);
+        }}
+      />
+    ))}
+  </div>
+))}
+
         </div>
       </div>
 

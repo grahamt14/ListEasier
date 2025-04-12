@@ -56,13 +56,22 @@ function App() {
   };
 
   const handleClick = () => {
-  // Validation
+  const errors = [];
+
   if (selectedCategory === "--" || subCategory === "--") {
-    setErrorMessage("Please select a valid category and subcategory before generating the listing.");
+    errors.push("Please select a valid category and subcategory.");
+  }
+
+  if (filesBase64.length === 0) {
+    errors.push("Please upload at least one image.");
+  }
+
+  if (errors.length > 0) {
+    setErrorMessages(errors);
     return;
   }
 
-  setErrorMessage(""); // Clear any existing error
+  setErrorMessages([]); // clear previous errors
 
   const count = filesBase64.length;
   const postData = {
@@ -86,6 +95,7 @@ function App() {
     })
     .catch((error) => console.error("Error CALLING API:", error));
 };
+
 
   
   const [isDragging, setIsDragging] = useState(false);
@@ -115,7 +125,7 @@ const triggerFileInput = () => {
   fileInputRef.current.click();
 };
 
-const [errorMessage, setErrorMessage] = useState('');
+const [errorMessages, setErrorMessages] = useState([]);
  
 
   return (
@@ -196,9 +206,13 @@ const [errorMessage, setErrorMessage] = useState('');
 				 <button onClick={handleClick}>
 					Generate Listing
 				</button>
-				{errorMessage && (
+				{errorMessages.length > 0 && (
   <div style={{ color: 'red', marginBottom: '1rem' }}>
-    {errorMessage}
+    <ul style={{ paddingLeft: '1.2rem' }}>
+      {errorMessages.map((msg, idx) => (
+        <li key={idx}>{msg}</li>
+      ))}
+    </ul>
   </div>
 )}
 

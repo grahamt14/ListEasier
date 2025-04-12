@@ -323,31 +323,6 @@ const toggleImageSelection = (index) => {
 )}
 
 
-<div style={{ marginTop: '2rem' }}>
-  <h3>Image Groups</h3>
-  {imageGroups.map((group, groupIndex) => (
-    <div
-      key={groupIndex}
-      style={{
-        display: 'flex',
-        gap: '0.5rem',
-        marginBottom: '1rem',
-        border: '1px solid #ccc',
-        padding: '0.5rem',
-        borderRadius: '8px'
-      }}
-    >
-      {group.map((src, idx) => (
-        <img
-          key={idx}
-          src={src}
-          alt={`group-${groupIndex}-${idx}`}
-          style={{ width: '100px' }}
-        />
-      ))}
-    </div>
-  ))}
-</div>
 
 
 

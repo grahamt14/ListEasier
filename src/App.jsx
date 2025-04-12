@@ -279,19 +279,6 @@ const toggleImageSelection = (index) => {
 			<br />
 			</div>
 			
-				<div
-  style={{
-    display: 'grid',
-    gap: '1rem',
-    marginTop: '1rem',
-    gridTemplateColumns: `repeat(${batchSize || 1}, 1fr)`
-  }}
->
-  {filesBase64.map((src, index) => (
-    <img key={index} src={src} alt={`preview ${index}`} style={{ width: '200px' }} />
-  ))}
-</div>
-
 			
 			{<pre>{JSON.stringify(responseData, null, 2)}</pre>}
 		</div>

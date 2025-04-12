@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import reactLogo from './assets/react.svg';
 import viteLogo from '/vite.svg';
 import './App.css';
@@ -175,6 +175,20 @@ const toggleImageSelection = (index) => {
     prev.includes(index) ? prev.filter((i) => i !== index) : [...prev, index]
   );
 };
+
+useEffect(() => {
+  if (filesBase64.length === 0) {
+    setBatchSize(0);
+    return;
+  }
+
+  const validBatchSizes = Array.from({ length: filesBase64.length }, (_, i) => i + 1)
+    .filter(num => filesBase64.length % num === 0 && num <= 24);
+
+  // Set to the last (highest) batch size
+  setBatchSize(validBatchSizes[validBatchSizes.length - 1]);
+}, [filesBase64]);
+
 
 
   return (

@@ -74,15 +74,7 @@ function App() {
       })
       .catch((error) => console.error("Error CALLING API:", error));
   };
-  
-    const [files, setFiles] = useState([]);
-
-  const handleFileChange = (event) => {
-    const selectedFiles = Array.from(event.target.files).filter(file =>
-      file.type.startsWith('image/')
-    );
-    setFiles(selectedFiles);
-  };
+ 
 
   return (
     <>
@@ -121,23 +113,23 @@ function App() {
 			{/* File Upload and Generate Button */}
 			<div>
 				    <div>
-					  <input
-						type="file"
-						multiple
-						accept="image/*"
-						onChange={handleFileChange}
-					  />
+				  <input
+					type="file"
+					multiple
+					accept="image/*"
+					onChange={handleFileChange}
+				  />
 
-					  {files.length > 0 && (
-						<select>
-						  {Array.from({ length: files.length }, (_, i) => (
-							<option key={i} value={i + 1}>
-							  {i + 1}
-							</option>
-						  ))}
-						</select>
-					  )}
-					</div>
+				  {filesBase64.length > 0 && (
+					<select>
+					  {Array.from({ length: filesBase64.length }, (_, i) => (
+						<option key={i} value={i + 1}>
+						  {i + 1}
+						</option>
+					  ))}
+					</select>
+				  )}
+				</div>
 
 				 <button onClick={handleClick}>
 					Generate Listing

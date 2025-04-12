@@ -30,15 +30,26 @@ function App() {
   setsubCategory(data[category][0]);
   setCategory(category);
 
-  if (category !== "--") {
-	setErrorMessages([]); // clear any previous error
+  if (category !== "--" && data[category][0] !== "--") {
+    // Clear category/subcategory-related error
+    setErrorMessages(prev =>
+      prev.filter(msg => msg !== "Please select a valid category and subcategory.")
+    );
   }
 };
 
-  const handleSubCategoryChange = (e) => {
-    const subCategory = e.target.value;
-    setsubCategory(e.target.value);
-  };
+
+const handleSubCategoryChange = (e) => {
+  const subCategory = e.target.value;
+  setsubCategory(subCategory);
+
+  if (selectedCategory !== "--" && subCategory !== "--") {
+    setErrorMessages(prev =>
+      prev.filter(msg => msg !== "Please select a valid category and subcategory.")
+    );
+  }
+};
+
 
   const convertToBase64 = (file) => {
     return new Promise((resolve, reject) => {
@@ -49,11 +60,14 @@ function App() {
     });
   };
 
-  const handleFileChange = async (event) => {
-    const files = Array.from(event.target.files);
-    const base64List = await Promise.all(files.map(file => convertToBase64(file)));
-    setFilesBase64(base64List);
-  };
+const handleFileChange = async (event) => {
+  const files = Array.from(event.target.files);
+  const base64List = await Promise.all(files.map(file => convertToBase64(file)));
+  setFilesBase64(base64List);
+
+  // Clear the image-related error if present
+  setErrorMessages(prev => prev.filter(msg => msg !== "Please upload at least one image."));
+};
 
   const handleClick = () => {
   const errors = [];
@@ -110,7 +124,11 @@ const handleDrop = async (e) => {
   );
   const base64List = await Promise.all(droppedFiles.map(file => convertToBase64(file)));
   setFilesBase64(base64List);
+
+  // Clear the image-related error if present
+  setErrorMessages(prev => prev.filter(msg => msg !== "Please upload at least one image."));
 };
+
 
 const handleDragOver = (e) => {
   e.preventDefault();

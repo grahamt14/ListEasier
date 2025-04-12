@@ -23,13 +23,17 @@ function App() {
   const [selectedCategory, setSelectedCategory] = useState("--");
   const [subcategories, setSubcategories] = useState(data["--"]);
 
-  const handleCategoryChange = (e) => {
-    const category = e.target.value;
-    setSelectedCategory(category);
-    setSubcategories(data[category]);
-    setsubCategory(data[category][0]);
-    setCategory(category); // optional: sets for POST data
-  };
+ const handleCategoryChange = (e) => {
+  const category = e.target.value;
+  setSelectedCategory(category);
+  setSubcategories(data[category]);
+  setsubCategory(data[category][0]);
+  setCategory(category);
+
+  if (category !== "--") {
+    setErrorMessage(""); // clear any previous error
+  }
+};
 
   const handleSubCategoryChange = (e) => {
     const subCategory = e.target.value;

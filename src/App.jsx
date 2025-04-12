@@ -229,17 +229,19 @@ const [errorMessages, setErrorMessages] = useState([]);
 			<div>
 				<br />
 				<label htmlFor="batchSize-select" style={{ marginRight: '0.5rem' }}>Images Per Item:</label>
-{filesBase64.length > 0 && (
-  <select id="batchSize-select">
-    {Array.from({ length: filesBase64.length }, (_, i) => i + 1)
+<select id="batchSize-select" disabled={filesBase64.length === 0}>
+  {filesBase64.length === 0 ? (
+    <option value="0">0</option>
+  ) : (
+    Array.from({ length: filesBase64.length }, (_, i) => i + 1)
       .filter(num => filesBase64.length % num === 0 && num <= 24)
       .map(num => (
         <option key={num} value={num}>
           {num}
         </option>
-      ))}
-  </select>
-)}
+      ))
+  )}
+</select>
 
 				 <button onClick={handleClick}>
 					Generate Listing

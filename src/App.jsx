@@ -163,6 +163,9 @@ const triggerFileInput = () => {
 };
 
 const [errorMessages, setErrorMessages] = useState([]);
+
+const [batchSize, setBatchSize] = useState(0);
+
  
 
   return (
@@ -229,7 +232,12 @@ const [errorMessages, setErrorMessages] = useState([]);
 			<div>
 				<br />
 				<label htmlFor="batchSize-select" style={{ marginRight: '0.5rem' }}>Images Per Item:</label>
-<select id="batchSize-select" disabled={filesBase64.length === 0}>
+<select
+  id="batchSize-select"
+  disabled={filesBase64.length === 0}
+  value={batchSize}
+  onChange={(e) => setBatchSize(Number(e.target.value))}
+>
   {filesBase64.length === 0 ? (
     <option value="0">0</option>
   ) : (
@@ -242,6 +250,7 @@ const [errorMessages, setErrorMessages] = useState([]);
       ))
   )}
 </select>
+
 
 				 <button onClick={handleClick}>
 					Generate Listing
@@ -262,11 +271,19 @@ const [errorMessages, setErrorMessages] = useState([]);
 			<br />
 			</div>
 			
-				<div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', marginTop: '1rem' }}>
-					{filesBase64.map((src, index) => (
-					  <img key={index} src={src} alt={`preview ${index}`} style={{ width: 200 }} />
-					))}
-				</div>
+				<div
+  style={{
+    display: 'grid',
+    gap: '1rem',
+    marginTop: '1rem',
+    gridTemplateColumns: `repeat(${batchSize || 1}, 1fr)`
+  }}
+>
+  {filesBase64.map((src, index) => (
+    <img key={index} src={src} alt={`preview ${index}`} style={{ width: '100%' }} />
+  ))}
+</div>
+
 			
 			{<pre>{JSON.stringify(responseData, null, 2)}</pre>}
 		</div>

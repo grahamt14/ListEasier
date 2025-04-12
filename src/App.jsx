@@ -74,39 +74,6 @@ function App() {
       })
       .catch((error) => console.error("Error CALLING API:", error));
   };
-  
-    const [loadedImages, setLoadedImages] = useState([]);
-
-  const handleImageLoad = (index) => {
-    setLoadedImages((prev) => [...prev, index]);
-  };
-  
-  const [isDragging, setIsDragging] = useState(false);
-  const inputRef = useRef(null);
-
-  const handleDrop = (event) => {
-    event.preventDefault();
-    setIsDragging(false);
-
-    const files = Array.from(event.dataTransfer.files).filter(file =>
-      file.type.startsWith('image/')
-    );
-    // Reuse your existing handler
-    handleFileChange({ target: { files } });
-  };
-
-  const handleDragOver = (event) => {
-    event.preventDefault(); // Required to allow dropping
-    setIsDragging(true);
-  };
-
-  const handleDragLeave = () => {
-    setIsDragging(false);
-  };
-
-  const openFilePicker = () => {
-    inputRef.current.click();
-  };
  
 
   return (
@@ -144,7 +111,13 @@ function App() {
 			</div>
 
 			{/* File Upload and Generate Button */}
-			
+			<div>
+				  <input
+					type="file"
+					multiple
+					accept="image/*"
+					onChange={handleFileChange}
+				  />
 				<br />
 				<label htmlFor="batchSize-select" style={{ marginRight: '0.5rem' }}>Batch Size:</label>
 				{filesBase64.length > 0 && (
@@ -162,34 +135,11 @@ function App() {
 					Generate Listing
 				</button>
 
-<div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', marginTop: '1rem' }}>
-      {filesBase64.map((src, index) => (
-        <div key={index} style={{ width: 200, height: 200, position: 'relative' }}>
-          {!loadedImages.includes(index) && (
-            <div style={{
-              position: 'absolute',
-              top: '50%',
-              left: '50%',
-              transform: 'translate(-50%, -50%)',
-              fontSize: '1.5rem',
-            }}>
-              ⏳
-            </div>
-          )}
-          <img
-            src={src}
-            alt={`preview ${index}`}
-            onLoad={() => handleImageLoad(index)}
-            style={{
-              width: '100%',
-              height: '100%',
-              objectFit: 'cover',
-              display: loadedImages.includes(index) ? 'block' : 'none'
-            }}
-          />
-        </div>
-      ))}
-    </div>
+				<div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', marginTop: '1rem' }}>
+					{filesBase64.map((src, index) => (
+					  <img key={index} src={src} alt={`preview ${index}`} style={{ width: 200 }} />
+					))}
+				</div>
 			</div>
 
 			{/* Display Response JSON */}

@@ -146,8 +146,8 @@ const triggerFileInput = () => {
     border: '2px dashed #aaa',
     padding: '2rem',
     textAlign: 'center',
+    backgroundColor: isDragging ? '#6a6a6a' : '#fafafa',
     borderRadius: '8px',
-    backgroundColor: isDragging ? '#f0f8ff' : '#fafafa',
     cursor: 'pointer',
     marginBottom: '1rem'
   }}
@@ -191,8 +191,9 @@ const triggerFileInput = () => {
 
 			{/* Display Response JSON */}
 			<br />
-			{<pre>{JSON.stringify(responseData, null, 2)}</pre>}
 			</div>
+			
+			{<pre>{JSON.stringify(responseData, null, 2)}</pre>}
 		</div>
     </>
   );

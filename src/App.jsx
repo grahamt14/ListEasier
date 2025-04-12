@@ -74,12 +74,6 @@ function App() {
       })
       .catch((error) => console.error("Error CALLING API:", error));
   };
-  
-  const [loadedImages, setLoadedImages] = useState([]);
-
-  const handleImageLoad = (index) => {
-    setLoadedImages((prev) => [...prev, index]);
-  };
  
 
   return (

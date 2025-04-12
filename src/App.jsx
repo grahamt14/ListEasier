@@ -74,6 +74,33 @@ function App() {
       })
       .catch((error) => console.error("Error CALLING API:", error));
   };
+  
+  const [isDragging, setIsDragging] = useState(false);
+const fileInputRef = useRef(null);
+
+const handleDrop = async (e) => {
+  e.preventDefault();
+  setIsDragging(false);
+
+  const droppedFiles = Array.from(e.dataTransfer.files).filter(file =>
+    file.type.startsWith("image/")
+  );
+  const base64List = await Promise.all(droppedFiles.map(file => convertToBase64(file)));
+  setFilesBase64(base64List);
+};
+
+const handleDragOver = (e) => {
+  e.preventDefault();
+  setIsDragging(true);
+};
+
+const handleDragLeave = () => {
+  setIsDragging(false);
+};
+
+const triggerFileInput = () => {
+  fileInputRef.current.click();
+};
  
 
   return (
@@ -109,15 +136,35 @@ function App() {
 				</select>
 			  </div>
 			</div>
+			
+			<div
+  onDrop={handleDrop}
+  onDragOver={handleDragOver}
+  onDragLeave={handleDragLeave}
+  onClick={triggerFileInput}
+  style={{
+    border: '2px dashed #aaa',
+    padding: '2rem',
+    textAlign: 'center',
+    borderRadius: '8px',
+    backgroundColor: isDragging ? '#f0f8ff' : '#fafafa',
+    cursor: 'pointer',
+    marginBottom: '1rem'
+  }}
+>
+  <p>{isDragging ? 'Drop images here' : 'Click or drag images to upload'}</p>
+  <input
+    type="file"
+    multiple
+    accept="image/*"
+    onChange={handleFileChange}
+    ref={fileInputRef}
+    style={{ display: 'none' }}
+  />
+</div>
 
 			{/* File Upload and Generate Button */}
 			<div>
-				  <input
-					type="file"
-					multiple
-					accept="image/*"
-					onChange={handleFileChange}
-				  />
 				<br />
 				<label htmlFor="batchSize-select" style={{ marginRight: '0.5rem' }}>Batch Size:</label>
 				{filesBase64.length > 0 && (

@@ -169,6 +169,11 @@ const [batchSize, setBatchSize] = useState(0);
  const [selectedImages, setSelectedImages] = useState([]);
 const [imageGroups, setImageGroups] = useState([]);
 
+const toggleImageSelection = (index) => {
+  setSelectedImages((prev) =>
+    prev.includes(index) ? prev.filter((i) => i !== index) : [...prev, index]
+  );
+};
 
 
   return (
@@ -290,6 +295,40 @@ const [imageGroups, setImageGroups] = useState([]);
 			
 			{<pre>{JSON.stringify(responseData, null, 2)}</pre>}
 		</div>
+		
+		
+		
+		
+		
+		
+		
+		
+		<div
+  style={{
+    display: 'grid',
+    gap: '1rem',
+    marginTop: '1rem',
+    gridTemplateColumns: `repeat(${batchSize || 1}, 1fr)`
+  }}
+>
+  {filesBase64.map((src, index) => (
+    <img
+      key={index}
+      src={src}
+      alt={`preview ${index}`}
+      style={{
+        width: '100%',
+        border: selectedImages.includes(index) ? '3px solid #00f' : '2px solid transparent',
+        cursor: 'pointer'
+      }}
+      onClick={() => toggleImageSelection(index)}
+    />
+  ))}
+</div>
+
+
+
+
     </>
   );
 }

@@ -280,7 +280,7 @@ const [batchSize, setBatchSize] = useState(0);
   }}
 >
   {filesBase64.map((src, index) => (
-    <img key={index} src={src} alt={`preview ${index}`} style={{ width: '100%' }} />
+    <img key={index} src={src} alt={`preview ${index}`} style={{ width: '200px' }} />
   ))}
 </div>
 

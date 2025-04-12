@@ -279,18 +279,7 @@ const toggleImageSelection = (index) => {
 			<br />
 			</div>
 			
-			
-			{<pre>{JSON.stringify(responseData, null, 2)}</pre>}
-		</div>
-		
-		
-		
-		
-		
-		
-		
-		
-		<div
+			<div
   style={{
     display: 'grid',
     gap: '1rem',
@@ -356,6 +345,20 @@ const toggleImageSelection = (index) => {
     </div>
   ))}
 </div>
+			
+		</div>
+		
+		
+		
+			{<pre>{JSON.stringify(responseData, null, 2)}</pre>}
+		
+		
+		
+		
+		
+		
+		
+		
 
 
     </>

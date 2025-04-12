@@ -52,28 +52,37 @@ function App() {
   };
 
   const handleClick = () => {
-    const count = filesBase64.length;
-    const postData = {
-      Base64Key: { filesBase64 },
-      imageCount: { count },
-      category: { category },
-      subCategory: { subCategory }
-    };
+  // Validation
+  if (selectedCategory === "--" || subCategory === "--") {
+    setErrorMessage("Please select a valid category and subcategory before generating the listing.");
+    return;
+  }
 
-    fetch("https://7f26uyyjs5.execute-api.us-east-2.amazonaws.com/ListEasily/ListEasilyAPI", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify(postData)
-    })
-      .then((response) => response.json())
-      .then((data) => {
-        setResponseData(data);
-        console.log(data);
-      })
-      .catch((error) => console.error("Error CALLING API:", error));
+  setErrorMessage(""); // Clear any existing error
+
+  const count = filesBase64.length;
+  const postData = {
+    Base64Key: { filesBase64 },
+    imageCount: { count },
+    category: { category },
+    subCategory: { subCategory }
   };
+
+  fetch("https://7f26uyyjs5.execute-api.us-east-2.amazonaws.com/ListEasily/ListEasilyAPI", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify(postData)
+  })
+    .then((response) => response.json())
+    .then((data) => {
+      setResponseData(data);
+      console.log(data);
+    })
+    .catch((error) => console.error("Error CALLING API:", error));
+};
+
   
   const [isDragging, setIsDragging] = useState(false);
 const fileInputRef = useRef(null);
@@ -101,6 +110,8 @@ const handleDragLeave = () => {
 const triggerFileInput = () => {
   fileInputRef.current.click();
 };
+
+const [errorMessage, setErrorMessage] = useState('');
  
 
   return (
@@ -181,6 +192,11 @@ const triggerFileInput = () => {
 				 <button onClick={handleClick}>
 					Generate Listing
 				</button>
+				{errorMessage && (
+  <div style={{ color: 'red', marginBottom: '1rem' }}>
+    {errorMessage}
+  </div>
+)}
 
 			</div>
 

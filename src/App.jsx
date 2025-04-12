@@ -228,7 +228,7 @@ const [errorMessages, setErrorMessages] = useState([]);
 			{/* File Upload and Generate Button */}
 			<div>
 				<br />
-				<label htmlFor="batchSize-select" style={{ marginRight: '0.5rem' }}>Batch Size:</label>
+				<label htmlFor="batchSize-select" style={{ marginRight: '0.5rem' }}>Images Per Item:</label>
 {filesBase64.length > 0 && (
   <select id="batchSize-select">
     {Array.from({ length: filesBase64.length }, (_, i) => i + 1)

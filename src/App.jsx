@@ -141,34 +141,11 @@ function App() {
 					Generate Listing
 				</button>
 
-<div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', marginTop: '1rem' }}>
-      {filesBase64.map((src, index) => (
-        <div key={index} style={{ width: 200, height: 200, position: 'relative' }}>
-          {!loadedImages.includes(index) && (
-            <div style={{
-              position: 'absolute',
-              top: '50%',
-              left: '50%',
-              transform: 'translate(-50%, -50%)',
-              fontSize: '1.5rem',
-            }}>
-              ⏳
-            </div>
-          )}
-          <img
-            src={src}
-            alt={`preview ${index}`}
-            onLoad={() => handleImageLoad(index)}
-            style={{
-              width: '100%',
-              height: '100%',
-              objectFit: 'cover',
-              display: loadedImages.includes(index) ? 'block' : 'none'
-            }}
-          />
-        </div>
-      ))}
-    </div>
+				<div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', marginTop: '1rem' }}>
+					{filesBase64.map((src, index) => (
+					  <img key={index} src={src} alt={`preview ${index}`} style={{ width: 200 }} />
+					))}
+				</div>
 			</div>
 
 			{/* Display Response JSON */}

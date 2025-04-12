@@ -31,7 +31,7 @@ function App() {
   setCategory(category);
 
   if (category !== "--") {
-    setErrorMessage(""); // clear any previous error
+	setErrorMessages([]); // clear any previous error
   }
 };
 

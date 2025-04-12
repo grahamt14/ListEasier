@@ -23,32 +23,51 @@ function App() {
   const [selectedCategory, setSelectedCategory] = useState("--");
   const [subcategories, setSubcategories] = useState(data["--"]);
 
- const handleCategoryChange = (e) => {
+const handleCategoryChange = (e) => {
   const category = e.target.value;
   setSelectedCategory(category);
   setSubcategories(data[category]);
   setsubCategory(data[category][0]);
   setCategory(category);
 
-  if (category !== "--" && data[category][0] !== "--") {
-    // Clear category/subcategory-related error
+  if (category === "--" || data[category][0] === "--") {
+    // Add the error if not already present
+    setErrorMessages(prev => {
+      if (!prev.includes("Please select a valid category and subcategory.")) {
+        return [...prev, "Please select a valid category and subcategory."];
+      }
+      return prev;
+    });
+  } else {
+    // Remove the error if present
     setErrorMessages(prev =>
       prev.filter(msg => msg !== "Please select a valid category and subcategory.")
     );
   }
 };
+
 
 
 const handleSubCategoryChange = (e) => {
   const subCategory = e.target.value;
   setsubCategory(subCategory);
 
-  if (selectedCategory !== "--" && subCategory !== "--") {
+  if (selectedCategory === "--" || subCategory === "--") {
+    // Add the error if not already present
+    setErrorMessages(prev => {
+      if (!prev.includes("Please select a valid category and subcategory.")) {
+        return [...prev, "Please select a valid category and subcategory."];
+      }
+      return prev;
+    });
+  } else {
+    // Remove the error if present
     setErrorMessages(prev =>
       prev.filter(msg => msg !== "Please select a valid category and subcategory.")
     );
   }
 };
+
 
 
   const convertToBase64 = (file) => {

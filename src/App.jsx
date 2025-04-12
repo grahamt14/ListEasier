@@ -9,6 +9,7 @@ function App() {
   const [category, setCategory] = useState();
   const [subCategory, setsubCategory] = useState();
 
+
   // Data representing the categories and their associated subcategories
   const data = {
     "--": ["--"],
@@ -258,6 +259,7 @@ const toggleImageSelection = (index) => {
       ))
   )}
 </select>
+
 
 
 				 <button onClick={handleClick}>

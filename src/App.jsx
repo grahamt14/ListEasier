@@ -112,25 +112,25 @@ function App() {
 
 			{/* File Upload and Generate Button */}
 			<div>
-				    <div>
 				  <input
 					type="file"
 					multiple
 					accept="image/*"
 					onChange={handleFileChange}
 				  />
-
-				  {filesBase64.length > 0 && (
-					<select>
-					  {Array.from({ length: filesBase64.length }, (_, i) => (
-						<option key={i} value={i + 1}>
-						  {i + 1}
+				<br />
+				<label htmlFor="batchSize-select" style={{ marginRight: '0.5rem' }}>Batch Size:</label>
+				{filesBase64.length > 0 && (
+				  <select id="batchSize-select">
+					{Array.from({ length: filesBase64.length }, (_, i) => i + 1)
+					  .filter(num => filesBase64.length % num === 0)
+					  .map(num => (
+						<option key={num} value={num}>
+						  {num}
 						</option>
 					  ))}
-					</select>
-				  )}
-				</div>
-
+				  </select>
+				)}
 				 <button onClick={handleClick}>
 					Generate Listing
 				</button>

@@ -166,7 +166,15 @@ const [errorMessages, setErrorMessages] = useState([]);
 
 const [batchSize, setBatchSize] = useState(0);
 
- 
+ const [selectedImages, setSelectedImages] = useState([]);
+const [imageGroups, setImageGroups] = useState([]);
+
+const toggleImageSelection = (index) => {
+  setSelectedImages((prev) =>
+    prev.includes(index) ? prev.filter((i) => i !== index) : [...prev, index]
+  );
+};
+
 
   return (
     <>
@@ -269,9 +277,12 @@ const [batchSize, setBatchSize] = useState(0);
 
 			{/* Display Response JSON */}
 			<br />
-			</div>
 			
-				<div
+			
+			
+			
+			
+			<div
   style={{
     display: 'grid',
     gap: '1rem',
@@ -280,9 +291,66 @@ const [batchSize, setBatchSize] = useState(0);
   }}
 >
   {filesBase64.map((src, index) => (
-    <img key={index} src={src} alt={`preview ${index}`} style={{ width: '200px' }} />
+    <img
+      key={index}
+      src={src}
+      alt={`preview ${index}`}
+      style={{
+        width: '100%',
+        border: selectedImages.includes(index) ? '3px solid #00f' : '2px solid transparent',
+        cursor: 'pointer'
+      }}
+      onClick={() => toggleImageSelection(index)}
+    />
   ))}
 </div>
+
+{selectedImages.length > 0 && (
+  <button
+    onClick={() => {
+      const group = selectedImages.map(index => filesBase64[index]);
+      setImageGroups((prev) => [...prev, group]);
+
+      // Remove grouped images from main list
+      setFilesBase64((prev) =>
+        prev.filter((_, index) => !selectedImages.includes(index))
+      );
+      setSelectedImages([]);
+    }}
+  >
+    Group Selected
+  </button>
+)}
+
+
+<div style={{ marginTop: '2rem' }}>
+  <h3>Image Groups</h3>
+  {imageGroups.map((group, groupIndex) => (
+    <div
+      key={groupIndex}
+      style={{
+        display: 'flex',
+        gap: '0.5rem',
+        marginBottom: '1rem',
+        border: '1px solid #ccc',
+        padding: '0.5rem',
+        borderRadius: '8px'
+      }}
+    >
+      {group.map((src, idx) => (
+        <img
+          key={idx}
+          src={src}
+          alt={`group-${groupIndex}-${idx}`}
+          style={{ width: '100px' }}
+        />
+      ))}
+    </div>
+  ))}
+</div>
+
+
+
 
 			
 			{<pre>{JSON.stringify(responseData, null, 2)}</pre>}

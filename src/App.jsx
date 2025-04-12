@@ -255,6 +255,22 @@ function App() {
             )}
           </div>
         </div>
+		
+		{/* ✅ Group Selected Button */}
+<div style={{ marginTop: '1rem', marginBottom: '2rem' }}>
+  <button
+    disabled={selectedImages.length === 0}
+    onClick={() => {
+      const newGroup = selectedImages.map(i => filesBase64[i]);
+      const remainingImages = filesBase64.filter((_, i) => !selectedImages.includes(i));
+      setImageGroups(prev => [...prev, newGroup]);
+      setFilesBase64(remainingImages);
+      setSelectedImages([]);
+    }}
+  >
+    Group Selected
+  </button>
+</div>
 
         {/* Image Pool */}
         <div

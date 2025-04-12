@@ -146,7 +146,7 @@ const triggerFileInput = () => {
     border: '2px dashed #aaa',
     padding: '2rem',
     textAlign: 'center',
-    backgroundColor: isDragging ? '#6a6a6a' : '#fafafa',
+    backgroundColor: isDragging ? '#545454' : '#6a6a6a',
     borderRadius: '8px',
     cursor: 'pointer',
     marginBottom: '1rem'
@@ -182,16 +182,17 @@ const triggerFileInput = () => {
 					Generate Listing
 				</button>
 
-				<div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', marginTop: '1rem' }}>
-					{filesBase64.map((src, index) => (
-					  <img key={index} src={src} alt={`preview ${index}`} style={{ width: 200 }} />
-					))}
-				</div>
 			</div>
 
 			{/* Display Response JSON */}
 			<br />
 			</div>
+			
+				<div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', marginTop: '1rem' }}>
+					{filesBase64.map((src, index) => (
+					  <img key={index} src={src} alt={`preview ${index}`} style={{ width: 200 }} />
+					))}
+				</div>
 			
 			{<pre>{JSON.stringify(responseData, null, 2)}</pre>}
 		</div>

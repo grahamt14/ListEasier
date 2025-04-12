@@ -144,31 +144,7 @@ function App() {
 			</div>
 
 			{/* File Upload and Generate Button */}
-			<div>
-				      <div
-      onDrop={handleDrop}
-      onDragOver={handleDragOver}
-      onDragLeave={handleDragLeave}
-      onClick={openFilePicker}
-      style={{
-        border: '2px dashed #aaa',
-        padding: '2rem',
-        textAlign: 'center',
-        borderRadius: '8px',
-        backgroundColor: isDragging ? '#f0f8ff' : '#fafafa',
-        cursor: 'pointer'
-      }}
-    >
-      <p>{isDragging ? 'Drop your images here' : 'Click or drag images here to upload'}</p>
-      <input
-        type="file"
-        multiple
-        accept="image/*"
-        onChange={handleFileChange}
-        ref={inputRef}
-        style={{ display: 'none' }}
-      />
-    </div>
+			
 				<br />
 				<label htmlFor="batchSize-select" style={{ marginRight: '0.5rem' }}>Batch Size:</label>
 				{filesBase64.length > 0 && (

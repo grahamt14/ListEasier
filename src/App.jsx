@@ -169,11 +169,6 @@ const [batchSize, setBatchSize] = useState(0);
  const [selectedImages, setSelectedImages] = useState([]);
 const [imageGroups, setImageGroups] = useState([]);
 
-const toggleImageSelection = (index) => {
-  setSelectedImages((prev) =>
-    prev.includes(index) ? prev.filter((i) => i !== index) : [...prev, index]
-  );
-};
 
 
   return (
@@ -277,12 +272,9 @@ const toggleImageSelection = (index) => {
 
 			{/* Display Response JSON */}
 			<br />
+			</div>
 			
-			
-			
-			
-			
-			<div
+				<div
   style={{
     display: 'grid',
     gap: '1rem',
@@ -291,41 +283,9 @@ const toggleImageSelection = (index) => {
   }}
 >
   {filesBase64.map((src, index) => (
-    <img
-      key={index}
-      src={src}
-      alt={`preview ${index}`}
-      style={{
-        width: '100%',
-        border: selectedImages.includes(index) ? '3px solid #00f' : '2px solid transparent',
-        cursor: 'pointer'
-      }}
-      onClick={() => toggleImageSelection(index)}
-    />
+    <img key={index} src={src} alt={`preview ${index}`} style={{ width: '200px' }} />
   ))}
 </div>
-
-{selectedImages.length > 0 && (
-  <button
-    onClick={() => {
-      const group = selectedImages.map(index => filesBase64[index]);
-      setImageGroups((prev) => [...prev, group]);
-
-      // Remove grouped images from main list
-      setFilesBase64((prev) =>
-        prev.filter((_, index) => !selectedImages.includes(index))
-      );
-      setSelectedImages([]);
-    }}
-  >
-    Group Selected
-  </button>
-)}
-
-
-
-
-
 
 			
 			{<pre>{JSON.stringify(responseData, null, 2)}</pre>}

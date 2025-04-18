@@ -11,6 +11,8 @@ function App() {
   const [batchSize, setBatchSize] = useState(0);
   const [selectedImages, setSelectedImages] = useState([]);
   const [imageGroups, setImageGroups] = useState([[]]);
+  const [responseData, setResponseData] = useState(null);
+  const [loading, setLoading] = useState(false);
 
   const fileInputRef = useRef(null);
 
@@ -153,12 +155,9 @@ function App() {
 
       setImageGroups(prev => {
         const updated = [...prev];
-
-        // Remove from old group
         updated[sourceGroupIndex] = [...updated[sourceGroupIndex]];
         updated[sourceGroupIndex].splice(imageIdx, 1);
 
-        // Insert into new group
         const targetGroup = [...updated[targetGroupIndex]];
         if (targetImageIndex === null) {
           targetGroup.push(draggedImage);
@@ -172,173 +171,232 @@ function App() {
     }
   };
 
+  const handleGenerateListing = () => {
+    const postData = {
+      category: selectedCategory,
+      subCategory: subCategory,
+      Base64Key: imageGroups.filter(group => group.length > 0),
+    };
+
+    setLoading(true);
+
+    fetch("https://7f26uyyjs5.execute-api.us-east-2.amazonaws.com/ListEasily/ListEasilyAPI", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(postData),
+    })
+      .then((response) => response.json())
+      .then((data) => {
+        setResponseData(data);
+        console.log(data);
+        setLoading(false);
+      })
+      .catch((error) => {
+        console.error("Error CALLING API:", error);
+        setLoading(false);
+      });
+  };
+
   return (
-    <>
-      <div className="centered-container">
-        <div>
-          <img src="/images/ListEasier.jpg" alt="ListEasier Image" className="logoCSS" />
-        </div>
-        <div className="card">
-          <label>Category:
-            <select onChange={handleCategoryChange} value={selectedCategory}>
-              {Object.keys(data).map((category) => (
-                <option key={category} value={category}>{category}</option>
-              ))}
-            </select>
-          </label>
-
-          <label>SubCategory:
-            <select onChange={handleSubCategoryChange} value={subCategory}>
-              {subcategories.map((subcategory, index) => (
-                <option key={index} value={subcategory}>{subcategory}</option>
-              ))}
-            </select>
-          </label>
-
-          <div
-            onDrop={handleDrop}
-            onDragOver={handleDragOver}
-            onClick={triggerFileInput}
-            style={{
-              border: '2px dashed #aaa',
-              padding: '2rem',
-              textAlign: 'center',
-              backgroundColor: '#6a6a6a',
-              borderRadius: '8px',
-              cursor: 'pointer',
-              marginBottom: '1rem'
-            }}
-          >
-            <p>Click or drag images to upload</p>
-            <input
-              type="file"
-              multiple
-              accept="image/*"
-              onChange={handleFileChange}
-              ref={fileInputRef}
-              style={{ display: 'none' }}
-            />
-          </div>
-
-          <label>Images Per Item:
-            <select
-              disabled={filesBase64.length === 0}
-              value={batchSize}
-              onChange={(e) => setBatchSize(Number(e.target.value))}
-            >
-              {filesBase64.length === 0 ? (
-                <option value="0">0</option>
-              ) : (
-                Array.from({ length: filesBase64.length }, (_, i) => i + 1)
-                  .filter(num => filesBase64.length % num === 0 && num <= 24)
-                  .map(num => (
-                    <option key={num} value={num}>{num}</option>
-                  ))
-              )}
-            </select>
-          </label>
-        </div>
-
-        <div style={{ marginTop: '1rem' }}>
-          <button
-            disabled={selectedImages.length === 0}
-            onClick={() => {
-              const newGroup = selectedImages.map(i => filesBase64[i]);
-              const remaining = filesBase64.filter((_, i) => !selectedImages.includes(i));
-              setImageGroups(prev => [...prev, newGroup]);
-              setFilesBase64(remaining);
-              setSelectedImages([]);
-            }}
-          >
-            Group Selected
-          </button>
-        </div>
-
-        {/* Image Pool */}
-        <div style={{
-          display: 'grid',
-          gap: '1rem',
-          marginTop: '1rem',
-          gridTemplateColumns: `repeat(${batchSize || 1}, 1fr)`
-        }}>
-          {filesBase64.map((src, index) => (
-            <img
-              key={index}
-              src={src}
-              draggable
-              onDragStart={(e) => {
-                e.dataTransfer.setData("from", "pool");
-                e.dataTransfer.setData("index", index.toString());
-              }}
-              onClick={() => toggleImageSelection(index)}
-              style={{
-                width: '200px',
-                border: selectedImages.includes(index) ? '3px solid #00f' : '2px solid transparent',
-                cursor: 'move',
-                transform: 'scale(1)',
-                transition: 'transform 0.2s ease-in-out'
-              }}
-              onMouseEnter={(e) => e.currentTarget.style.transform = 'scale(1.05) rotateZ(1deg)'}
-              onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}
-            />
-          ))}
-        </div>
-
-        {/* Grouped Images */}
-        <div style={{ marginTop: '2rem' }}>
-          <h3>Image Groups</h3>
-          {(imageGroups.length > 0 ? imageGroups : [[]]).map((group, groupIndex) => (
-            <div
-              key={groupIndex}
-              onDragOver={handleDragOver}
-              onDrop={(e) => handleGroupDrop(e, groupIndex)}
-              style={{
-                display: 'flex',
-                gap: '0.5rem',
-                marginBottom: '1rem',
-                border: '1px solid #ccc',
-                padding: '0.5rem',
-                borderRadius: '8px',
-                flexWrap: 'wrap',
-                backgroundColor: '#f5f5f5',
-                minWidth: '200px',
-                minHeight: '100px'
-              }}
-            >
-              {group.map((src, idx) => (
-                <img
-                  key={idx}
-                  src={src}
-                  draggable
-                  onDragStart={(e) => {
-                    e.dataTransfer.setData("from", "group");
-                    e.dataTransfer.setData("index", `${groupIndex}-${idx}`);
-                  }}
-                  onDragOver={(e) => {
-                    e.preventDefault();
-                  }}
-                  onDrop={(e) => handleGroupDrop(e, groupIndex, idx)}
-                  onClick={() => {
-                    const updated = [...imageGroups];
-                    const removed = updated[groupIndex].splice(idx, 1)[0];
-                    setImageGroups(updated.filter(g => g.length > 0));
-                    setFilesBase64(prev => [...prev, removed]);
-                  }}
-                  onMouseEnter={(e) => e.currentTarget.style.transform = 'scale(1.05) rotateZ(1deg)'}
-                  onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}
-                  style={{
-                    width: '100px',
-                    border: '2px solid red',
-                    cursor: 'move',
-                    transition: 'transform 0.2s ease-in-out'
-                  }}
-                />
-              ))}
-            </div>
-          ))}
-        </div>
+    <div className="centered-container">
+      <div>
+        <img src="/images/ListEasier.jpg" alt="ListEasier Image" className="logoCSS" />
       </div>
-    </>
+
+      <div className="card">
+        <label>Category:
+          <select onChange={handleCategoryChange} value={selectedCategory}>
+            {Object.keys(data).map((category) => (
+              <option key={category} value={category}>{category}</option>
+            ))}
+          </select>
+        </label>
+
+        <label>SubCategory:
+          <select onChange={handleSubCategoryChange} value={subCategory}>
+            {subcategories.map((subcategory, index) => (
+              <option key={index} value={subcategory}>{subcategory}</option>
+            ))}
+          </select>
+        </label>
+
+        <div
+          onDrop={handleDrop}
+          onDragOver={handleDragOver}
+          onClick={triggerFileInput}
+          style={{
+            border: '2px dashed #aaa',
+            padding: '2rem',
+            textAlign: 'center',
+            backgroundColor: '#6a6a6a',
+            borderRadius: '8px',
+            cursor: 'pointer',
+            marginBottom: '1rem'
+          }}
+        >
+          <p>Click or drag images to upload</p>
+          <input
+            type="file"
+            multiple
+            accept="image/*"
+            onChange={handleFileChange}
+            ref={fileInputRef}
+            style={{ display: 'none' }}
+          />
+        </div>
+
+        <label>Images Per Item:
+          <select
+            disabled={filesBase64.length === 0}
+            value={batchSize}
+            onChange={(e) => setBatchSize(Number(e.target.value))}
+          >
+            {filesBase64.length === 0 ? (
+              <option value="0">0</option>
+            ) : (
+              Array.from({ length: filesBase64.length }, (_, i) => i + 1)
+                .filter(num => filesBase64.length % num === 0 && num <= 24)
+                .map(num => (
+                  <option key={num} value={num}>{num}</option>
+                ))
+            )}
+          </select>
+        </label>
+      </div>
+
+      <div style={{ marginTop: '1rem' }}>
+        <button
+          disabled={selectedImages.length === 0}
+          onClick={() => {
+            const newGroup = selectedImages.map(i => filesBase64[i]);
+            const remaining = filesBase64.filter((_, i) => !selectedImages.includes(i));
+            setImageGroups(prev => [...prev, newGroup]);
+            setFilesBase64(remaining);
+            setSelectedImages([]);
+          }}
+        >
+          Group Selected
+        </button>
+      </div>
+
+      {/* Image Pool */}
+      <div style={{
+        display: 'grid',
+        gap: '1rem',
+        marginTop: '1rem',
+        gridTemplateColumns: `repeat(${batchSize || 1}, 1fr)`
+      }}>
+        {filesBase64.map((src, index) => (
+          <img
+            key={index}
+            src={src}
+            draggable
+            onDragStart={(e) => {
+              e.dataTransfer.setData("from", "pool");
+              e.dataTransfer.setData("index", index.toString());
+            }}
+            onClick={() => toggleImageSelection(index)}
+            style={{
+              width: '200px',
+              border: selectedImages.includes(index) ? '3px solid #00f' : '2px solid transparent',
+              cursor: 'move',
+              transform: 'scale(1)',
+              transition: 'transform 0.2s ease-in-out'
+            }}
+            onMouseEnter={(e) => e.currentTarget.style.transform = 'scale(1.05) rotateZ(1deg)'}
+            onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}
+          />
+        ))}
+      </div>
+
+      {/* Grouped Images */}
+      <div style={{ marginTop: '2rem' }}>
+        <h3>Image Groups</h3>
+        {(imageGroups.length > 0 ? imageGroups : [[]]).map((group, groupIndex) => (
+          <div
+            key={groupIndex}
+            onDragOver={handleDragOver}
+            onDrop={(e) => handleGroupDrop(e, groupIndex)}
+            style={{
+              display: 'flex',
+              gap: '0.5rem',
+              marginBottom: '1rem',
+              border: '1px solid #ccc',
+              padding: '0.5rem',
+              borderRadius: '8px',
+              flexWrap: 'wrap',
+              backgroundColor: '#f5f5f5',
+              minWidth: '200px',
+              minHeight: '100px'
+            }}
+          >
+            {group.map((src, idx) => (
+              <img
+                key={idx}
+                src={src}
+                draggable
+                onDragStart={(e) => {
+                  e.dataTransfer.setData("from", "group");
+                  e.dataTransfer.setData("index", `${groupIndex}-${idx}`);
+                }}
+                onDragOver={(e) => {
+                  e.preventDefault();
+                }}
+                onDrop={(e) => handleGroupDrop(e, groupIndex, idx)}
+                onClick={() => {
+                  const updated = [...imageGroups];
+                  const removed = updated[groupIndex].splice(idx, 1)[0];
+                  setImageGroups(updated.filter(g => g.length > 0));
+                  setFilesBase64(prev => [...prev, removed]);
+                }}
+                onMouseEnter={(e) => e.currentTarget.style.transform = 'scale(1.05) rotateZ(1deg)'}
+                onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}
+                style={{
+                  width: '100px',
+                  border: '2px solid red',
+                  cursor: 'move',
+                  transition: 'transform 0.2s ease-in-out'
+                }}
+              />
+            ))}
+          </div>
+        ))}
+      </div>
+
+      {/* Generate Listing Button */}
+      <div style={{ marginTop: '2rem', textAlign: 'center' }}>
+        <button
+          onClick={handleGenerateListing}
+          disabled={loading}
+          style={{
+            backgroundColor: loading ? '#ccc' : '#007bff',
+            color: '#fff',
+            padding: '1rem 2rem',
+            fontSize: '1rem',
+            border: 'none',
+            borderRadius: '8px',
+            cursor: loading ? 'not-allowed' : 'pointer',
+            transition: 'background-color 0.3s ease, transform 0.2s ease',
+          }}
+          onMouseEnter={(e) => {
+            if (!loading) e.currentTarget.style.backgroundColor = '#0056b3';
+          }}
+          onMouseLeave={(e) => {
+            if (!loading) e.currentTarget.style.backgroundColor = '#007bff';
+          }}
+          onMouseDown={(e) => {
+            if (!loading) e.currentTarget.style.transform = 'scale(0.97)';
+          }}
+          onMouseUp={(e) => {
+            if (!loading) e.currentTarget.style.transform = 'scale(1)';
+          }}
+        >
+          {loading ? 'Generating...' : 'Generate Listing'}
+        </button>
+      </div>
+    </div>
   );
 }
 

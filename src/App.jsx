@@ -176,7 +176,8 @@ function App() {
     <>
       <div className="centered-container">
 			<div>
-				<img src="/images/ListEasier.jpg" alt="Logo" /></div>
+				<img src="/images/ListEasier.jpg" alt="ListEasier Image" class="logoCSS" />
+			</div>
 			<div className="card">
 			<label>Category:
             <select onChange={handleCategoryChange} value={selectedCategory}>

@@ -1,4 +1,3 @@
-// App.js
 import { useState, useRef, useEffect } from 'react';
 import './App.css';
 
@@ -288,7 +287,7 @@ function App() {
         {/* Grouped Images */}
         <div style={{ marginTop: '2rem' }}>
           <h3>Image Groups</h3>
-          {imageGroups.map((group, groupIndex) => (
+          {(imageGroups.length > 0 ? imageGroups : [[]]).map((group, groupIndex) => (
             <div
               key={groupIndex}
               onDragOver={handleDragOver}
@@ -303,7 +302,7 @@ function App() {
                 flexWrap: 'wrap',
                 backgroundColor: '#f5f5f5',
                 minWidth: '200px',
-                minHeight: '100px' // 🔥 This ensures visibility even when empty
+                minHeight: '100px'
               }}
             >
               {group.map((src, idx) => (

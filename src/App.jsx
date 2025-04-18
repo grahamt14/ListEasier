@@ -1,3 +1,4 @@
+// App.js
 import { useState, useRef, useEffect } from 'react';
 import './App.css';
 
@@ -175,11 +176,11 @@ function App() {
   return (
     <>
       <div className="centered-container">
-			<div>
-				<img src="/images/ListEasier.jpg" alt="ListEasier Image" class="logoCSS" />
-			</div>
-			<div className="card">
-			<label>Category:
+        <div>
+          <img src="/images/ListEasier.jpg" alt="ListEasier Image" className="logoCSS" />
+        </div>
+        <div className="card">
+          <label>Category:
             <select onChange={handleCategoryChange} value={selectedCategory}>
               {Object.keys(data).map((category) => (
                 <option key={category} value={category}>{category}</option>
@@ -300,7 +301,9 @@ function App() {
                 padding: '0.5rem',
                 borderRadius: '8px',
                 flexWrap: 'wrap',
-                backgroundColor: '#f5f5f5'
+                backgroundColor: '#f5f5f5',
+                minWidth: '200px',
+                minHeight: '100px' // 🔥 This ensures visibility even when empty
               }}
             >
               {group.map((src, idx) => (

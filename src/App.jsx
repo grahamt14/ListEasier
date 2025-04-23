@@ -123,6 +123,8 @@ function App() {
       if (updated[0].length === 0) {
         // First group empty: add here
         updated[0] = [...updated[0], ...groupImgs];
+      }else if (updated[updated.length - 1].length === 0){
+        updated[updated.length - 1] = [...updated[updated.length - 1], ...groupImgs];
       } else {
         // First group has images: create a new group
         updated.push(groupImgs);

@@ -249,7 +249,7 @@ function App() {
       {imageGroups.map((group, gi)=> (
         <div key={gi} onDrop={e=>handleGroupDrop(e,gi)} onDragOver={handleDragOver}
              onDragEnter={()=>setHoveredGroup(gi)} onDragLeave={()=>setHoveredGroup(null)}
-             style={{ minWidth:'250px', minHeight:'200px', border:hoveredGroup===gi?'2px dashed #00bfff':'1px solid #ccc', padding:'1rem', borderRadius:'8px', marginBottom:'1rem', display:'flex', flexWrap:'wrap', gap:'0.5rem', backgroundColor:'#f5f5f5' }}>
+             style={{ minWidth:'250px', height: 'auto', border:hoveredGroup===gi?'2px dashed #00bfff':'1px solid #ccc', padding:'1rem', borderRadius:'8px', marginBottom:'1rem', display:'flex', flexWrap:'wrap', gap:'0.5rem', backgroundColor:'#f5f5f5' }}>
           {group.map((src, xi)=>(
             <img key={xi} src={src} draggable onDragStart={e=>{
               e.dataTransfer.setData('from','group');

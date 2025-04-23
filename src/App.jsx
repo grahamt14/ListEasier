@@ -205,6 +205,40 @@ function App() {
       <button disabled={!selectedImages.length} onClick={handleGroupSelected} style={{ margin: '1rem 0' }}>
         Group Selected
       </button>
+	        <div style={{ position: 'relative', display: 'inline-block' }}
+           onMouseEnter={() => !isValidSelection && setShowTooltip(true)}
+           onMouseLeave={() => setShowTooltip(false)}>
+        <button
+          disabled={!isValidSelection}
+          onClick={handleGenerateListing}
+          style={{
+            padding: '1rem 2rem',
+            fontSize: '1rem',
+            backgroundColor: isValidSelection ? '#007bff' : '#ccc',
+            color: '#fff',
+            border: 'none',
+            borderRadius: '8px',
+            cursor: isValidSelection ? 'pointer' : 'not-allowed'
+          }}>
+          Generate Listing
+        </button>
+        {showTooltip && (
+          <div style={{
+            position: 'absolute',
+            top: '-2rem',
+            left: '0',
+            backgroundColor: '#333',
+            color: '#fff',
+            padding: '0.5rem 1rem',
+            borderRadius: '4px',
+            whiteSpace: 'nowrap',
+            fontSize: '0.875rem'
+          }}>
+            Please select a valid category and subcategory.
+          </div>
+        )}
+      </div>
+    </div>
 	  <h3>Uploaded Images</h3>
       <div style={{ display: 'grid', gap: '1rem', gridTemplateColumns: `repeat(${batchSize || 1}, 1fr)`, marginBottom: '2rem' }}>
         {filesBase64.map((src, i) => (
@@ -240,41 +274,6 @@ function App() {
           ))}
         </div>
       ))}
-
-      <div style={{ position: 'relative', display: 'inline-block' }}
-           onMouseEnter={() => !isValidSelection && setShowTooltip(true)}
-           onMouseLeave={() => setShowTooltip(false)}>
-        <button
-          disabled={!isValidSelection}
-          onClick={handleGenerateListing}
-          style={{
-            padding: '1rem 2rem',
-            fontSize: '1rem',
-            backgroundColor: isValidSelection ? '#007bff' : '#ccc',
-            color: '#fff',
-            border: 'none',
-            borderRadius: '8px',
-            cursor: isValidSelection ? 'pointer' : 'not-allowed'
-          }}>
-          Generate Listing
-        </button>
-        {showTooltip && (
-          <div style={{
-            position: 'absolute',
-            top: '-2rem',
-            left: '0',
-            backgroundColor: '#333',
-            color: '#fff',
-            padding: '0.5rem 1rem',
-            borderRadius: '4px',
-            whiteSpace: 'nowrap',
-            fontSize: '0.875rem'
-          }}>
-            Please select a valid category and subcategory.
-          </div>
-        )}
-      </div>
-    </div>
   );
 }
 

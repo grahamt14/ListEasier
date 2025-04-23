@@ -205,7 +205,7 @@ function App() {
       <button disabled={!selectedImages.length} onClick={handleGroupSelected} style={{ margin: '1rem 0' }}>
         Group Selected
       </button>
-
+	  <h3>Uploaded Images</h3>
       <div style={{ display: 'grid', gap: '1rem', gridTemplateColumns: `repeat(${batchSize || 1}, 1fr)`, marginBottom: '2rem' }}>
         {filesBase64.map((src, i) => (
           <img key={i} src={src} draggable onDragStart={e => {

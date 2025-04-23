@@ -115,27 +115,35 @@ function App() {
   }, [filesBase64]);
 
   // Handle 'Group Selected' click: if first group empty add there, otherwise new group; always keep one empty at end
-  const handleGroupSelected = () => {
-    const groupImgs = selectedImages.map(i => filesBase64[i]);
-    const remaining = filesBase64.filter((_, i) => !selectedImages.includes(i));
-    setImageGroups(prev => {
-      let updated = [...prev];
-      if (updated[0].length === 0) {
-        // First group empty: add here
-        updated[0] = [...updated[0], ...groupImgs];
-      } else {
-        // First group has images: create a new group
-        updated.push(groupImgs);
-      }
-      // Ensure a fresh empty group at the end
-      if (updated[updated.length - 1].length > 0) {
-        updated.push([]);
-      }
-      return updated;
-    });
-    setFilesBase64(remaining);
-    setSelectedImages([]);
-  };
+const handleGroupSelected = () => {
+  const groupImgs = selectedImages.map(i => filesBase64[i]);
+  const remaining = filesBase64.filter((_, i) => !selectedImages.includes(i));
+  setImageGroups(prev => {
+    let updated = [...prev];
+
+    // Case 1: First group is empty
+    if (updated[0].length === 0) {
+      updated[0] = [...groupImgs];
+    } 
+    // Case 2: Last group is empty and not the first group
+    else if (updated.length > 1 && updated[updated.length - 1].length === 0) {
+      updated[updated.length - 1] = [...groupImgs];
+    } 
+    // Case 3: Create a new group
+    else {
+      updated.push(groupImgs);
+    }
+
+    // Ensure a fresh empty group at the end
+    if (updated[updated.length - 1].length > 0) {
+      updated.push([]);
+    }
+
+    return updated;
+  });
+  setFilesBase64(remaining);
+  setSelectedImages([]);
+};
 
   // Drag/drop between pool and groups
   const handleGroupDrop = (e, groupIdx, imgIdx = null) => {

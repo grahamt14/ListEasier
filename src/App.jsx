@@ -137,37 +137,45 @@ function App() {
     setSelectedImages([]);
   };
 
-  // Drag/drop between pool and groups
+  // Drag/drop between pool and groups: ensures an empty group remains at end after drop
   const handleGroupDrop = (e, groupIdx, imgIdx = null) => {
     e.preventDefault();
     const from = e.dataTransfer.getData("from");
     const index = e.dataTransfer.getData("index");
     setHoveredGroup(null);
 
-    if (from === "pool") {
-      const i = parseInt(index, 10);
-      const img = filesBase64[i];
-      setFilesBase64(prev => prev.filter((_, j) => j !== i));
-      setImageGroups(prev => {
-        const cp = [...prev];
-        const tgt = [...cp[groupIdx]];
+    setImageGroups(prev => {
+      let updated = [...prev];
+
+      if (from === "pool") {
+        const i = parseInt(index, 10);
+        const img = filesBase64[i];
+        setFilesBase64(prevFiles => prevFiles.filter((_, j) => j !== i));
+        const tgt = [...updated[groupIdx]];
         imgIdx === null ? tgt.push(img) : tgt.splice(imgIdx, 0, img);
-        cp[groupIdx] = tgt;
-        return cp;
-      });
-    } else {
-      const [srcG, srcI] = index.split("-").map(Number);
-      if (srcG === groupIdx && srcI === imgIdx) return;
-      const img = imageGroups[srcG][srcI];
-      setImageGroups(prev => {
-        const cp = [...prev];
-        cp[srcG] = cp[srcG].filter((_, j) => j !== srcI);
-        const tgt = [...cp[groupIdx]];
-        imgIdx === null ? tgt.push(img) : tgt.splice(imgIdx, 0, img);
-        cp[groupIdx] = tgt;
-        return cp;
-      });
-    }
+        updated[groupIdx] = tgt;
+      } else {
+        const [srcG, srcI] = index.split("-").map(Number);
+        if (!(srcG === groupIdx && srcI === imgIdx)) {
+          const img = updated[srcG][srcI];
+          updated[srcG] = updated[srcG].filter((_, j) => j !== srcI);
+          const tgt = [...updated[groupIdx]];
+          imgIdx === null ? tgt.push(img) : tgt.splice(imgIdx, 0, img);
+          updated[groupIdx] = tgt;
+        }
+      }
+
+      // Ensure exactly one empty group at the end
+      if (updated[updated.length - 1].length > 0) {
+        updated.push([]);
+      }
+      // Remove any extra empty groups before the last
+      updated = updated.filter((grp, idx) => grp.length > 0 || idx === updated.length - 1);
+
+      return updated;
+    });
+
+    setSelectedImages([]);
   };
 
   // Send listing to API
@@ -198,81 +206,3 @@ function App() {
           SubCategory:
           <select onChange={handleSubCategoryChange} value={subCategory}>
             {subcategories.map((sub, i) => <option key={i}>{sub}</option>)}
-          </select>
-        </label>
-
-        {/* Upload area */}
-        <div onDrop={handleDrop} onDragOver={handleDragOver} onClick={triggerFileInput}
-             style={{ border: '2px dashed #aaa', padding: '2rem', textAlign: 'center', backgroundColor: '#6a6a6a', borderRadius: '8px', cursor: 'pointer', marginBottom: '1rem' }}>
-          <p>Click or drag images to upload</p>
-          <input ref={fileInputRef} type="file" multiple accept="image/*" onChange={handleFileChange} style={{ display: 'none' }} />
-        </div>
-
-        {/* Batch size */}
-        <label>
-          Images Per Item:
-          <select disabled={!filesBase64.length} value={batchSize} onChange={e => setBatchSize(Number(e.target.value))}>
-            {!filesBase64.length ? <option>0</option> :
-              Array.from({ length: filesBase64.length }, (_, i) => i + 1)
-                .filter(n => filesBase64.length % n === 0 && n <= 24)
-                .map(n => <option key={n} value={n}>{n}</option>)}
-          </select>
-        </label>
-      </div>
-
-      {/* Group Selected button ```
-      the images are stretching inside of the image group containers. They should always maintain their height and width. It is ok if there is space between them.
-      ``` */}
-      <button disabled={!selectedImages.length} onClick={handleGroupSelected} style={{ margin: '1rem 0' }}>
-        Group Selected
-      </button>
-
-      {/* Pool of images */}
-      <div style={{ display: 'grid', gap: '1rem', gridTemplateColumns: `repeat(${batchSize||1}, 1fr)`, marginBottom: '2rem' }}>
-        {filesBase64.map((src, i) => (
-          <img key={i} src={src} draggable onDragStart={e => {
-            e.dataTransfer.setData('from','pool');
-            e.dataTransfer.setData('index',i);
-            const img=new Image();img.src=src;img.onload=()=>e.dataTransfer.setDragImage(img,50,50);
-          }} onClick={()=>toggleImageSelection(i)}
-               style={{ width: '200px', border: selectedImages.includes(i)?'3px solid #00f':'2px solid transparent', cursor:'grab', transition:'transform 0.2s' }}
-               onMouseEnter={e=>e.currentTarget.style.transform='scale(1.05)'} onMouseLeave={e=>e.currentTarget.style.transform='scale(1)'}
-          />
-        ))}
-      </div>
-
-      {/* Image Groups */}
-      <h3>Image Groups</h3>
-      {imageGroups.map((group, gi)=> (
-        <div key={gi} onDrop={e=>handleGroupDrop(e,gi)} onDragOver={handleDragOver}
-             onDragEnter={()=>setHoveredGroup(gi)} onDragLeave={()=>setHoveredGroup(null)}
-             style={{ minWidth:'250px', minHeight:'200px', border:hoveredGroup===gi?'2px dashed #00bfff':'1px solid #ccc', padding:'1rem', borderRadius:'8px', marginBottom:'1rem', display:'flex', flexWrap:'wrap', gap:'0.5rem', backgroundColor:'#f5f5f5' }}>
-          {group.map((src, xi)=>(
-            <img key={xi} src={src} draggable onDragStart={e=>{
-              e.dataTransfer.setData('from','group');
-              e.dataTransfer.setData('index',`${gi}-${xi}`);
-              const img=new Image();img.src=src;img.onload=()=>e.dataTransfer.setDragImage(img,50,50);
-            }} onDrop={e=>handleGroupDrop(e,gi,xi)} onDragOver={e=>e.preventDefault()}
-                 onClick={()=>{
-                   const cp=[...imageGroups];
-                   const removed=cp[gi].splice(xi,1)[0];
-                   setImageGroups(cp.filter(g=>g.length));
-                   setFilesBase64(prev=>[...prev,removed]);
-                 }}
-                 style={{ width:'100px', height:'auto', cursor:'grab', transition:'transform 0.2s' }}
-                 onMouseEnter={e=>e.currentTarget.style.transform='scale(1.05)'} onMouseLeave={e=>e.currentTarget.style.transform='scale(1)'}
-            />
-          ))}
-        </div>
-      ))}
-
-      {/* Generate Listing */}
-      <button onClick={handleGenerateListing} style={{ padding:'1rem 2rem', fontSize:'1rem', backgroundColor:'#007bff', color:'#fff', border:'none', borderRadius:'8px', cursor:'pointer' }}
-              onMouseEnter={e=>e.currentTarget.style.backgroundColor='#0056b3'} onMouseLeave={e=>e.currentTarget.style.backgroundColor='#007bff'}>
-        Generate Listing
-      </button>
-    </div>
-  );
-}
-
-export default App;

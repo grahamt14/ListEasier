@@ -153,12 +153,45 @@ function App() {
   };
 
   const handleGenerateListing = () => {
-	  
-	 const filteredGroups = imageGroups.filter(group => group.length > 0);
-	  
+    // Calculate the final groups to send to the API
+    let finalGroups = [];
+    
+    // First, include all non-empty existing groups
+    const existingGroups = imageGroups.filter(group => group.length > 0);
+    finalGroups = [...existingGroups];
+    
+    // Then, add new groups from filesBase64 based on batchSize
+    if (filesBase64.length > 0 && batchSize > 0) {
+      for (let i = 0; i < filesBase64.length; i += batchSize) {
+        const group = filesBase64.slice(i, i + batchSize);
+        finalGroups.push(group);
+      }
+      
+      // Also update the UI state to reflect these changes
+      setImageGroups(prev => {
+        const filteredPrev = prev.filter(group => group.length > 0);
+        
+        const newGroups = [];
+        for (let i = 0; i < filesBase64.length; i += batchSize) {
+          const group = filesBase64.slice(i, i + batchSize);
+          newGroups.push(group);
+        }
+        
+        return [...filteredPrev, ...newGroups, []];
+      });
+      
+      // Clear the filesBase64 array
+      setFilesBase64([]);
+    }
+    
+    // Now make the API call with the finalGroups
     fetch(
       "https://7f26uyyjs5.execute-api.us-east-2.amazonaws.com/ListEasily/ListEasilyAPI",
-      { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ category, subCategory, Base64Key: filteredGroups }) }
+      { 
+        method: "POST", 
+        headers: { "Content-Type": "application/json" }, 
+        body: JSON.stringify({ category, subCategory, Base64Key: finalGroups }) 
+      }
     )
       .then(res => res.json())
       .then(data => setResponseData(data))
@@ -205,7 +238,7 @@ function App() {
       <button disabled={!selectedImages.length} onClick={handleGroupSelected} style={{ margin: '1rem 0' }}>
         Group Selected
       </button>
-	       <div style={{ position: 'relative', display: 'inline-block' }}
+      <div style={{ position: 'relative', display: 'inline-block' }}
            onMouseEnter={() => !isValidSelection && setShowTooltip(true)}
            onMouseLeave={() => setShowTooltip(false)}>
         <button
@@ -238,7 +271,7 @@ function App() {
           </div>
         )}
       </div>
-	  <h3>Uploaded Images</h3>
+      <h3>Uploaded Images</h3>
       <div style={{ display: 'grid', gap: '1rem', gridTemplateColumns: `repeat(${batchSize || 1}, 1fr)`, marginBottom: '2rem' }}>
         {filesBase64.map((src, i) => (
           <img key={i} src={src} draggable onDragStart={e => {
@@ -273,8 +306,6 @@ function App() {
           ))}
         </div>
       ))}
-
- 
     </div>
   );
 }

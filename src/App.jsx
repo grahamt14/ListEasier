@@ -153,9 +153,12 @@ function App() {
   };
 
   const handleGenerateListing = () => {
+	  
+	 const filteredGroups = imageGroups.filter(group => group.length > 0);
+	  
     fetch(
       "https://7f26uyyjs5.execute-api.us-east-2.amazonaws.com/ListEasily/ListEasilyAPI",
-      { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ category, subCategory, Base64Key: imageGroups }) }
+      { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ category, subCategory, Base64Key: filteredGroups }) }
     )
       .then(res => res.json())
       .then(data => setResponseData(data))

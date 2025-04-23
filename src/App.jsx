@@ -205,7 +205,7 @@ function App() {
       <button disabled={!selectedImages.length} onClick={handleGroupSelected} style={{ margin: '1rem 0' }}>
         Group Selected
       </button>
-	        <div style={{ position: 'relative', display: 'inline-block' }}
+	       <div style={{ position: 'relative', display: 'inline-block' }}
            onMouseEnter={() => !isValidSelection && setShowTooltip(true)}
            onMouseLeave={() => setShowTooltip(false)}>
         <button
@@ -238,7 +238,6 @@ function App() {
           </div>
         )}
       </div>
-    </div>
 	  <h3>Uploaded Images</h3>
       <div style={{ display: 'grid', gap: '1rem', gridTemplateColumns: `repeat(${batchSize || 1}, 1fr)`, marginBottom: '2rem' }}>
         {filesBase64.map((src, i) => (
@@ -274,6 +273,9 @@ function App() {
           ))}
         </div>
       ))}
+
+ 
+    </div>
   );
 }
 

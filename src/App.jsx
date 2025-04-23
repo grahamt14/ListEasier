@@ -114,16 +114,24 @@ function App() {
     setBatchSize(valid[valid.length - 1]);
   }, [filesBase64]);
 
-  // Handle 'Group Selected' click: add to first group, then append new empty group
+  // Handle 'Group Selected' click: if first group empty add there, otherwise new group; always keep one empty at end
   const handleGroupSelected = () => {
     const groupImgs = selectedImages.map(i => filesBase64[i]);
     const remaining = filesBase64.filter((_, i) => !selectedImages.includes(i));
     setImageGroups(prev => {
-      const updated = [...prev];
-      // Add selected to first group
-      updated[0] = [...updated[0], ...groupImgs];
-      // Ensure a fresh empty group at end
-      return [...updated, []];
+      let updated = [...prev];
+      if (updated[0].length === 0) {
+        // First group empty: add here
+        updated[0] = [...updated[0], ...groupImgs];
+      } else {
+        // First group has images: create a new group
+        updated.push(groupImgs);
+      }
+      // Ensure a fresh empty group at the end
+      if (updated[updated.length - 1].length > 0) {
+        updated.push([]);
+      }
+      return updated;
     });
     setFilesBase64(remaining);
     setSelectedImages([]);
@@ -212,7 +220,9 @@ function App() {
         </label>
       </div>
 
-      {/* Group Selected button */}
+      {/* Group Selected button ```
+      the images are stretching inside of the image group containers. They should always maintain their height and width. It is ok if there is space between them.
+      ``` */}
       <button disabled={!selectedImages.length} onClick={handleGroupSelected} style={{ margin: '1rem 0' }}>
         Group Selected
       </button>
@@ -249,7 +259,7 @@ function App() {
                    setImageGroups(cp.filter(g=>g.length));
                    setFilesBase64(prev=>[...prev,removed]);
                  }}
-                 style={{ width:'100px', cursor:'grab', transition:'transform 0.2s' }}
+                 style={{ width:'100px', height:'auto', cursor:'grab', transition:'transform 0.2s' }}
                  onMouseEnter={e=>e.currentTarget.style.transform='scale(1.05)'} onMouseLeave={e=>e.currentTarget.style.transform='scale(1)'}
             />
           ))}

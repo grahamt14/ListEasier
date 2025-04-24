@@ -161,8 +161,8 @@ function App() {
     finalGroups = [...existingGroups];
     
     // Then, add new groups from filesBase64 based on batchSize
-    if (filesBase64.length > 0 && batchSize > 0) {
-      for (let i = 0; i < filesBase64.length; i += batchSize) {
+    if (filesBase64.length > 0) {
+      for (let i = 0; i < filesBase64.length; i++) {
         const group = filesBase64.slice(i, i + batchSize);
         finalGroups.push(group);
       }

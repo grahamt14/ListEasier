@@ -187,7 +187,7 @@ function App() {
 
     const allResponses = [];
 
-    const chunkifyGroups = (groups, maxSize = 10 * 1024 * 1024) => {
+    const chunkifyGroups = (groups, maxSize = 5 * 1024 * 1024) => {
       const result = [];
       let current = [];
 

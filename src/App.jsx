@@ -119,62 +119,7 @@ function App() {
   }, [filesBase64]);
 
   const handleGroupSelected = () => {
-    const groupImgs = selectedImages.map(i => filesBase64[i]);
-    const remaining = filesBase64.filter((_, i) => !selectedImages.includes(i));
-    setImageGroups(prev => {
-      let updated = [...prev];
-      const firstEmptyIndex = updated.findIndex(g => g.length === 0);
-      if (firstEmptyIndex !== -1) {
-        updated[firstEmptyIndex] = [...updated[firstEmptyIndex], ...groupImgs];
-      } else {
-        updated.push(groupImgs);
-      }
-      if (updated[updated.length - 1].length > 0) {
-        updated.push([]);
-      }
-      return updated;
-    });
-    setFilesBase64(remaining);
-    setSelectedImages([]);
-  };
-
-  const handleGroupDrop = (e, groupIdx, imgIdx = null) => {
-    e.preventDefault();
-    const from = e.dataTransfer.getData("from");
-    const index = e.dataTransfer.getData("index");
-    setHoveredGroup(null);
-
-    setImageGroups(prev => {
-      let updated = [...prev];
-      if (from === "pool") {
-        const i = parseInt(index, 10);
-        const img = filesBase64[i];
-        setFilesBase64(prevFiles => prevFiles.filter((_, j) => j !== i));
-        const tgt = [...updated[groupIdx]];
-        imgIdx === null ? tgt.push(img) : tgt.splice(imgIdx, 0, img);
-        updated[groupIdx] = tgt;
-      } else {
-        const [srcG, srcI] = index.split("-").map(Number);
-        if (!(srcG === groupIdx && srcI === imgIdx)) {
-          const img = updated[srcG][srcI];
-          updated[srcG] = updated[srcG].filter((_, j) => j !== srcI);
-          const tgt = [...updated[groupIdx]];
-          imgIdx === null ? tgt.push(img) : tgt.splice(imgIdx, 0, img);
-          updated[groupIdx] = tgt;
-        }
-      }
-      if (updated[updated.length - 1].length > 0) updated.push([]);
-      return updated;
-    });
-
-    setSelectedImages([]);
-    setIsDirty(true);
-  };
-
-  const handleGenerateListing = () => {
-    // clear empty groups
     const nonEmptyGroups = imageGroups.filter(g => g.length > 0);
-    // handle batching of any remaining pool images
     if (filesBase64.length > 0 && batchSize > 0) {
       for (let i = 0; i < filesBase64.length; i += batchSize) {
         nonEmptyGroups.push(filesBase64.slice(i, i + batchSize));
@@ -311,21 +256,26 @@ function App() {
             </button>
             {showTooltip && <span className="tooltip">Please select a valid category and subcategory.</span>}
           </div>
+
           {filesBase64.length > 0 && (
             <div className="uploaded-images">
-              {filesBase64.map((src, i) => (
-                <img
-                  key={i}
-                  src={src}
-                  alt={`upload-${i}`}
-                  draggable
-                  onDragStart={e => {
-                    e.dataTransfer.setData("from", "pool");
-                    e.dataTransfer.setData("index", i.toString());
-                  }}
-                  onClick={() => toggleImageSelection(i)}
-                />
-              ))}
+              {filesBase64.map((src, i) => {
+                const isSelected = selectedImages.includes(i);
+                return (
+                  <img
+                    key={i}
+                    src={src}
+                    alt={`upload-${i}`}
+                    draggable
+                    onDragStart={e => {
+                      e.dataTransfer.setData("from", "pool");
+                      e.dataTransfer.setData("index", i.toString());
+                    }}
+                    onClick={() => toggleImageSelection(i)}
+                    style={{ outline: isSelected ? '3px solid #007bff' : 'none' }}
+                  />
+                );
+              })}
             </div>
           )}
         </section>

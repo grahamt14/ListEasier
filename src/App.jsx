@@ -18,6 +18,7 @@ function App() {
   const [isDirty, setIsDirty] = useState(false);
   const [totalChunks, setTotalChunks] = useState(0);
   const [completedChunks, setCompletedChunks] = useState(0);
+  const [processingGroups, setProcessingGroups] = useState([]);
 
   const fileInputRef = useRef(null);
 
@@ -30,6 +31,13 @@ function App() {
     "Video Games": ["None"],
     "Postcards": ["Non-Topographical Postcards", "Topographical Postcards"]
   };
+
+  // Effect to log responseData changes for debugging
+  useEffect(() => {
+    if (responseData.some(item => item !== null)) {
+      console.log("Response data updated:", responseData);
+    }
+  }, [responseData]);
 
   const handleCategoryChange = (e) => {
     const category = e.target.value;
@@ -192,9 +200,12 @@ function App() {
     setFilesBase64([]);
     setIsDirty(false);
     setIsLoading(true);
+    setProcessingGroups(Array(nonEmptyGroups.length).fill(true));
 
     // 4. Fire off each fetch separately and update state upon completion
     nonEmptyGroups.forEach((group, idx) => {
+      console.log(`Starting API call for group ${idx}`);
+      
       fetch(
         "https://7f26uyyjs5.execute-api.us-east-2.amazonaws.com/ListEasily/ListEasilyAPI",
         {
@@ -205,30 +216,53 @@ function App() {
       )
         .then(res => res.json())
         .then(data => {
+          console.log(`Group ${idx} API call completed`);
           let parsed = data.body;
           if (typeof parsed === "string") parsed = JSON.parse(parsed);
-          setResponseData(prev => {
-            const next = [...prev];
-            next[idx] = Array.isArray(parsed) ? parsed[0] : parsed;
-            return next;
-          });
+          
+          // Use setTimeout to force this update to be processed separately
+          setTimeout(() => {
+            setResponseData(prev => {
+              const next = [...prev];
+              next[idx] = Array.isArray(parsed) ? parsed[0] : parsed;
+              return next;
+            });
+            
+            setProcessingGroups(prev => {
+              const next = [...prev];
+              next[idx] = false;
+              return next;
+            });
+          }, 0);
         })
         .catch(err => {
-          console.error("Error during fetch:", err);
-          setResponseData(prev => {
-            const next = [...prev];
-            next[idx] = { error: "Failed to fetch listing data", raw_content: err.message };
-            return next;
-          });
+          console.error(`Error during fetch for group ${idx}:`, err);
+          
+          setTimeout(() => {
+            setResponseData(prev => {
+              const next = [...prev];
+              next[idx] = { error: "Failed to fetch listing data", raw_content: err.message };
+              return next;
+            });
+            
+            setProcessingGroups(prev => {
+              const next = [...prev];
+              next[idx] = false;
+              return next;
+            });
+          }, 0);
         })
         .finally(() => {
-          setCompletedChunks(c => {
-            const done = c + 1;
-            if (done === nonEmptyGroups.length) {
-              setIsLoading(false);
-            }
-            return done;
-          });
+          setTimeout(() => {
+            setCompletedChunks(c => {
+              const done = c + 1;
+              console.log(`Completed ${done} of ${nonEmptyGroups.length} chunks`);
+              if (done === nonEmptyGroups.length) {
+                setIsLoading(false);
+              }
+              return done;
+            });
+          }, 0);
         });
     });
   };
@@ -246,6 +280,7 @@ function App() {
     setResponseData([]);
     setIsLoading(false);
     setIsDirty(true);
+    setProcessingGroups([]);
   };
 
   const renderResponseData = (index) => {
@@ -324,7 +359,7 @@ function App() {
 
           <div className="generate-area" onMouseEnter={() => !isValidSelection && setShowTooltip(true)} onMouseLeave={() => setShowTooltip(false)}>
             <button className="primary large" disabled={!isValidSelection || isLoading || !isDirty} onClick={handleGenerateListing}>
-              {isLoading ? 'Generating...' : 'Generate Listing'}
+              {isLoading ? `Generating... (${completedChunks}/${totalChunks})` : 'Generate Listing'}
             </button>
             {showTooltip && <span className="tooltip">Please select a valid category and subcategory.</span>}
           </div>
@@ -360,6 +395,11 @@ function App() {
 
         <section className="preview-section">
           <h2>Image Groups & Listings</h2>
+          {isLoading && (
+            <div className="loading-progress">
+              <p>Processing {completedChunks} of {totalChunks} listings...</p>
+            </div>
+          )}
           <div className="groups-container">
             {imageGroups.map((group, gi) => (
               <div
@@ -377,10 +417,11 @@ function App() {
                   ))}
                 </div>
                 <div className="listing">
-                  {isLoading
-                    ? <p>Generating listing...</p>
-                    : renderResponseData(gi) || <p>No data. Click “Generate Listing”.</p>
-                  }
+                  {processingGroups[gi] ? (
+                    <p>Generating listing for group {gi+1}...</p>
+                  ) : (
+                    renderResponseData(gi) || <p>No data. Click "Generate Listing".</p>
+                  )}
                 </div>
               </div>
             ))}

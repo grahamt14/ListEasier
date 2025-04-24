@@ -10,7 +10,7 @@ function App() {
   const [errorMessages, setErrorMessages] = useState([]);
   const [batchSize, setBatchSize] = useState(0);
   const [selectedImages, setSelectedImages] = useState([]);
-  const [imageGroups, setImageGroups] = useState([[]]);  // always starts with one empty group
+  const [imageGroups, setImageGroups] = useState([[]]);
   const [responseData, setResponseData] = useState([]);
   const [hoveredGroup, setHoveredGroup] = useState(null);
   const [showTooltip, setShowTooltip] = useState(false);
@@ -118,14 +118,12 @@ function App() {
     const remaining = filesBase64.filter((_, i) => !selectedImages.includes(i));
     setImageGroups(prev => {
       let updated = [...prev];
-      // always add into the first empty slot
       const firstEmptyIndex = updated.findIndex(g => g.length === 0);
       if (firstEmptyIndex !== -1) {
         updated[firstEmptyIndex] = [...updated[firstEmptyIndex], ...groupImgs];
       } else {
         updated.push(groupImgs);
       }
-      // ensure there's always an empty group at the end
       if (updated[updated.length - 1].length > 0) {
         updated.push([]);
       }
@@ -224,7 +222,7 @@ function App() {
     setErrorMessages([]);
     setBatchSize(0);
     setSelectedImages([]);
-    setImageGroups([[]]);     // reset to single empty group
+    setImageGroups([[]]);
     setResponseData([]);
     setIsLoading(false);
   };
@@ -280,17 +278,30 @@ function App() {
               {subcategories.map((sub, i) => <option key={i}>{sub}</option>)}
             </select>
           </div>
+
           <div className="upload-area" onDrop={handleDrop} onDragOver={handleDragOver} onClick={triggerFileInput}>
             <p>Click or drag images to upload</p>
             <input ref={fileInputRef} type="file" multiple accept="image/*" onChange={handleFileChange} hidden />
           </div>
+
           {filesBase64.length > 0 && (
             <div className="uploaded-images">
               {filesBase64.map((src, i) => (
-                <img key={i} src={src} alt={`upload-${i}`} onClick={() => toggleImageSelection(i)} />
+                <img
+                  key={i}
+                  src={src}
+                  alt={`upload-${i}`}
+                  draggable
+                  onDragStart={e => {
+                    e.dataTransfer.setData("from", "pool");
+                    e.dataTransfer.setData("index", i.toString());
+                  }}
+                  onClick={() => toggleImageSelection(i)}
+                />
               ))}
             </div>
           )}
+
           <div className="form-group">
             <label>Images Per Item</label>
             <select disabled={!filesBase64.length} value={batchSize} onChange={e => setBatchSize(Number(e.target.value))}>
@@ -302,10 +313,12 @@ function App() {
               }
             </select>
           </div>
+
           <div className="button-group">
             <button className="primary" disabled={!selectedImages.length} onClick={handleGroupSelected}>Group Selected</button>
             <button className="danger" onClick={handleClearAll}>Clear All</button>
           </div>
+
           <div className="generate-area" onMouseEnter={() => !isValidSelection && setShowTooltip(true)} onMouseLeave={() => setShowTooltip(false)}>
             <button className="primary large" disabled={!isValidSelection || isLoading} onClick={handleGenerateListing}>
               {isLoading ? 'Generating...' : 'Generate Listing'}
@@ -326,7 +339,10 @@ function App() {
               >
                 <div className="thumbs">
                   {group.map((src, xi) => (
-                    <img key={xi} src={src} alt={`group-${gi}-img-${xi}`} />
+                    <img key={xi} src={src} alt={`group-${gi}-img-${xi}`} draggable onDragStart={e => {
+                      e.dataTransfer.setData("from", "group");
+                      e.dataTransfer.setData("index", `${gi}-${xi}`);
+                    }} />
                   ))}
                 </div>
                 <div className="listing">

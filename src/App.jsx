@@ -11,9 +11,10 @@ function App() {
   const [batchSize, setBatchSize] = useState(0);
   const [selectedImages, setSelectedImages] = useState([]);
   const [imageGroups, setImageGroups] = useState([[]]);
-  const [responseData, setResponseData] = useState(null);
+  const [responseData, setResponseData] = useState([]);
   const [hoveredGroup, setHoveredGroup] = useState(null);
   const [showTooltip, setShowTooltip] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
 
   const fileInputRef = useRef(null);
 
@@ -161,8 +162,8 @@ function App() {
     finalGroups = [...existingGroups];
     
     // Then, add new groups from filesBase64 based on batchSize
-    if (filesBase64.length > 0) {
-      for (let i = 0; i < filesBase64.length; i++) {
+    if (filesBase64.length > 0 && batchSize > 0) {
+      for (let i = 0; i < filesBase64.length; i += batchSize) {
         const group = filesBase64.slice(i, i + batchSize);
         finalGroups.push(group);
       }
@@ -184,6 +185,9 @@ function App() {
       setFilesBase64([]);
     }
     
+    // Set loading state
+    setIsLoading(true);
+    
     // Now make the API call with the finalGroups
     fetch(
       "https://7f26uyyjs5.execute-api.us-east-2.amazonaws.com/ListEasily/ListEasilyAPI",
@@ -194,8 +198,61 @@ function App() {
       }
     )
       .then(res => res.json())
-      .then(data => setResponseData(data))
-      .catch(err => console.error("Error CALLING API:", err));
+      .then(data => {
+        // Parse the response
+        let parsedData;
+        try {
+          // If the response is a string containing JSON, parse it
+          if (typeof data.body === 'string') {
+            parsedData = JSON.parse(data.body);
+          } else {
+            // Otherwise use the data directly
+            parsedData = data.body || data;
+          }
+          setResponseData(parsedData);
+        } catch (error) {
+          console.error("Error parsing response:", error);
+          setResponseData([{ error: "Failed to parse response" }]);
+        }
+        setIsLoading(false);
+      })
+      .catch(err => {
+        console.error("Error CALLING API:", err);
+        setIsLoading(false);
+      });
+  };
+
+  // Function to render response data for each group
+  const renderResponseData = (index) => {
+    if (!responseData || responseData.length === 0 || !responseData[index]) {
+      return null;
+    }
+    
+    const response = responseData[index];
+    
+    // Check if response is an error message
+    if (response.error) {
+      return (
+        <div className="response-error">
+          <p>Error: {response.error}</p>
+          {response.raw_content && <p>Raw content: {response.raw_content}</p>}
+        </div>
+      );
+    }
+    
+    // Otherwise, render the response properties
+    return (
+      <div className="response-data">
+        <h4>Generated Listing</h4>
+        <div className="response-fields">
+          {Object.entries(response).map(([key, value]) => (
+            <div key={key} className="response-field">
+              <strong>{key.replace(/_/g, ' ').charAt(0).toUpperCase() + key.replace(/_/g, ' ').slice(1)}:</strong> {value}
+            </div>
+          ))}
+        </div>
+      </div>
+    );
   };
 
   const isValidSelection = selectedCategory !== "--" && subCategory !== "--";
@@ -242,18 +299,18 @@ function App() {
            onMouseEnter={() => !isValidSelection && setShowTooltip(true)}
            onMouseLeave={() => setShowTooltip(false)}>
         <button
-          disabled={!isValidSelection}
+          disabled={!isValidSelection || isLoading}
           onClick={handleGenerateListing}
           style={{
             padding: '1rem 2rem',
             fontSize: '1rem',
-            backgroundColor: isValidSelection ? '#007bff' : '#ccc',
+            backgroundColor: isValidSelection && !isLoading ? '#007bff' : '#ccc',
             color: '#fff',
             border: 'none',
             borderRadius: '8px',
-            cursor: isValidSelection ? 'pointer' : 'not-allowed'
+            cursor: isValidSelection && !isLoading ? 'pointer' : 'not-allowed'
           }}>
-          Generate Listing
+          {isLoading ? 'Generating...' : 'Generate Listing'}
         </button>
         {showTooltip && (
           <div style={{
@@ -284,30 +341,101 @@ function App() {
         ))}
       </div>
 
-      <h3>Image Groups</h3>
-      {imageGroups.map((group, gi) => (
-        <div key={gi} onDrop={e => handleGroupDrop(e, gi)} onDragOver={handleDragOver}
-             onDragEnter={() => setHoveredGroup(gi)} onDragLeave={() => setHoveredGroup(null)}
-             style={{ minWidth: '250px', height: 'auto', border: hoveredGroup === gi ? '2px dashed #00bfff' : '1px solid #ccc', padding: '1rem', borderRadius: '8px', marginBottom: '1rem', display: 'flex', flexWrap: 'wrap', gap: '0.5rem', backgroundColor: '#f5f5f5' }}>
-          {group.map((src, xi) => (
-            <img key={xi} src={src} draggable onDragStart={e => {
-              e.dataTransfer.setData('from', 'group');
-              e.dataTransfer.setData('index', `${gi}-${xi}`);
-              const img = new Image(); img.src = src; img.onload = () => e.dataTransfer.setDragImage(img, 50, 50);
-            }} onDrop={e => handleGroupDrop(e, gi, xi)} onDragOver={e => e.preventDefault()}
-              onClick={() => {
-                const cp = [...imageGroups];
-                const removed = cp[gi].splice(xi, 1)[0];
-                setImageGroups(cp.filter(g => g.length));
-                setFilesBase64(prev => [...prev, removed]);
-              }}
-              style={{ width: '100px', height: 'auto', cursor: 'grab', transition: 'transform 0.2s' }}
-              onMouseEnter={e => e.currentTarget.style.transform = 'scale(1.05)'} onMouseLeave={e => e.currentTarget.style.transform = 'scale(1)'}/>
-          ))}
+      <h3>Image Groups & Generated Listings</h3>
+      {imageGroups.filter(group => group.length > 0).map((group, gi) => (
+        <div key={gi} className="image-group-container" style={{ marginBottom: '2rem' }}>
+          <div 
+            onDrop={e => handleGroupDrop(e, gi)} 
+            onDragOver={handleDragOver}
+            onDragEnter={() => setHoveredGroup(gi)} 
+            onDragLeave={() => setHoveredGroup(null)}
+            style={{ 
+              minWidth: '250px', 
+              height: 'auto', 
+              border: hoveredGroup === gi ? '2px dashed #00bfff' : '1px solid #ccc', 
+              padding: '1rem', 
+              borderRadius: '8px', 
+              marginBottom: '1rem', 
+              display: 'flex', 
+              flexWrap: 'wrap', 
+              gap: '0.5rem', 
+              backgroundColor: '#f5f5f5' 
+            }}
+          >
+            {group.map((src, xi) => (
+              <img 
+                key={xi} 
+                src={src} 
+                draggable 
+                onDragStart={e => {
+                  e.dataTransfer.setData('from', 'group');
+                  e.dataTransfer.setData('index', `${gi}-${xi}`);
+                  const img = new Image(); 
+                  img.src = src; 
+                  img.onload = () => e.dataTransfer.setDragImage(img, 50, 50);
+                }} 
+                onDrop={e => handleGroupDrop(e, gi, xi)} 
+                onDragOver={e => e.preventDefault()}
+                onClick={() => {
+                  const cp = [...imageGroups];
+                  const removed = cp[gi].splice(xi, 1)[0];
+                  setImageGroups(cp.filter(g => g.length || g === cp[cp.length - 1]));
+                  setFilesBase64(prev => [...prev, removed]);
+                }}
+                style={{ 
+                  width: '100px', 
+                  height: 'auto', 
+                  cursor: 'grab', 
+                  transition: 'transform 0.2s' 
+                }}
+                onMouseEnter={e => e.currentTarget.style.transform = 'scale(1.05)'} 
+                onMouseLeave={e => e.currentTarget.style.transform = 'scale(1)'}
+              />
+            ))}
+          </div>
+          
+          {/* Display Response Data for this group */}
+          <div style={{ 
+            padding: '1rem', 
+            border: '1px solid #ddd', 
+            borderRadius: '8px',
+            backgroundColor: '#f9f9f9',
+            marginTop: '0.5rem'
+          }}>
+            {isLoading ? (
+              <p>Generating listing...</p>
+            ) : responseData && responseData.length > gi ? (
+              renderResponseData(gi)
+            ) : (
+              <p>No listing data available. Click "Generate Listing" to create one.</p>
+            )}
+          </div>
         </div>
       ))}
-	  
-	  {responseData}
+      
+      {/* Empty drop area for new groups */}
+      {imageGroups.length > 0 && imageGroups[imageGroups.length - 1].length === 0 && (
+        <div 
+          onDrop={e => handleGroupDrop(e, imageGroups.length - 1)} 
+          onDragOver={handleDragOver}
+          onDragEnter={() => setHoveredGroup(imageGroups.length - 1)} 
+          onDragLeave={() => setHoveredGroup(null)}
+          style={{ 
+            minWidth: '250px', 
+            minHeight: '100px',
+            border: hoveredGroup === imageGroups.length - 1 ? '2px dashed #00bfff' : '1px dashed #ccc', 
+            padding: '1rem', 
+            borderRadius: '8px', 
+            marginBottom: '1rem',
+            display: 'flex',
+            justifyContent: 'center',
+            alignItems: 'center',
+            backgroundColor: '#f5f5f5'
+          }}
+        >
+          <p style={{ color: '#777' }}>Drag images here to create a new group</p>
+        </div>
+      )}
     </div>
   );
 }

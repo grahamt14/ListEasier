@@ -172,65 +172,75 @@ function App() {
   };
 
   const handleGenerateListing = async () => {
-    const nonEmptyGroups = imageGroups.filter(g => g.length > 0);
+  // 1. Gather all non-empty groups
+  const nonEmptyGroups = imageGroups.filter(g => g.length > 0);
 
-    if (filesBase64.length > 0 && batchSize > 0) {
-      for (let i = 0; i < filesBase64.length; i += batchSize) {
-        nonEmptyGroups.push(filesBase64.slice(i, i + batchSize));
+  // 2. If there are leftover pool images, batch them too
+  if (filesBase64.length > 0 && batchSize > 0) {
+    for (let i = 0; i < filesBase64.length; i += batchSize) {
+      nonEmptyGroups.push(filesBase64.slice(i, i + batchSize));
+    }
+  }
+
+  // 3. Chunk groups so each payload < 10MB
+  const chunkifyGroups = (groups, maxSize = 10 * 1024 * 1024) => {
+    const result = [];
+    let current = [];
+    const estimateSize = obj => new Blob([JSON.stringify(obj)]).size;
+
+    for (const group of groups) {
+      const testPayload = { category, subCategory, Base64Key: [...current, group] };
+      if (estimateSize(testPayload) > maxSize && current.length) {
+        result.push([...current]);
+        current = [group];
+      } else {
+        current.push(group);
       }
     }
-
-    setImageGroups([...nonEmptyGroups, []]);
-    setFilesBase64([]);
-    setIsDirty(false);
-    setIsLoading(true);
-
-    const allResponses = [];
-
-    const chunkifyGroups = (groups, maxSize = 2.5 * 1024 * 1024) => {
-      const result = [];
-      let current = [];
-
-      const estimateSize = (obj) => new Blob([JSON.stringify(obj)]).size;
-
-      for (const group of groups) {
-        const testPayload = { category, subCategory, Base64Key: [...current, group] };
-        if (estimateSize(testPayload) > maxSize && current.length) {
-          result.push([...current]);
-          current = [group];
-        } else {
-          current.push(group);
-        }
-      }
-      if (current.length) result.push(current);
-      return result;
-    };
-
-    const groupedChunks = chunkifyGroups(nonEmptyGroups);
-
-    for (const chunk of groupedChunks) {
-      try {
-        const res = await fetch(
-          "https://7f26uyyjs5.execute-api.us-east-2.amazonaws.com/ListEasily/ListEasilyAPI",
-          {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ category, subCategory, Base64Key: chunk })
-          }
-        );
-        const data = await res.json();
-        let parsed = data.body;
-        if (typeof parsed === 'string') parsed = JSON.parse(parsed);
-        allResponses.push(...parsed);
-      } catch (error) {
-        console.error("Error during fetch:", error);
-        allResponses.push({ error: "Failed to fetch listing data", raw_content: error.message });
-      }
-    }
-
-    setResponseData(allResponses);
-    setIsLoading(false);
+    if (current.length) result.push(current);
+    return result;
   };
+
+  const chunks = chunkifyGroups(nonEmptyGroups);
+
+  // 4. Initialize UI state
+  setTotalChunks(chunks.length);
+  setCompletedChunks(0);
+  setImageGroups([...nonEmptyGroups, []]);
+  setFilesBase64([]);
+  setIsDirty(false);
+  setIsLoading(true);
+
+  // 5. Fire all fetch calls in parallel
+  const fetchPromises = chunks.map(chunk =>
+    fetch(
+      "https://7f26uyyjs5.execute-api.us-east-2.amazonaws.com/ListEasily/ListEasilyAPI",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ category, subCategory, Base64Key: chunk })
+      }
+    )
+      .then(res => res.json())
+      .then(data => {
+        let parsed = data.body;
+        if (typeof parsed === "string") parsed = JSON.parse(parsed);
+        setCompletedChunks(c => c + 1);
+        return parsed;
+      })
+      .catch(err => {
+        console.error("Error during fetch:", err);
+        setCompletedChunks(c => c + 1);
+        return [{ error: "Failed to fetch listing data", raw_content: err.message }];
+      })
+  );
+
+  // 6. Wait for all to finish, flatten results, and update state
+  const results = await Promise.all(fetchPromises);
+  setResponseData(results.flat());
+  setIsLoading(false);
+};
+
 
   const handleClearAll = () => {
     setFilesBase64([]);

@@ -187,13 +187,14 @@ function App() {
     // 3. Initialize UI state
     setTotalChunks(nonEmptyGroups.length);
     setCompletedChunks(0);
+    setResponseData(Array(nonEmptyGroups.length).fill(null));
     setImageGroups([...nonEmptyGroups, []]);
     setFilesBase64([]);
     setIsDirty(false);
     setIsLoading(true);
 
-    // 4. Fire each listing request individually
-    const fetchPromises = nonEmptyGroups.map(group =>
+    // 4. Fire off each fetch separately and update state upon completion
+    nonEmptyGroups.forEach((group, idx) => {
       fetch(
         "https://7f26uyyjs5.execute-api.us-east-2.amazonaws.com/ListEasily/ListEasilyAPI",
         {
@@ -206,19 +207,30 @@ function App() {
         .then(data => {
           let parsed = data.body;
           if (typeof parsed === "string") parsed = JSON.parse(parsed);
-          setCompletedChunks(c => c + 1);
-          return parsed[0]; // single listing per group
+          setResponseData(prev => {
+            const next = [...prev];
+            next[idx] = Array.isArray(parsed) ? parsed[0] : parsed;
+            return next;
+          });
         })
         .catch(err => {
           console.error("Error during fetch:", err);
-          setCompletedChunks(c => c + 1);
-          return { error: "Failed to fetch listing data", raw_content: err.message };
+          setResponseData(prev => {
+            const next = [...prev];
+            next[idx] = { error: "Failed to fetch listing data", raw_content: err.message };
+            return next;
+          });
         })
-    );
-
-    const results = await Promise.all(fetchPromises);
-    setResponseData(results);
-    setIsLoading(false);
+        .finally(() => {
+          setCompletedChunks(c => {
+            const done = c + 1;
+            if (done === nonEmptyGroups.length) {
+              setIsLoading(false);
+            }
+            return done;
+          });
+        });
+    });
   };
 
   const handleClearAll = () => {
@@ -316,6 +328,12 @@ function App() {
             </button>
             {showTooltip && <span className="tooltip">Please select a valid category and subcategory.</span>}
           </div>
+
+          {errorMessages.length > 0 && (
+            <div className="errors">
+              {errorMessages.map((msg, i) => <p key={i} className="error-msg">{msg}</p>)}
+            </div>
+          )}
 
           {filesBase64.length > 0 && (
             <div className="uploaded-images">

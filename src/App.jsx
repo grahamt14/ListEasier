@@ -284,24 +284,6 @@ function App() {
             <input ref={fileInputRef} type="file" multiple accept="image/*" onChange={handleFileChange} hidden />
           </div>
 
-          {filesBase64.length > 0 && (
-            <div className="uploaded-images">
-              {filesBase64.map((src, i) => (
-                <img
-                  key={i}
-                  src={src}
-                  alt={`upload-${i}`}
-                  draggable
-                  onDragStart={e => {
-                    e.dataTransfer.setData("from", "pool");
-                    e.dataTransfer.setData("index", i.toString());
-                  }}
-                  onClick={() => toggleImageSelection(i)}
-                />
-              ))}
-            </div>
-          )}
-
           <div className="form-group">
             <label>Images Per Item</label>
             <select disabled={!filesBase64.length} value={batchSize} onChange={e => setBatchSize(Number(e.target.value))}>
@@ -325,6 +307,24 @@ function App() {
             </button>
             {showTooltip && <span className="tooltip">Please select a valid category and subcategory.</span>}
           </div>
+		  
+		  {filesBase64.length > 0 && (
+            <div className="uploaded-images">
+              {filesBase64.map((src, i) => (
+                <img
+                  key={i}
+                  src={src}
+                  alt={`upload-${i}`}
+                  draggable
+                  onDragStart={e => {
+                    e.dataTransfer.setData("from", "pool");
+                    e.dataTransfer.setData("index", i.toString());
+                  }}
+                  onClick={() => toggleImageSelection(i)}
+                />
+              ))}
+            </div>
+          )}
         </section>
 
         <section className="preview-section">

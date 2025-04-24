@@ -10,7 +10,7 @@ function App() {
   const [errorMessages, setErrorMessages] = useState([]);
   const [batchSize, setBatchSize] = useState(0);
   const [selectedImages, setSelectedImages] = useState([]);
-  const [imageGroups, setImageGroups] = useState([[]]);
+  const [imageGroups, setImageGroups] = useState([[]]);  // always starts with one empty group
   const [responseData, setResponseData] = useState([]);
   const [hoveredGroup, setHoveredGroup] = useState(null);
   const [showTooltip, setShowTooltip] = useState(false);
@@ -60,44 +60,28 @@ function App() {
     }
   };
 
-
-const convertToBase64 = (file) => {
-  return new Promise((resolve, reject) => {
-    // First create an image from the file
-    const img = new Image();
-    img.onload = () => {
-      // Target dimensions - optimal for ChatGPT Vision
-      // GPT-4 Vision can handle up to 20MB total across all images
-      // A good balance is around 800px width while maintaining aspect ratio
-      const maxWidth = 800;
-      let width = img.width;
-      let height = img.height;
-      
-      // Calculate new dimensions while maintaining aspect ratio
-      if (width > maxWidth) {
-        height = Math.floor(height * (maxWidth / width));
-        width = maxWidth;
-      }
-      
-      // Create canvas for resizing
-      const canvas = document.createElement("canvas");
-      canvas.width = width;
-      canvas.height = height;
-      
-      // Draw resized image to canvas
-      const ctx = canvas.getContext("2d");
-      ctx.drawImage(img, 0, 0, width, height);
-      
-      const base64String = canvas.toDataURL(file.type)
-      resolve(base64String);
-    };
-    
-    img.onerror = (err) => reject(err);
-    
-    // Create a blob URL from the file for the image source
-    img.src = URL.createObjectURL(file);
-  });
-};
+  const convertToBase64 = (file) => {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => {
+        const maxWidth = 800;
+        let width = img.width;
+        let height = img.height;
+        if (width > maxWidth) {
+          height = Math.floor(height * (maxWidth / width));
+          width = maxWidth;
+        }
+        const canvas = document.createElement("canvas");
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext("2d");
+        ctx.drawImage(img, 0, 0, width, height);
+        resolve(canvas.toDataURL(file.type));
+      };
+      img.onerror = (err) => reject(err);
+      img.src = URL.createObjectURL(file);
+    });
+  };
 
   const handleFileChange = async (e) => {
     const files = Array.from(e.target.files);
@@ -134,13 +118,14 @@ const convertToBase64 = (file) => {
     const remaining = filesBase64.filter((_, i) => !selectedImages.includes(i));
     setImageGroups(prev => {
       let updated = [...prev];
-      if (updated[0].length === 0) {
-        updated[0] = [...updated[0], ...groupImgs];
-      } else if (updated[updated.length - 1].length === 0) {
-        updated[updated.length - 1] = [...updated[updated.length - 1], ...groupImgs];
+      // always add into the first empty slot
+      const firstEmptyIndex = updated.findIndex(g => g.length === 0);
+      if (firstEmptyIndex !== -1) {
+        updated[firstEmptyIndex] = [...updated[firstEmptyIndex], ...groupImgs];
       } else {
         updated.push(groupImgs);
       }
+      // ensure there's always an empty group at the end
       if (updated[updated.length - 1].length > 0) {
         updated.push([]);
       }
@@ -176,7 +161,6 @@ const convertToBase64 = (file) => {
         }
       }
       if (updated[updated.length - 1].length > 0) updated.push([]);
-      updated = updated.filter((grp, idx) => grp.length > 0 || idx === updated.length - 1);
       return updated;
     });
 
@@ -184,41 +168,23 @@ const convertToBase64 = (file) => {
   };
 
   const handleGenerateListing = () => {
-    // Calculate the final groups to send to the API
-    let finalGroups = [];
-    
-    // First, include all non-empty existing groups
-    const existingGroups = imageGroups.filter(group => group.length > 0);
-    finalGroups = [...existingGroups];
-    
-    // Then, add new groups from filesBase64 based on batchSize
+    let finalGroups = imageGroups.filter(g => g.length > 0);
     if (filesBase64.length > 0 && batchSize > 0) {
       for (let i = 0; i < filesBase64.length; i += batchSize) {
-        const group = filesBase64.slice(i, i + batchSize);
-        finalGroups.push(group);
+        finalGroups.push(filesBase64.slice(i, i + batchSize));
       }
-      
-      // Also update the UI state to reflect these changes
       setImageGroups(prev => {
         const filteredPrev = prev.filter(group => group.length > 0);
-        
         const newGroups = [];
         for (let i = 0; i < filesBase64.length; i += batchSize) {
-          const group = filesBase64.slice(i, i + batchSize);
-          newGroups.push(group);
+          newGroups.push(filesBase64.slice(i, i + batchSize));
         }
-        
         return [...filteredPrev, ...newGroups, []];
       });
-      
-      // Clear the filesBase64 array
       setFilesBase64([]);
     }
-    
-    // Set loading state
+
     setIsLoading(true);
-    
-    // Now make the API call with the finalGroups
     fetch(
       "https://7f26uyyjs5.execute-api.us-east-2.amazonaws.com/ListEasily/ListEasilyAPI",
       { 
@@ -229,14 +195,11 @@ const convertToBase64 = (file) => {
     )
       .then(res => res.json())
       .then(data => {
-        // Parse the response
         let parsedData;
         try {
-          // If the response is a string containing JSON, parse it
           if (typeof data.body === 'string') {
             parsedData = JSON.parse(data.body);
           } else {
-            // Otherwise use the data directly
             parsedData = data.body || data;
           }
           setResponseData(parsedData);
@@ -252,9 +215,7 @@ const convertToBase64 = (file) => {
       });
   };
 
-  // Function to handle clearing all content
   const handleClearAll = () => {
-    // Reset all state to initial values
     setFilesBase64([]);
     setSelectedCategory("--");
     setSubcategories(["--"]);
@@ -263,20 +224,14 @@ const convertToBase64 = (file) => {
     setErrorMessages([]);
     setBatchSize(0);
     setSelectedImages([]);
-    setImageGroups([[]]);
+    setImageGroups([[]]);     // reset to single empty group
     setResponseData([]);
     setIsLoading(false);
   };
 
-  // Function to render response data for each group
   const renderResponseData = (index) => {
-    if (!responseData || responseData.length === 0 || !responseData[index]) {
-      return null;
-    }
-    
     const response = responseData[index];
-    
-    // Check if response is an error message
+    if (!response) return null;
     if (response.error) {
       return (
         <div className="response-error">
@@ -285,15 +240,15 @@ const convertToBase64 = (file) => {
         </div>
       );
     }
-    
-    // Otherwise, render the response properties
     return (
       <div className="response-data">
         <h4 style={{ color: '#000' }}>Generated Listing</h4>
         <div className="response-fields">
           {Object.entries(response).map(([key, value]) => (
             <div key={key} className="response-field">
-              <strong style={{ color: '#000' }}>{key.replace(/_/g, ' ').charAt(0).toUpperCase() + key.replace(/_/g, ' ').slice(1)}:</strong> 
+              <strong style={{ color: '#000' }}>
+                {key.replace(/_/g, ' ').replace(/^\w/, c => c.toUpperCase())}:
+              </strong>
               <span style={{ color: '#000' }}>{value}</span>
             </div>
           ))}
@@ -304,7 +259,7 @@ const convertToBase64 = (file) => {
 
   const isValidSelection = selectedCategory !== "--" && subCategory !== "--";
 
-   return (
+  return (
     <div className="app-container">
       <header className="header">
         <img src="/images/ListEasier.jpg" alt="ListEasier" className="logo" />
@@ -312,9 +267,7 @@ const convertToBase64 = (file) => {
       </header>
 
       <main className="main-card">
-        {/* Form Section */}
         <section className="form-section">
-          {/* Category & Subcategory selectors */}
           <div className="form-group">
             <label>Category</label>
             <select onChange={handleCategoryChange} value={selectedCategory}>
@@ -327,14 +280,10 @@ const convertToBase64 = (file) => {
               {subcategories.map((sub, i) => <option key={i}>{sub}</option>)}
             </select>
           </div>
-
-          {/* Upload area */}
           <div className="upload-area" onDrop={handleDrop} onDragOver={handleDragOver} onClick={triggerFileInput}>
             <p>Click or drag images to upload</p>
             <input ref={fileInputRef} type="file" multiple accept="image/*" onChange={handleFileChange} hidden />
           </div>
-
-          {/* Preview uploaded images */}
           {filesBase64.length > 0 && (
             <div className="uploaded-images">
               {filesBase64.map((src, i) => (
@@ -342,22 +291,21 @@ const convertToBase64 = (file) => {
               ))}
             </div>
           )}
-
           <div className="form-group">
             <label>Images Per Item</label>
             <select disabled={!filesBase64.length} value={batchSize} onChange={e => setBatchSize(Number(e.target.value))}>
-              {!filesBase64.length ? <option>0</option> :
-                Array.from({ length: filesBase64.length }, (_, i) => i + 1)
-                  .filter(n => filesBase64.length % n === 0 && n <= 24)
-                  .map(n => <option key={n} value={n}>{n}</option>)}
+              {!filesBase64.length
+                ? <option>0</option>
+                : Array.from({ length: filesBase64.length }, (_, i) => i + 1)
+                    .filter(n => filesBase64.length % n === 0 && n <= 24)
+                    .map(n => <option key={n} value={n}>{n}</option>)
+              }
             </select>
           </div>
-
           <div className="button-group">
             <button className="primary" disabled={!selectedImages.length} onClick={handleGroupSelected}>Group Selected</button>
             <button className="danger" onClick={handleClearAll}>Clear All</button>
           </div>
-
           <div className="generate-area" onMouseEnter={() => !isValidSelection && setShowTooltip(true)} onMouseLeave={() => setShowTooltip(false)}>
             <button className="primary large" disabled={!isValidSelection || isLoading} onClick={handleGenerateListing}>
               {isLoading ? 'Generating...' : 'Generate Listing'}
@@ -366,23 +314,26 @@ const convertToBase64 = (file) => {
           </div>
         </section>
 
-        {/* Preview Section */}
         <section className="preview-section">
           <h2>Image Groups & Listings</h2>
           <div className="groups-container">
-            {imageGroups.filter(group => group.length > 0).map((group, gi) => (
-              <div key={gi} className="group-card" onDrop={e => handleGroupDrop(e, gi)} onDragOver={handleDragOver}>
+            {imageGroups.map((group, gi) => (
+              <div
+                key={gi}
+                className="group-card"
+                onDrop={e => handleGroupDrop(e, gi)}
+                onDragOver={handleDragOver}
+              >
                 <div className="thumbs">
                   {group.map((src, xi) => (
                     <img key={xi} src={src} alt={`group-${gi}-img-${xi}`} />
                   ))}
                 </div>
                 <div className="listing">
-                  {isLoading ? (
-                    <p>Generating listing...</p>
-                  ) : (
-                    renderResponseData(gi) || <p>No data. Click “Generate Listing”.</p>
-                  )}
+                  {isLoading
+                    ? <p>Generating listing...</p>
+                    : renderResponseData(gi) || <p>No data. Click “Generate Listing”.</p>
+                  }
                 </div>
               </div>
             ))}

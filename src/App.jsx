@@ -60,14 +60,44 @@ function App() {
     }
   };
 
-  const convertToBase64 = (file) => {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.readAsDataURL(file);
-      reader.onload = () => resolve(reader.result);
-      reader.onerror = (err) => reject(err);
-    });
-  };
+
+const convertToBase64 = (file) => {
+  return new Promise((resolve, reject) => {
+    // First create an image from the file
+    const img = new Image();
+    img.onload = () => {
+      // Target dimensions - optimal for ChatGPT Vision
+      // GPT-4 Vision can handle up to 20MB total across all images
+      // A good balance is around 800px width while maintaining aspect ratio
+      const maxWidth = 800;
+      let width = img.width;
+      let height = img.height;
+      
+      // Calculate new dimensions while maintaining aspect ratio
+      if (width > maxWidth) {
+        height = Math.floor(height * (maxWidth / width));
+        width = maxWidth;
+      }
+      
+      // Create canvas for resizing
+      const canvas = document.createElement("canvas");
+      canvas.width = width;
+      canvas.height = height;
+      
+      // Draw resized image to canvas
+      const ctx = canvas.getContext("2d");
+      ctx.drawImage(img, 0, 0, width, height);
+      
+      const base64String = canvas.toDataURL(file.type)
+      resolve(base64String);
+    };
+    
+    img.onerror = (err) => reject(err);
+    
+    // Create a blob URL from the file for the image source
+    img.src = URL.createObjectURL(file);
+  });
+};
 
   const handleFileChange = async (e) => {
     const files = Array.from(e.target.files);

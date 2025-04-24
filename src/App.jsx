@@ -304,212 +304,74 @@ const convertToBase64 = (file) => {
 
   const isValidSelection = selectedCategory !== "--" && subCategory !== "--";
 
-  return (
-    <div className="centered-container" style={{ cursor: isLoading ? 'wait' : 'default' }}>
-      <img src="/images/ListEasier.jpg" alt="ListEasier" className="logoCSS" />
+   return (
+    <div className="app-container">
+      <header className="header">
+        <img src="/images/ListEasier.jpg" alt="ListEasier" className="logo" />
+        <h1>ListEasier</h1>
+      </header>
 
-      <div className="card">
-        <label>
-          Category:
-          <select onChange={handleCategoryChange} value={selectedCategory}>
-            {Object.keys(data).map(cat => <option key={cat} value={cat}>{cat}</option>)}
-          </select>
-        </label>
-        <label>
-          SubCategory:
-          <select onChange={handleSubCategoryChange} value={subCategory}>
-            {subcategories.map((sub, i) => <option key={i}>{sub}</option>)}
-          </select>
-        </label>
-
-        <div onDrop={handleDrop} onDragOver={handleDragOver} onClick={triggerFileInput}
-             style={{ border: '2px dashed #aaa', padding: '2rem', textAlign: 'center', backgroundColor: '#6a6a6a', borderRadius: '8px', cursor: 'pointer', marginBottom: '1rem' }}>
-          <p>Click or drag images to upload</p>
-          <input ref={fileInputRef} type="file" multiple accept="image/*" onChange={handleFileChange} style={{ display: 'none' }} />
-        </div>
-
-        <label>
-          Images Per Item:
-          <select disabled={!filesBase64.length} value={batchSize} onChange={e => setBatchSize(Number(e.target.value))}>
-            {!filesBase64.length ? <option>0</option> :
-              Array.from({ length: filesBase64.length }, (_, i) => i + 1)
-                .filter(n => filesBase64.length % n === 0 && n <= 24)
-                .map(n => <option key={n} value={n}>{n}</option>)}
-          </select>
-        </label>
-      </div>
-
-      <div style={{ display: 'flex', gap: '1rem', margin: '1rem 0' }}>
-        <button disabled={!selectedImages.length} onClick={handleGroupSelected}>
-          Group Selected
-        </button>
-        
-        {/* Clear All Button */}
-        <button 
-          onClick={handleClearAll}
-          style={{
-            backgroundColor: '#dc3545',
-            color: 'white',
-            border: 'none',
-            borderRadius: '4px',
-            padding: '0.5rem 1rem',
-            cursor: 'pointer'
-          }}
-        >
-          Clear All
-        </button>
-      </div>
-
-      <div style={{ position: 'relative', display: 'inline-block' }}
-           onMouseEnter={() => !isValidSelection && setShowTooltip(true)}
-           onMouseLeave={() => setShowTooltip(false)}>
-        <button
-          disabled={!isValidSelection || isLoading}
-          onClick={handleGenerateListing}
-          style={{
-            padding: '1rem 2rem',
-            fontSize: '1rem',
-            backgroundColor: isValidSelection && !isLoading ? '#007bff' : '#ccc',
-            color: '#fff',
-            border: 'none',
-            borderRadius: '8px',
-            cursor: isValidSelection && !isLoading ? 'pointer' : 'not-allowed'
-          }}>
-          {isLoading ? 'Generating...' : 'Generate Listing'}
-        </button>
-        {showTooltip && (
-          <div style={{
-            position: 'absolute',
-            top: '-2rem',
-            left: '0',
-            backgroundColor: '#333',
-            color: '#fff',
-            padding: '0.5rem 1rem',
-            borderRadius: '4px',
-            whiteSpace: 'nowrap',
-            fontSize: '0.875rem'
-          }}>
-            Please select a valid category and subcategory.
+      <main className="main-card">
+        <section className="form-section">
+          <div className="form-group">
+            <label>Category</label>
+            <select onChange={handleCategoryChange} value={selectedCategory}>
+              {Object.keys(data).map(cat => <option key={cat} value={cat}>{cat}</option>)}
+            </select>
           </div>
-        )}
-      </div>
-
-      {(filesBase64.length > 0 || imageGroups.some(group => group.length > 0)) && (
-        <>
-          <h3>Uploaded Images</h3>
-          <div style={{ display: 'grid', gap: '1rem', gridTemplateColumns: `repeat(${batchSize || 1}, 1fr)`, marginBottom: '2rem' }}>
-            {filesBase64.map((src, i) => (
-              <img key={i} src={src} draggable onDragStart={e => {
-                e.dataTransfer.setData('from', 'pool');
-                e.dataTransfer.setData('index', i);
-                const img = new Image(); img.src = src; img.onload = () => e.dataTransfer.setDragImage(img, 50, 50);
-              }} onClick={() => toggleImageSelection(i)}
-                style={{ width: '200px', border: selectedImages.includes(i) ? '3px solid #00f' : '2px solid transparent', cursor: 'grab', transition: 'transform 0.2s' }}
-                onMouseEnter={e => e.currentTarget.style.transform = 'scale(1.05)'} onMouseLeave={e => e.currentTarget.style.transform = 'scale(1)'}/>
-            ))}
+          <div className="form-group">
+            <label>SubCategory</label>
+            <select onChange={handleSubCategoryChange} value={subCategory}>
+              {subcategories.map((sub, i) => <option key={i}>{sub}</option>)}
+            </select>
           </div>
 
-          <h3>Image Groups & Generated Listings</h3>
-          {imageGroups.filter(group => group.length > 0).map((group, gi) => (
-            <div key={gi} className="image-group-container" style={{ marginBottom: '2rem' }}>
-              <div 
-                onDrop={e => handleGroupDrop(e, gi)} 
-                onDragOver={handleDragOver}
-                onDragEnter={() => setHoveredGroup(gi)} 
-                onDragLeave={() => setHoveredGroup(null)}
-                style={{ 
-                  minWidth: '250px', 
-                  height: 'auto', 
-                  border: hoveredGroup === gi ? '2px dashed #00bfff' : '1px solid #ccc', 
-                  padding: '1rem', 
-                  borderRadius: '8px', 
-                  backgroundColor: '#f5f5f5',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  gap: '1rem'
-                }}
-              >
-                {/* Images section */}
-                <div style={{ 
-                  display: 'flex', 
-                  flexWrap: 'wrap', 
-                  gap: '0.5rem' 
-                }}>
-                  {group.map((src, xi) => (
-                    <img 
-                      key={xi} 
-                      src={src} 
-                      draggable 
-                      onDragStart={e => {
-                        e.dataTransfer.setData('from', 'group');
-                        e.dataTransfer.setData('index', `${gi}-${xi}`);
-                        const img = new Image(); 
-                        img.src = src; 
-                        img.onload = () => e.dataTransfer.setDragImage(img, 50, 50);
-                      }} 
-                      onDrop={e => handleGroupDrop(e, gi, xi)} 
-                      onDragOver={e => e.preventDefault()}
-                      onClick={() => {
-                        const cp = [...imageGroups];
-                        const removed = cp[gi].splice(xi, 1)[0];
-                        setImageGroups(cp.filter(g => g.length || g === cp[cp.length - 1]));
-                        setFilesBase64(prev => [...prev, removed]);
-                      }}
-                      style={{ 
-                        width: '100px', 
-                        height: 'auto', 
-                        cursor: 'grab', 
-                        transition: 'transform 0.2s' 
-                      }}
-                      onMouseEnter={e => e.currentTarget.style.transform = 'scale(1.05)'} 
-                      onMouseLeave={e => e.currentTarget.style.transform = 'scale(1)'}
-                    />
-                  ))}
-                </div>
-                
-                {/* Response Data section - now inside the same card */}
-                <div style={{ 
-                  borderTop: '1px solid #ddd',
-                  paddingTop: '1rem',
-                  backgroundColor: 'transparent'
-                }}>
-                  {isLoading ? (
-                    <p style={{ color: '#000' }}>Generating listing...</p>
-                  ) : responseData && responseData.length > gi ? (
-                    renderResponseData(gi)
-                  ) : (
-                    <p style={{ color: '#000' }}>No listing data available. Click "Generate Listing" to create one.</p>
-                  )}
+          <div className="upload-area" onDrop={handleDrop} onDragOver={handleDragOver} onClick={triggerFileInput}>
+            <p>Click or drag images to upload</p>
+            <input ref={fileInputRef} type="file" multiple accept="image/*" onChange={handleFileChange} hidden />
+          </div>
+
+          <div className="form-group">
+            <label>Images Per Item</label>
+            <select disabled={!filesBase64.length} value={batchSize} onChange={e => setBatchSize(Number(e.target.value))}>
+              {!filesBase64.length ? <option>0</option> :
+                Array.from({ length: filesBase64.length }, (_, i) => i + 1)
+                  .filter(n => filesBase64.length % n === 0 && n <= 24)
+                  .map(n => <option key={n} value={n}>{n}</option>)}
+            </select>
+          </div>
+
+          <div className="button-group">
+            <button className="primary" disabled={!selectedImages.length} onClick={handleGroupSelected}>Group Selected</button>
+            <button className="danger" onClick={handleClearAll}>Clear All</button>
+          </div>
+
+          <div className="generate-area" onMouseEnter={() => !isValidSelection && setShowTooltip(true)} onMouseLeave={() => setShowTooltip(false)}>
+            <button className="primary large" disabled={!isValidSelection || isLoading} onClick={handleGenerateListing}>
+              {isLoading ? 'Generating...' : 'Generate Listing'}
+            </button>
+            {showTooltip && <span className="tooltip">Please select a valid category and subcategory.</span>}
+          </div>
+        </section>
+
+        <section className="preview-section">
+          <h2>Image Groups & Listings</h2>
+          <div className="groups-container">
+            {imageGroups.filter(g => g.length).map((group, gi) => (
+              <div key={gi} className="group-card" onDrop={e => handleGroupDrop(e, gi)} onDragOver={handleDragOver}>
+                <div className="thumbs">{group.map((src, xi) => <img key={xi} src={src} alt="thumb" />)}</div>
+                <div className="listing">
+                  {isLoading ? <p>Loading...</p> : renderResponseData(gi) || <p>No data</p>}
                 </div>
               </div>
-            </div>
-          ))}
-        </>
-      )}
-      
-      {/* Empty drop area for new groups */}
-      {imageGroups.length > 0 && imageGroups[imageGroups.length - 1].length === 0 && (
-        <div 
-          onDrop={e => handleGroupDrop(e, imageGroups.length - 1)} 
-          onDragOver={handleDragOver}
-          onDragEnter={() => setHoveredGroup(imageGroups.length - 1)} 
-          onDragLeave={() => setHoveredGroup(null)}
-          style={{ 
-            minWidth: '250px', 
-            minHeight: '100px',
-            border: hoveredGroup === imageGroups.length - 1 ? '2px dashed #00bfff' : '1px dashed #ccc', 
-            padding: '1rem', 
-            borderRadius: '8px', 
-            marginBottom: '1rem',
-            display: 'flex',
-            justifyContent: 'center',
-            alignItems: 'center',
-            backgroundColor: '#f5f5f5'
-          }}
-        >
-          <p style={{ color: '#000' }}>Drag images here to create a new group</p>
-        </div>
-      )}
+            ))}
+          </div>
+        </section>
+      </main>
+
+      <footer className="footer">
+        <p>&copy; 2025 ListEasier</p>
+      </footer>
     </div>
   );
 }

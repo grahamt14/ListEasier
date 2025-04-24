@@ -15,6 +15,7 @@ function App() {
   const [hoveredGroup, setHoveredGroup] = useState(null);
   const [showTooltip, setShowTooltip] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [isDirty, setIsDirty] = useState(false);
 
   const fileInputRef = useRef(null);
 
@@ -34,6 +35,7 @@ function App() {
     setSubcategories(data[category]);
     setsubCategory(data[category][0]);
     setCategory(category);
+    setIsDirty(true);
 
     if (category === "--" || data[category][0] === "--") {
       setErrorMessages(prev =>
@@ -49,6 +51,7 @@ function App() {
   const handleSubCategoryChange = (e) => {
     const sub = e.target.value;
     setsubCategory(sub);
+    setIsDirty(true);
     if (selectedCategory === "--" || sub === "--") {
       setErrorMessages(prev =>
         prev.includes("Please select a valid category and subcategory.")
@@ -88,6 +91,7 @@ function App() {
     const base64List = await Promise.all(files.map(f => convertToBase64(f)));
     setFilesBase64(prev => [...prev, ...base64List]);
     setErrorMessages(prev => prev.filter(msg => msg !== "Please upload at least one image."));
+    setIsDirty(true);
   };
 
   const handleDrop = async (e) => {
@@ -95,6 +99,7 @@ function App() {
     const imgs = Array.from(e.dataTransfer.files).filter(f => f.type.startsWith("image/"));
     const base64List = await Promise.all(imgs.map(f => convertToBase64(f)));
     setFilesBase64(prev => [...prev, ...base64List]);
+    setIsDirty(true);
   };
 
   const handleDragOver = (e) => e.preventDefault();
@@ -163,32 +168,30 @@ function App() {
     });
 
     setSelectedImages([]);
+    setIsDirty(true);
   };
 
   const handleGenerateListing = () => {
-    let finalGroups = imageGroups.filter(g => g.length > 0);
+    // clear empty groups
+    const nonEmptyGroups = imageGroups.filter(g => g.length > 0);
+    // handle batching of any remaining pool images
     if (filesBase64.length > 0 && batchSize > 0) {
       for (let i = 0; i < filesBase64.length; i += batchSize) {
-        finalGroups.push(filesBase64.slice(i, i + batchSize));
+        nonEmptyGroups.push(filesBase64.slice(i, i + batchSize));
       }
-      setImageGroups(prev => {
-        const filteredPrev = prev.filter(group => group.length > 0);
-        const newGroups = [];
-        for (let i = 0; i < filesBase64.length; i += batchSize) {
-          newGroups.push(filesBase64.slice(i, i + batchSize));
-        }
-        return [...filteredPrev, ...newGroups, []];
-      });
-      setFilesBase64([]);
     }
 
+    setImageGroups([...nonEmptyGroups, []]);
+    setFilesBase64([]);
+    setIsDirty(false);
     setIsLoading(true);
+
     fetch(
       "https://7f26uyyjs5.execute-api.us-east-2.amazonaws.com/ListEasily/ListEasilyAPI",
       { 
         method: "POST", 
         headers: { "Content-Type": "application/json" }, 
-        body: JSON.stringify({ category, subCategory, Base64Key: finalGroups }) 
+        body: JSON.stringify({ category, subCategory, Base64Key: nonEmptyGroups }) 
       }
     )
       .then(res => res.json())
@@ -225,6 +228,7 @@ function App() {
     setImageGroups([[]]);
     setResponseData([]);
     setIsLoading(false);
+    setIsDirty(true);
   };
 
   const renderResponseData = (index) => {
@@ -302,13 +306,12 @@ function App() {
           </div>
 
           <div className="generate-area" onMouseEnter={() => !isValidSelection && setShowTooltip(true)} onMouseLeave={() => setShowTooltip(false)}>
-            <button className="primary large" disabled={!isValidSelection || isLoading} onClick={handleGenerateListing}>
+            <button className="primary large" disabled={!isValidSelection || isLoading || !isDirty} onClick={handleGenerateListing}>
               {isLoading ? 'Generating...' : 'Generate Listing'}
             </button>
             {showTooltip && <span className="tooltip">Please select a valid category and subcategory.</span>}
           </div>
-		  
-		  {filesBase64.length > 0 && (
+          {filesBase64.length > 0 && (
             <div className="uploaded-images">
               {filesBase64.map((src, i) => (
                 <img
@@ -358,7 +361,7 @@ function App() {
       </main>
 
       <footer className="footer">
-        <p>&copy; 2025 ListEasier</p>
+        <p>© 2025 ListEasier</p>
       </footer>
     </div>
   );

@@ -222,6 +222,22 @@ function App() {
       });
   };
 
+  // Function to handle clearing all content
+  const handleClearAll = () => {
+    // Reset all state to initial values
+    setFilesBase64([]);
+    setSelectedCategory("--");
+    setSubcategories(["--"]);
+    setCategory(undefined);
+    setsubCategory(undefined);
+    setErrorMessages([]);
+    setBatchSize(0);
+    setSelectedImages([]);
+    setImageGroups([[]]);
+    setResponseData([]);
+    setIsLoading(false);
+  };
+
   // Function to render response data for each group
   const renderResponseData = (index) => {
     if (!responseData || responseData.length === 0 || !responseData[index]) {
@@ -293,9 +309,27 @@ function App() {
         </label>
       </div>
 
-      <button disabled={!selectedImages.length} onClick={handleGroupSelected} style={{ margin: '1rem 0' }}>
-        Group Selected
-      </button>
+      <div style={{ display: 'flex', gap: '1rem', margin: '1rem 0' }}>
+        <button disabled={!selectedImages.length} onClick={handleGroupSelected}>
+          Group Selected
+        </button>
+        
+        {/* Clear All Button */}
+        <button 
+          onClick={handleClearAll}
+          style={{
+            backgroundColor: '#dc3545',
+            color: 'white',
+            border: 'none',
+            borderRadius: '4px',
+            padding: '0.5rem 1rem',
+            cursor: 'pointer'
+          }}
+        >
+          Clear All
+        </button>
+      </div>
+
       <div style={{ position: 'relative', display: 'inline-block' }}
            onMouseEnter={() => !isValidSelection && setShowTooltip(true)}
            onMouseLeave={() => setShowTooltip(false)}>
@@ -329,94 +363,99 @@ function App() {
           </div>
         )}
       </div>
-      <h3>Uploaded Images</h3>
-      <div style={{ display: 'grid', gap: '1rem', gridTemplateColumns: `repeat(${batchSize || 1}, 1fr)`, marginBottom: '2rem' }}>
-        {filesBase64.map((src, i) => (
-          <img key={i} src={src} draggable onDragStart={e => {
-            e.dataTransfer.setData('from', 'pool');
-            e.dataTransfer.setData('index', i);
-            const img = new Image(); img.src = src; img.onload = () => e.dataTransfer.setDragImage(img, 50, 50);
-          }} onClick={() => toggleImageSelection(i)}
-            style={{ width: '200px', border: selectedImages.includes(i) ? '3px solid #00f' : '2px solid transparent', cursor: 'grab', transition: 'transform 0.2s' }}
-            onMouseEnter={e => e.currentTarget.style.transform = 'scale(1.05)'} onMouseLeave={e => e.currentTarget.style.transform = 'scale(1)'}/>
-        ))}
-      </div>
 
-      <h3>Image Groups & Generated Listings</h3>
-      {imageGroups.filter(group => group.length > 0).map((group, gi) => (
-        <div key={gi} className="image-group-container" style={{ marginBottom: '2rem' }}>
-          <div 
-            onDrop={e => handleGroupDrop(e, gi)} 
-            onDragOver={handleDragOver}
-            onDragEnter={() => setHoveredGroup(gi)} 
-            onDragLeave={() => setHoveredGroup(null)}
-            style={{ 
-              minWidth: '250px', 
-              height: 'auto', 
-              border: hoveredGroup === gi ? '2px dashed #00bfff' : '1px solid #ccc', 
-              padding: '1rem', 
-              borderRadius: '8px', 
-              backgroundColor: '#f5f5f5',
-              display: 'flex',
-              flexDirection: 'column',
-              gap: '1rem'
-            }}
-          >
-            {/* Images section */}
-            <div style={{ 
-              display: 'flex', 
-              flexWrap: 'wrap', 
-              gap: '0.5rem' 
-            }}>
-              {group.map((src, xi) => (
-                <img 
-                  key={xi} 
-                  src={src} 
-                  draggable 
-                  onDragStart={e => {
-                    e.dataTransfer.setData('from', 'group');
-                    e.dataTransfer.setData('index', `${gi}-${xi}`);
-                    const img = new Image(); 
-                    img.src = src; 
-                    img.onload = () => e.dataTransfer.setDragImage(img, 50, 50);
-                  }} 
-                  onDrop={e => handleGroupDrop(e, gi, xi)} 
-                  onDragOver={e => e.preventDefault()}
-                  onClick={() => {
-                    const cp = [...imageGroups];
-                    const removed = cp[gi].splice(xi, 1)[0];
-                    setImageGroups(cp.filter(g => g.length || g === cp[cp.length - 1]));
-                    setFilesBase64(prev => [...prev, removed]);
-                  }}
-                  style={{ 
-                    width: '100px', 
-                    height: 'auto', 
-                    cursor: 'grab', 
-                    transition: 'transform 0.2s' 
-                  }}
-                  onMouseEnter={e => e.currentTarget.style.transform = 'scale(1.05)'} 
-                  onMouseLeave={e => e.currentTarget.style.transform = 'scale(1)'}
-                />
-              ))}
-            </div>
-            
-            {/* Response Data section - now inside the same card */}
-            <div style={{ 
-              borderTop: '1px solid #ddd',
-              paddingTop: '1rem',
-              backgroundColor: 'transparent'
-            }}>
-              {isLoading ? (
-                <p style={{ color: '#000' }}>Generating listing...</p>
-              ) : responseData && responseData.length > gi ? (
-                renderResponseData(gi)
-              ) : (
-                <p style={{ color: '#000' }}>No listing data available. Click "Generate Listing" to create one.</p>
-              )}
-            </div>
+      {(filesBase64.length > 0 || imageGroups.some(group => group.length > 0)) && (
+        <>
+          <h3>Uploaded Images</h3>
+          <div style={{ display: 'grid', gap: '1rem', gridTemplateColumns: `repeat(${batchSize || 1}, 1fr)`, marginBottom: '2rem' }}>
+            {filesBase64.map((src, i) => (
+              <img key={i} src={src} draggable onDragStart={e => {
+                e.dataTransfer.setData('from', 'pool');
+                e.dataTransfer.setData('index', i);
+                const img = new Image(); img.src = src; img.onload = () => e.dataTransfer.setDragImage(img, 50, 50);
+              }} onClick={() => toggleImageSelection(i)}
+                style={{ width: '200px', border: selectedImages.includes(i) ? '3px solid #00f' : '2px solid transparent', cursor: 'grab', transition: 'transform 0.2s' }}
+                onMouseEnter={e => e.currentTarget.style.transform = 'scale(1.05)'} onMouseLeave={e => e.currentTarget.style.transform = 'scale(1)'}/>
+            ))}
           </div>
-        </div>
-      ))}
+
+          <h3>Image Groups & Generated Listings</h3>
+          {imageGroups.filter(group => group.length > 0).map((group, gi) => (
+            <div key={gi} className="image-group-container" style={{ marginBottom: '2rem' }}>
+              <div 
+                onDrop={e => handleGroupDrop(e, gi)} 
+                onDragOver={handleDragOver}
+                onDragEnter={() => setHoveredGroup(gi)} 
+                onDragLeave={() => setHoveredGroup(null)}
+                style={{ 
+                  minWidth: '250px', 
+                  height: 'auto', 
+                  border: hoveredGroup === gi ? '2px dashed #00bfff' : '1px solid #ccc', 
+                  padding: '1rem', 
+                  borderRadius: '8px', 
+                  backgroundColor: '#f5f5f5',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '1rem'
+                }}
+              >
+                {/* Images section */}
+                <div style={{ 
+                  display: 'flex', 
+                  flexWrap: 'wrap', 
+                  gap: '0.5rem' 
+                }}>
+                  {group.map((src, xi) => (
+                    <img 
+                      key={xi} 
+                      src={src} 
+                      draggable 
+                      onDragStart={e => {
+                        e.dataTransfer.setData('from', 'group');
+                        e.dataTransfer.setData('index', `${gi}-${xi}`);
+                        const img = new Image(); 
+                        img.src = src; 
+                        img.onload = () => e.dataTransfer.setDragImage(img, 50, 50);
+                      }} 
+                      onDrop={e => handleGroupDrop(e, gi, xi)} 
+                      onDragOver={e => e.preventDefault()}
+                      onClick={() => {
+                        const cp = [...imageGroups];
+                        const removed = cp[gi].splice(xi, 1)[0];
+                        setImageGroups(cp.filter(g => g.length || g === cp[cp.length - 1]));
+                        setFilesBase64(prev => [...prev, removed]);
+                      }}
+                      style={{ 
+                        width: '100px', 
+                        height: 'auto', 
+                        cursor: 'grab', 
+                        transition: 'transform 0.2s' 
+                      }}
+                      onMouseEnter={e => e.currentTarget.style.transform = 'scale(1.05)'} 
+                      onMouseLeave={e => e.currentTarget.style.transform = 'scale(1)'}
+                    />
+                  ))}
+                </div>
+                
+                {/* Response Data section - now inside the same card */}
+                <div style={{ 
+                  borderTop: '1px solid #ddd',
+                  paddingTop: '1rem',
+                  backgroundColor: 'transparent'
+                }}>
+                  {isLoading ? (
+                    <p style={{ color: '#000' }}>Generating listing...</p>
+                  ) : responseData && responseData.length > gi ? (
+                    renderResponseData(gi)
+                  ) : (
+                    <p style={{ color: '#000' }}>No listing data available. Click "Generate Listing" to create one.</p>
+                  )}
+                </div>
+              </div>
+            </div>
+          ))}
+        </>
+      )}
       
       {/* Empty drop area for new groups */}
       {imageGroups.length > 0 && imageGroups[imageGroups.length - 1].length === 0 && (

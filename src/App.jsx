@@ -304,7 +304,7 @@ const convertToBase64 = (file) => {
 
   const isValidSelection = selectedCategory !== "--" && subCategory !== "--";
 
-  return (
+   return (
     <div className="app-container">
       <header className="header">
         <img src="/images/ListEasier.jpg" alt="ListEasier" className="logo" />
@@ -312,6 +312,7 @@ const convertToBase64 = (file) => {
       </header>
 
       <main className="main-card">
+        {/* Form Section */}
         <section className="form-section">
           {/* Category & Subcategory selectors */}
           <div className="form-group">
@@ -365,7 +366,28 @@ const convertToBase64 = (file) => {
           </div>
         </section>
 
-        {/* Preview section unchanged... */}
+        {/* Preview Section */}
+        <section className="preview-section">
+          <h2>Image Groups & Listings</h2>
+          <div className="groups-container">
+            {imageGroups.filter(group => group.length > 0).map((group, gi) => (
+              <div key={gi} className="group-card" onDrop={e => handleGroupDrop(e, gi)} onDragOver={handleDragOver}>
+                <div className="thumbs">
+                  {group.map((src, xi) => (
+                    <img key={xi} src={src} alt={`group-${gi}-img-${xi}`} />
+                  ))}
+                </div>
+                <div className="listing">
+                  {isLoading ? (
+                    <p>Generating listing...</p>
+                  ) : (
+                    renderResponseData(gi) || <p>No data. Click “Generate Listing”.</p>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
       </main>
 
       <footer className="footer">

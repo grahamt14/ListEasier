@@ -79,21 +79,717 @@ function FormSection({
       { localizedValue: "Original" }
     ],
     subject: [
-      { localizedValue: "Actors" },
-      { localizedValue: "Aircraft" },
-      { localizedValue: "Air Force" },
-      { localizedValue: "Airline" },
-      { localizedValue: "American Civil War" },
-      { localizedValue: "American Revolutionary War" },
-      { localizedValue: "Anonymous People" },
-      { localizedValue: "Army" },
-      { localizedValue: "Artist" },
-      { localizedValue: "Athlete" },
-      { localizedValue: "Athletics" },
-      { localizedValue: "Author" },
-      { localizedValue: "Automobile" },
-      // This is truncated for brevity, but would include all subject values from the JSON
-      // Additional subjects would be listed here
+      {
+          "localizedValue": "Actors"
+        },
+        {
+          "localizedValue": "Aircraft"
+        },
+        {
+          "localizedValue": "Air Force"
+        },
+        {
+          "localizedValue": "Airline"
+        },
+        {
+          "localizedValue": "American Civil War"
+        },
+        {
+          "localizedValue": "American Revolutionary War"
+        },
+        {
+          "localizedValue": "Anonymous People"
+        },
+        {
+          "localizedValue": "Army"
+        },
+        {
+          "localizedValue": "Artist"
+        },
+        {
+          "localizedValue": "Athlete"
+        },
+        {
+          "localizedValue": "Athletics"
+        },
+        {
+          "localizedValue": "Author"
+        },
+        {
+          "localizedValue": "Automobile"
+        },
+        {
+          "localizedValue": "Base/Fort"
+        },
+        {
+          "localizedValue": "Baseball"
+        },
+        {
+          "localizedValue": "Battle"
+        },
+        {
+          "localizedValue": "Battle Ship"
+        },
+        {
+          "localizedValue": "Beverage"
+        },
+        {
+          "localizedValue": "Bicycle"
+        },
+        {
+          "localizedValue": "Billiard Hall"
+        },
+        {
+          "localizedValue": "Bird"
+        },
+        {
+          "localizedValue": "Black Bear"
+        },
+        {
+          "localizedValue": "Boats & Ships"
+        },
+        {
+          "localizedValue": "Bollywood"
+        },
+        {
+          "localizedValue": "Boxing"
+        },
+        {
+          "localizedValue": "Brewery"
+        },
+        {
+          "localizedValue": "Bridge"
+        },
+        {
+          "localizedValue": "Brown Bear"
+        },
+        {
+          "localizedValue": "Bryce Canyon National Park"
+        },
+        {
+          "localizedValue": "Buddhism"
+        },
+        {
+          "localizedValue": "Bus/Tram"
+        },
+        {
+          "localizedValue": "Butterfly"
+        },
+        {
+          "localizedValue": "Cabin"
+        },
+        {
+          "localizedValue": "Calligraphy"
+        },
+        {
+          "localizedValue": "Camp"
+        },
+        {
+          "localizedValue": "Cargo Ship"
+        },
+        {
+          "localizedValue": "Casino"
+        },
+        {
+          "localizedValue": "Castles"
+        },
+        {
+          "localizedValue": "Cat"
+        },
+        {
+          "localizedValue": "Character Piece"
+        },
+        {
+          "localizedValue": "Children"
+        },
+        {
+          "localizedValue": "Chimpanzee"
+        },
+        {
+          "localizedValue": "Christianity"
+        },
+        {
+          "localizedValue": "Church"
+        },
+        {
+          "localizedValue": "Clark Lake Pleasant View Hotel"
+        },
+        {
+          "localizedValue": "Coast Guard"
+        },
+        {
+          "localizedValue": "Colliery"
+        },
+        {
+          "localizedValue": "Conway Castle"
+        },
+        {
+          "localizedValue": "Coronation"
+        },
+        {
+          "localizedValue": "Cosmetics"
+        },
+        {
+          "localizedValue": "Cricket"
+        },
+        {
+          "localizedValue": "Cronus Airlines"
+        },
+        {
+          "localizedValue": "Crown Jewels"
+        },
+        {
+          "localizedValue": "Cruise Liner"
+        },
+        {
+          "localizedValue": "Cycling"
+        },
+        {
+          "localizedValue": "Dachshund"
+        },
+        {
+          "localizedValue": "Dam"
+        },
+        {
+          "localizedValue": "Deer"
+        },
+        {
+          "localizedValue": "Disneyland"
+        },
+        {
+          "localizedValue": "Disney World"
+        },
+        {
+          "localizedValue": "Dog"
+        },
+        {
+          "localizedValue": "Edelweiss"
+        },
+        {
+          "localizedValue": "Elbe Tunnel"
+        },
+        {
+          "localizedValue": "Elephant"
+        },
+        {
+          "localizedValue": "Equestrian"
+        },
+        {
+          "localizedValue": "Erzgebirge"
+        },
+        {
+          "localizedValue": "Female Model"
+        },
+        {
+          "localizedValue": "Ferry"
+        },
+        {
+          "localizedValue": "Fire Engine"
+        },
+        {
+          "localizedValue": "Fish"
+        },
+        {
+          "localizedValue": "Flag"
+        },
+        {
+          "localizedValue": "Football"
+        },
+        {
+          "localizedValue": "Fox"
+        },
+        {
+          "localizedValue": "Frankfurt Airport"
+        },
+        {
+          "localizedValue": "Freight Train"
+        },
+        {
+          "localizedValue": "Frog"
+        },
+        {
+          "localizedValue": "Furniture"
+        },
+        {
+          "localizedValue": "Gas Station"
+        },
+        {
+          "localizedValue": "Glacier National Park"
+        },
+        {
+          "localizedValue": "Golf"
+        },
+        {
+          "localizedValue": "Grand Canyon National Park"
+        },
+        {
+          "localizedValue": "Grizzly Bear"
+        },
+        {
+          "localizedValue": "Guards"
+        },
+        {
+          "localizedValue": "Hair Care"
+        },
+        {
+          "localizedValue": "Harvard University"
+        },
+        {
+          "localizedValue": "Haulage"
+        },
+        {
+          "localizedValue": "Helicopter"
+        },
+        {
+          "localizedValue": "Herne Bay"
+        },
+        {
+          "localizedValue": "Hinduism"
+        },
+        {
+          "localizedValue": "Hippopotamus"
+        },
+        {
+          "localizedValue": "Hockey"
+        },
+        {
+          "localizedValue": "Horse"
+        },
+        {
+          "localizedValue": "Hostel"
+        },
+        {
+          "localizedValue": "Hotel"
+        },
+        {
+          "localizedValue": "House of Commons/Lords"
+        },
+        {
+          "localizedValue": "Hovercraft"
+        },
+        {
+          "localizedValue": "Icon/Symbol"
+        },
+        {
+          "localizedValue": "Indochine"
+        },
+        {
+          "localizedValue": "Industrial"
+        },
+        {
+          "localizedValue": "Inn"
+        },
+        {
+          "localizedValue": "Insects"
+        },
+        {
+          "localizedValue": "Islam"
+        },
+        {
+          "localizedValue": "Judaism"
+        },
+        {
+          "localizedValue": "Knott's Berry Farm"
+        },
+        {
+          "localizedValue": "Koala"
+        },
+        {
+          "localizedValue": "Korean War"
+        },
+        {
+          "localizedValue": "Krampus"
+        },
+        {
+          "localizedValue": "Lifeboat"
+        },
+        {
+          "localizedValue": "Lion"
+        },
+        {
+          "localizedValue": "Lizard"
+        },
+        {
+          "localizedValue": "LNWR"
+        },
+        {
+          "localizedValue": "Lufthansa"
+        },
+        {
+          "localizedValue": "Luna Park"
+        },
+        {
+          "localizedValue": "Male Model"
+        },
+        {
+          "localizedValue": "Marineland"
+        },
+        {
+          "localizedValue": "Marines"
+        },
+        {
+          "localizedValue": "Medicine"
+        },
+        {
+          "localizedValue": "Meerkat"
+        },
+        {
+          "localizedValue": "Merchant/Cargo Vessel"
+        },
+        {
+          "localizedValue": "Military Vessel"
+        },
+        {
+          "localizedValue": "Milky & Schoki"
+        },
+        {
+          "localizedValue": "Monument"
+        },
+        {
+          "localizedValue": "Moose"
+        },
+        {
+          "localizedValue": "Mosque"
+        },
+        {
+          "localizedValue": "Motel"
+        },
+        {
+          "localizedValue": "Motorcycle/Scooter"
+        },
+        {
+          "localizedValue": "Motor Racing"
+        },
+        {
+          "localizedValue": "Mount Rainier National Park"
+        },
+        {
+          "localizedValue": "Musicians"
+        },
+        {
+          "localizedValue": "Navy"
+        },
+        {
+          "localizedValue": "New Jersey City University"
+        },
+        {
+          "localizedValue": "Nightclub"
+        },
+        {
+          "localizedValue": "Nudes"
+        },
+        {
+          "localizedValue": "Orchid"
+        },
+        {
+          "localizedValue": "Pagan"
+        },
+        {
+          "localizedValue": "Painting"
+        },
+        {
+          "localizedValue": "Panama Canal"
+        },
+        {
+          "localizedValue": "Pan American"
+        },
+        {
+          "localizedValue": "Panda"
+        },
+        {
+          "localizedValue": "Passenger Ship"
+        },
+        {
+          "localizedValue": "Passenger Train"
+        },
+        {
+          "localizedValue": "Penguin"
+        },
+        {
+          "localizedValue": "Penmaenmawr Tunnel"
+        },
+        {
+          "localizedValue": "Perfume"
+        },
+        {
+          "localizedValue": "Personal Life"
+        },
+        {
+          "localizedValue": "Pig"
+        },
+        {
+          "localizedValue": "Plane & Airport"
+        },
+        {
+          "localizedValue": "Polar Bear"
+        },
+        {
+          "localizedValue": "Politician"
+        },
+        {
+          "localizedValue": "Portrait"
+        },
+        {
+          "localizedValue": "Princeton University"
+        },
+        {
+          "localizedValue": "Rabbit"
+        },
+        {
+          "localizedValue": "Railway"
+        },
+        {
+          "localizedValue": "Rathskeller"
+        },
+        {
+          "localizedValue": "Real Photo"
+        },
+        {
+          "localizedValue": "Reich Chancellery"
+        },
+        {
+          "localizedValue": "Religious Building"
+        },
+        {
+          "localizedValue": "Religious Figure"
+        },
+        {
+          "localizedValue": "Religious Text"
+        },
+        {
+          "localizedValue": "Resort"
+        },
+        {
+          "localizedValue": "Restaurant & Diner"
+        },
+        {
+          "localizedValue": "Retail"
+        },
+        {
+          "localizedValue": "Rheidol Valley"
+        },
+        {
+          "localizedValue": "Roads & Highways"
+        },
+        {
+          "localizedValue": "Roadside Attraction"
+        },
+        {
+          "localizedValue": "Rocky Mountain National Park"
+        },
+        {
+          "localizedValue": "Romance"
+        },
+        {
+          "localizedValue": "Roses"
+        },
+        {
+          "localizedValue": "Rottweiler"
+        },
+        {
+          "localizedValue": "Royal Mail"
+        },
+        {
+          "localizedValue": "Royalty"
+        },
+        {
+          "localizedValue": "Rugby"
+        },
+        {
+          "localizedValue": "Russo-Japanese War"
+        },
+        {
+          "localizedValue": "Sailing Vessel"
+        },
+        {
+          "localizedValue": "Salvation Army"
+        },
+        {
+          "localizedValue": "Sanilac County Jail"
+        },
+        {
+          "localizedValue": "Santa"
+        },
+        {
+          "localizedValue": "SATA Air Acores"
+        },
+        {
+          "localizedValue": "Satire"
+        },
+        {
+          "localizedValue": "Scientist"
+        },
+        {
+          "localizedValue": "Sea World"
+        },
+        {
+          "localizedValue": "Sheep"
+        },
+        {
+          "localizedValue": "Ship"
+        },
+        {
+          "localizedValue": "Shopping Market"
+        },
+        {
+          "localizedValue": "Sister Lakes"
+        },
+        {
+          "localizedValue": "Snake"
+        },
+        {
+          "localizedValue": "Soap/Detergent"
+        },
+        {
+          "localizedValue": "Soccer"
+        },
+        {
+          "localizedValue": "Spanish-American War"
+        },
+        {
+          "localizedValue": "Spider"
+        },
+        {
+          "localizedValue": "Stadium"
+        },
+        {
+          "localizedValue": "Station/Depot"
+        },
+        {
+          "localizedValue": "Statue"
+        },
+        {
+          "localizedValue": "Steam Ship"
+        },
+        {
+          "localizedValue": "Still Life"
+        },
+        {
+          "localizedValue": "Street Car"
+        },
+        {
+          "localizedValue": "Suffragettes"
+        },
+        {
+          "localizedValue": "Swimming"
+        },
+        {
+          "localizedValue": "Synagogue"
+        },
+        {
+          "localizedValue": "Tank"
+        },
+        {
+          "localizedValue": "Temple"
+        },
+        {
+          "localizedValue": "Tennis"
+        },
+        {
+          "localizedValue": "Theater"
+        },
+        {
+          "localizedValue": "The Maryland Inn Hotel"
+        },
+        {
+          "localizedValue": "The Three Kings"
+        },
+        {
+          "localizedValue": "The Wright Place Bar"
+        },
+        {
+          "localizedValue": "Tiger"
+        },
+        {
+          "localizedValue": "Toad"
+        },
+        {
+          "localizedValue": "Tobacco"
+        },
+        {
+          "localizedValue": "Tower"
+        },
+        {
+          "localizedValue": "Town Musicians"
+        },
+        {
+          "localizedValue": "Track"
+        },
+        {
+          "localizedValue": "Train"
+        },
+        {
+          "localizedValue": "Train Station"
+        },
+        {
+          "localizedValue": "Tricycle"
+        },
+        {
+          "localizedValue": "Tunnel"
+        },
+        {
+          "localizedValue": "Turtle"
+        },
+        {
+          "localizedValue": "Tywyn Corbett Arms Hotel"
+        },
+        {
+          "localizedValue": "University of California"
+        },
+        {
+          "localizedValue": "University of Illinois"
+        },
+        {
+          "localizedValue": "University of Missouri"
+        },
+        {
+          "localizedValue": "University of New Haven"
+        },
+        {
+          "localizedValue": "Utilities"
+        },
+        {
+          "localizedValue": "Vase"
+        },
+        {
+          "localizedValue": "Vietnam War"
+        },
+        {
+          "localizedValue": "War of 1812"
+        },
+        {
+          "localizedValue": "Washington State University"
+        },
+        {
+          "localizedValue": "Watercraft"
+        },
+        {
+          "localizedValue": "Whale"
+        },
+        {
+          "localizedValue": "Working Life"
+        },
+        {
+          "localizedValue": "World War I (1914-1918)"
+        },
+        {
+          "localizedValue": "World War II (1939-1945)"
+        },
+        {
+          "localizedValue": "Yacht"
+        },
+        {
+          "localizedValue": "Yale University"
+        },
+        {
+          "localizedValue": "Yellowstone"
+        },
+        {
+          "localizedValue": "Yosemite"
+        },
+        {
+          "localizedValue": "Zeppelin"
+        }
     ]
   };
 

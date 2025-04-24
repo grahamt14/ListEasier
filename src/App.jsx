@@ -19,6 +19,12 @@ function App() {
   const [totalChunks, setTotalChunks] = useState(0);
   const [completedChunks, setCompletedChunks] = useState(0);
   const [processingGroups, setProcessingGroups] = useState([]);
+  
+  // New states for upload loading
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [totalFiles, setTotalFiles] = useState(0);
+  const [processedFiles, setProcessedFiles] = useState(0);
 
   const fileInputRef = useRef(null);
 
@@ -98,18 +104,74 @@ function App() {
 
   const handleFileChange = async (e) => {
     const files = Array.from(e.target.files);
-    const base64List = await Promise.all(files.map(f => convertToBase64(f)));
+    if (files.length === 0) return;
+    
+    // Set uploading state and initialize progress
+    setIsUploading(true);
+    setTotalFiles(files.length);
+    setProcessedFiles(0);
+    setUploadProgress(0);
+    
+    const base64List = [];
+    
+    // Process files sequentially for better progress tracking
+    for (let i = 0; i < files.length; i++) {
+      try {
+        const base64 = await convertToBase64(files[i]);
+        base64List.push(base64);
+        
+        // Update progress
+        setProcessedFiles(i + 1);
+        setUploadProgress(Math.round(((i + 1) / files.length) * 100));
+      } catch (error) {
+        console.error("Error converting file:", error);
+      }
+    }
+    
     setFilesBase64(prev => [...prev, ...base64List]);
     setErrorMessages(prev => prev.filter(msg => msg !== "Please upload at least one image."));
     setIsDirty(true);
+    
+    // Clear uploading state
+    setTimeout(() => {
+      setIsUploading(false);
+    }, 500); // Small delay to show 100% briefly
   };
 
   const handleDrop = async (e) => {
     e.preventDefault();
     const imgs = Array.from(e.dataTransfer.files).filter(f => f.type.startsWith("image/"));
-    const base64List = await Promise.all(imgs.map(f => convertToBase64(f)));
+    if (imgs.length === 0) return;
+    
+    // Set uploading state and initialize progress
+    setIsUploading(true);
+    setTotalFiles(imgs.length);
+    setProcessedFiles(0);
+    setUploadProgress(0);
+    
+    const base64List = [];
+    
+    // Process files sequentially for better progress tracking
+    for (let i = 0; i < imgs.length; i++) {
+      try {
+        const base64 = await convertToBase64(imgs[i]);
+        base64List.push(base64);
+        
+        // Update progress
+        setProcessedFiles(i + 1);
+        setUploadProgress(Math.round(((i + 1) / imgs.length) * 100));
+      } catch (error) {
+        console.error("Error converting file:", error);
+      }
+    }
+    
     setFilesBase64(prev => [...prev, ...base64List]);
     setIsDirty(true);
+    
+    // Clear uploading state
+    setTimeout(() => {
+      setIsUploading(false);
+    }, 500); // Small delay to show 100% briefly
   };
 
   const handleDragOver = (e) => e.preventDefault();
@@ -281,6 +343,10 @@ function App() {
     setIsLoading(false);
     setIsDirty(true);
     setProcessingGroups([]);
+    setIsUploading(false);
+    setUploadProgress(0);
+    setTotalFiles(0);
+    setProcessedFiles(0);
   };
 
   const renderResponseData = (index) => {
@@ -311,6 +377,21 @@ function App() {
     );
   };
 
+  // Spinner component
+  const Spinner = () => (
+    <div className="spinner">
+      <div className="spinner-circle"></div>
+    </div>
+  );
+
+  // Progress bar component
+  const ProgressBar = ({ progress }) => (
+    <div className="progress-container">
+      <div className="progress-bar" style={{ width: `${progress}%` }}></div>
+      <div className="progress-text">{progress}%</div>
+    </div>
+  );
+
   const isValidSelection = selectedCategory !== "--" && subCategory !== "--";
 
   return (
@@ -335,8 +416,19 @@ function App() {
             </select>
           </div>
 
-          <div className="upload-area" onDrop={handleDrop} onDragOver={handleDragOver} onClick={triggerFileInput}>
-            <p>Click or drag images to upload</p>
+          <div className="upload-area" 
+               onDrop={handleDrop} 
+               onDragOver={handleDragOver} 
+               onClick={triggerFileInput}>
+            {isUploading ? (
+              <div className="upload-loading">
+                <Spinner />
+                <p>Processing images... ({processedFiles}/{totalFiles})</p>
+                <ProgressBar progress={uploadProgress} />
+              </div>
+            ) : (
+              <p>Click or drag images to upload</p>
+            )}
             <input ref={fileInputRef} type="file" multiple accept="image/*" onChange={handleFileChange} hidden />
           </div>
 
@@ -359,7 +451,11 @@ function App() {
 
           <div className="generate-area" onMouseEnter={() => !isValidSelection && setShowTooltip(true)} onMouseLeave={() => setShowTooltip(false)}>
             <button className="primary large" disabled={!isValidSelection || isLoading || !isDirty} onClick={handleGenerateListing}>
-              {isLoading ? `Generating... (${completedChunks}/${totalChunks})` : 'Generate Listing'}
+              {isLoading ? (
+                <span className="loading-button">
+                  <Spinner /> Generating... ({completedChunks}/{totalChunks})
+                </span>
+              ) : 'Generate Listing'}
             </button>
             {showTooltip && <span className="tooltip">Please select a valid category and subcategory.</span>}
           </div>
@@ -397,6 +493,9 @@ function App() {
           <h2>Image Groups & Listings</h2>
           {isLoading && (
             <div className="loading-progress">
+              <div className="loading-bar-container">
+                <div className="loading-bar" style={{ width: `${(completedChunks / totalChunks) * 100}%` }}></div>
+              </div>
               <p>Processing {completedChunks} of {totalChunks} listings...</p>
             </div>
           )}
@@ -418,7 +517,10 @@ function App() {
                 </div>
                 <div className="listing">
                   {processingGroups[gi] ? (
-                    <p>Generating listing for group {gi+1}...</p>
+                    <div className="listing-loading">
+                      <Spinner />
+                      <p>Generating listing for group {gi+1}...</p>
+                    </div>
                   ) : (
                     renderResponseData(gi) || <p>No data. Click "Generate Listing".</p>
                   )}
@@ -432,6 +534,108 @@ function App() {
       <footer className="footer">
         <p>© 2025 ListEasier</p>
       </footer>
+      
+      {/* CSS for spinner and progress bar */}
+      <style jsx>{`
+        .spinner {
+          display: inline-block;
+          position: relative;
+          width: 24px;
+          height: 24px;
+          margin-right: 10px;
+        }
+        
+        .spinner-circle {
+          box-sizing: border-box;
+          display: block;
+          position: absolute;
+          width: 24px;
+          height: 24px;
+          border: 3px solid transparent;
+          border-radius: 50%;
+          border-top-color: #007bff;
+          animation: spin 1s linear infinite;
+        }
+        
+        @keyframes spin {
+          0% { transform: rotate(0deg); }
+          100% { transform: rotate(360deg); }
+        }
+        
+        .progress-container {
+          width: 100%;
+          height: 20px;
+          background-color: #f1f1f1;
+          border-radius: 10px;
+          margin: 10px 0;
+          position: relative;
+          overflow: hidden;
+        }
+        
+        .progress-bar {
+          height: 100%;
+          background-color: #007bff;
+          border-radius: 10px;
+          transition: width 0.3s ease;
+        }
+        
+        .progress-text {
+          position: absolute;
+          top: 0;
+          left: 0;
+          width: 100%;
+          height: 100%;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          color: #000;
+          font-size: 12px;
+          font-weight: bold;
+        }
+        
+        .upload-loading {
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+          width: 100%;
+          height: 100%;
+        }
+        
+        .loading-button {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+        }
+        
+        .loading-progress {
+          margin-bottom: 20px;
+        }
+        
+        .loading-bar-container {
+          width: 100%;
+          height: 10px;
+          background-color: #f1f1f1;
+          border-radius: 5px;
+          margin-bottom: 10px;
+          overflow: hidden;
+        }
+        
+        .loading-bar {
+          height: 100%;
+          background-color: #007bff;
+          border-radius: 5px;
+          transition: width 0.3s ease;
+        }
+        
+        .listing-loading {
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+          padding: 20px;
+        }
+      `}</style>
     </div>
   );
 }

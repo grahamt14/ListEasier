@@ -16,6 +16,8 @@ function App() {
   const [showTooltip, setShowTooltip] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [isDirty, setIsDirty] = useState(false);
+   const [totalChunks, setTotalChunks] = useState(0);
+  const [completedChunks, setCompletedChunks] = useState(0);
 
   const fileInputRef = useRef(null);
 
@@ -182,8 +184,8 @@ function App() {
     }
   }
 
-  // 3. Chunk groups so each payload < 10MB
-  const chunkifyGroups = (groups, maxSize = 10 * 1024 * 1024) => {
+  // 3. Chunk groups so each payload < 1.5MB
+  const chunkifyGroups = (groups, maxSize = 1.5 * 1024 * 1024) => {
     const result = [];
     let current = [];
     const estimateSize = obj => new Blob([JSON.stringify(obj)]).size;

@@ -171,10 +171,9 @@ function App() {
     setIsDirty(true);
   };
 
-  const handleGenerateListing = () => {
-    // clear empty groups
+  const handleGenerateListing = async () => {
     const nonEmptyGroups = imageGroups.filter(g => g.length > 0);
-    // handle batching of any remaining pool images
+
     if (filesBase64.length > 0 && batchSize > 0) {
       for (let i = 0; i < filesBase64.length; i += batchSize) {
         nonEmptyGroups.push(filesBase64.slice(i, i + batchSize));
@@ -186,34 +185,51 @@ function App() {
     setIsDirty(false);
     setIsLoading(true);
 
-    fetch(
-      "https://7f26uyyjs5.execute-api.us-east-2.amazonaws.com/ListEasily/ListEasilyAPI",
-      { 
-        method: "POST", 
-        headers: { "Content-Type": "application/json" }, 
-        body: JSON.stringify({ category, subCategory, Base64Key: nonEmptyGroups }) 
-      }
-    )
-      .then(res => res.json())
-      .then(data => {
-        let parsedData;
-        try {
-          if (typeof data.body === 'string') {
-            parsedData = JSON.parse(data.body);
-          } else {
-            parsedData = data.body || data;
-          }
-          setResponseData(parsedData);
-        } catch (error) {
-          console.error("Error parsing response:", error);
-          setResponseData([{ error: "Failed to parse response" }]);
+    const allResponses = [];
+
+    const chunkifyGroups = (groups, maxSize = 10 * 1024 * 1024) => {
+      const result = [];
+      let current = [];
+
+      const estimateSize = (obj) => new Blob([JSON.stringify(obj)]).size;
+
+      for (const group of groups) {
+        const testPayload = { category, subCategory, Base64Key: [...current, group] };
+        if (estimateSize(testPayload) > maxSize && current.length) {
+          result.push([...current]);
+          current = [group];
+        } else {
+          current.push(group);
         }
-        setIsLoading(false);
-      })
-      .catch(err => {
-        console.error("Error CALLING API:", err);
-        setIsLoading(false);
-      });
+      }
+      if (current.length) result.push(current);
+      return result;
+    };
+
+    const groupedChunks = chunkifyGroups(nonEmptyGroups);
+
+    for (const chunk of groupedChunks) {
+      try {
+        const res = await fetch(
+          "https://7f26uyyjs5.execute-api.us-east-2.amazonaws.com/ListEasily/ListEasilyAPI",
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ category, subCategory, Base64Key: chunk })
+          }
+        );
+        const data = await res.json();
+        let parsed = data.body;
+        if (typeof parsed === 'string') parsed = JSON.parse(parsed);
+        allResponses.push(...parsed);
+      } catch (error) {
+        console.error("Error during fetch:", error);
+        allResponses.push({ error: "Failed to fetch listing data", raw_content: error.message });
+      }
+    }
+
+    setResponseData(allResponses);
+    setIsLoading(false);
   };
 
   const handleClearAll = () => {
@@ -311,28 +327,28 @@ function App() {
             </button>
             {showTooltip && <span className="tooltip">Please select a valid category and subcategory.</span>}
           </div>
-{filesBase64.length > 0 && (
-  <div className="uploaded-images">
-    {filesBase64.map((src, i) => {
-      const isSelected = selectedImages.includes(i);
-      return (
-        <img
-          key={i}
-          src={src}
-          alt={`upload-${i}`}
-          draggable
-          onDragStart={e => {
-            e.dataTransfer.setData("from", "pool");
-            e.dataTransfer.setData("index", i.toString());
-          }}
-          onClick={() => toggleImageSelection(i)}
-          style={{ outline: isSelected ? '3px solid #007bff' : 'none' }}
-        />
-      );
-    })}
-  </div>
-)}
 
+          {filesBase64.length > 0 && (
+            <div className="uploaded-images">
+              {filesBase64.map((src, i) => {
+                const isSelected = selectedImages.includes(i);
+                return (
+                  <img
+                    key={i}
+                    src={src}
+                    alt={`upload-${i}`}
+                    draggable
+                    onDragStart={e => {
+                      e.dataTransfer.setData("from", "pool");
+                      e.dataTransfer.setData("index", i.toString());
+                    }}
+                    onClick={() => toggleImageSelection(i)}
+                    style={{ outline: isSelected ? '3px solid #007bff' : 'none' }}
+                  />
+                );
+              })}
+            </div>
+          )}
         </section>
 
         <section className="preview-section">

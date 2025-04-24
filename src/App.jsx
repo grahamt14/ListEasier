@@ -377,13 +377,6 @@ function App() {
     );
   };
 
-  // Spinner component
-  const Spinner = () => (
-    <div className="spinner">
-      <div className="spinner-circle"></div>
-    </div>
-  );
-
   // Progress bar component
   const ProgressBar = ({ progress }) => (
     <div className="progress-container">
@@ -534,108 +527,7 @@ function App() {
       <footer className="footer">
         <p>© 2025 ListEasier</p>
       </footer>
-      
-      {/* CSS for spinner and progress bar */}
-      <style jsx>{`
-        .spinner {
-          display: inline-block;
-          position: relative;
-          width: 24px;
-          height: 24px;
-          margin-right: 10px;
-        }
-        
-        .spinner-circle {
-          box-sizing: border-box;
-          display: block;
-          position: absolute;
-          width: 24px;
-          height: 24px;
-          border: 3px solid transparent;
-          border-radius: 50%;
-          border-top-color: #007bff;
-          animation: spin 1s linear infinite;
-        }
-        
-        @keyframes spin {
-          0% { transform: rotate(0deg); }
-          100% { transform: rotate(360deg); }
-        }
-        
-        .progress-container {
-          width: 100%;
-          height: 20px;
-          background-color: #f1f1f1;
-          border-radius: 10px;
-          margin: 10px 0;
-          position: relative;
-          overflow: hidden;
-        }
-        
-        .progress-bar {
-          height: 100%;
-          background-color: #007bff;
-          border-radius: 10px;
-          transition: width 0.3s ease;
-        }
-        
-        .progress-text {
-          position: absolute;
-          top: 0;
-          left: 0;
-          width: 100%;
-          height: 100%;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          color: #000;
-          font-size: 12px;
-          font-weight: bold;
-        }
-        
-        .upload-loading {
-          display: flex;
-          flex-direction: column;
-          align-items: center;
-          justify-content: center;
-          width: 100%;
-          height: 100%;
-        }
-        
-        .loading-button {
-          display: flex;
-          align-items: center;
-          justify-content: center;
-        }
-        
-        .loading-progress {
-          margin-bottom: 20px;
-        }
-        
-        .loading-bar-container {
-          width: 100%;
-          height: 10px;
-          background-color: #f1f1f1;
-          border-radius: 5px;
-          margin-bottom: 10px;
-          overflow: hidden;
-        }
-        
-        .loading-bar {
-          height: 100%;
-          background-color: #007bff;
-          border-radius: 5px;
-          transition: width 0.3s ease;
-        }
-        
-        .listing-loading {
-          display: flex;
-          flex-direction: column;
-          align-items: center;
-          justify-content: center;
-          padding: 20px;
-        }
-      `}</style>
+
     </div>
   );
 }

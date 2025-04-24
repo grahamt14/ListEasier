@@ -76,6 +76,12 @@
   background-color: #f0f0f0;
 }
 
+.uploaded-images img {
+  max-width: 200px;
+  height: auto;
+  object-fit: cover;
+}
+
 .button-group {
   display: flex;
   gap: 1rem;

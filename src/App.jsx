@@ -377,6 +377,13 @@ function App() {
     );
   };
 
+  // Spinner component
+  const Spinner = () => (
+    <div className="spinner">
+      <div className="spinner-circle"></div>
+    </div>
+  );
+
   // Progress bar component
   const ProgressBar = ({ progress }) => (
     <div className="progress-container">
@@ -415,7 +422,6 @@ function App() {
                onClick={triggerFileInput}>
             {isUploading ? (
               <div className="upload-loading">
-                <Spinner />
                 <p>Processing images... ({processedFiles}/{totalFiles})</p>
                 <ProgressBar progress={uploadProgress} />
               </div>

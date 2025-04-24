@@ -234,8 +234,8 @@ function App() {
     if (response.error) {
       return (
         <div className="response-error">
-          <p>Error: {response.error}</p>
-          {response.raw_content && <p>Raw content: {response.raw_content}</p>}
+          <p style={{ color: '#000' }}>Error: {response.error}</p>
+          {response.raw_content && <p style={{ color: '#000' }}>Raw content: {response.raw_content}</p>}
         </div>
       );
     }
@@ -243,11 +243,12 @@ function App() {
     // Otherwise, render the response properties
     return (
       <div className="response-data">
-        <h4>Generated Listing</h4>
+        <h4 style={{ color: '#000' }}>Generated Listing</h4>
         <div className="response-fields">
           {Object.entries(response).map(([key, value]) => (
             <div key={key} className="response-field">
-              <strong>{key.replace(/_/g, ' ').charAt(0).toUpperCase() + key.replace(/_/g, ' ').slice(1)}:</strong> {value}
+              <strong style={{ color: '#000' }}>{key.replace(/_/g, ' ').charAt(0).toUpperCase() + key.replace(/_/g, ' ').slice(1)}:</strong> 
+              <span style={{ color: '#000' }}>{value}</span>
             </div>
           ))}
         </div>
@@ -258,7 +259,7 @@ function App() {
   const isValidSelection = selectedCategory !== "--" && subCategory !== "--";
 
   return (
-    <div className="centered-container">
+    <div className="centered-container" style={{ cursor: isLoading ? 'wait' : 'default' }}>
       <img src="/images/ListEasier.jpg" alt="ListEasier" className="logoCSS" />
 
       <div className="card">
@@ -355,60 +356,64 @@ function App() {
               border: hoveredGroup === gi ? '2px dashed #00bfff' : '1px solid #ccc', 
               padding: '1rem', 
               borderRadius: '8px', 
-              marginBottom: '1rem', 
-              display: 'flex', 
-              flexWrap: 'wrap', 
-              gap: '0.5rem', 
-              backgroundColor: '#f5f5f5' 
+              backgroundColor: '#f5f5f5',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '1rem'
             }}
           >
-            {group.map((src, xi) => (
-              <img 
-                key={xi} 
-                src={src} 
-                draggable 
-                onDragStart={e => {
-                  e.dataTransfer.setData('from', 'group');
-                  e.dataTransfer.setData('index', `${gi}-${xi}`);
-                  const img = new Image(); 
-                  img.src = src; 
-                  img.onload = () => e.dataTransfer.setDragImage(img, 50, 50);
-                }} 
-                onDrop={e => handleGroupDrop(e, gi, xi)} 
-                onDragOver={e => e.preventDefault()}
-                onClick={() => {
-                  const cp = [...imageGroups];
-                  const removed = cp[gi].splice(xi, 1)[0];
-                  setImageGroups(cp.filter(g => g.length || g === cp[cp.length - 1]));
-                  setFilesBase64(prev => [...prev, removed]);
-                }}
-                style={{ 
-                  width: '100px', 
-                  height: 'auto', 
-                  cursor: 'grab', 
-                  transition: 'transform 0.2s' 
-                }}
-                onMouseEnter={e => e.currentTarget.style.transform = 'scale(1.05)'} 
-                onMouseLeave={e => e.currentTarget.style.transform = 'scale(1)'}
-              />
-            ))}
-          </div>
-          
-          {/* Display Response Data for this group */}
-          <div style={{ 
-            padding: '1rem', 
-            border: '1px solid #ddd', 
-            borderRadius: '8px',
-            backgroundColor: '#f9f9f9',
-            marginTop: '0.5rem'
-          }}>
-            {isLoading ? (
-              <p>Generating listing...</p>
-            ) : responseData && responseData.length > gi ? (
-              renderResponseData(gi)
-            ) : (
-              <p>No listing data available. Click "Generate Listing" to create one.</p>
-            )}
+            {/* Images section */}
+            <div style={{ 
+              display: 'flex', 
+              flexWrap: 'wrap', 
+              gap: '0.5rem' 
+            }}>
+              {group.map((src, xi) => (
+                <img 
+                  key={xi} 
+                  src={src} 
+                  draggable 
+                  onDragStart={e => {
+                    e.dataTransfer.setData('from', 'group');
+                    e.dataTransfer.setData('index', `${gi}-${xi}`);
+                    const img = new Image(); 
+                    img.src = src; 
+                    img.onload = () => e.dataTransfer.setDragImage(img, 50, 50);
+                  }} 
+                  onDrop={e => handleGroupDrop(e, gi, xi)} 
+                  onDragOver={e => e.preventDefault()}
+                  onClick={() => {
+                    const cp = [...imageGroups];
+                    const removed = cp[gi].splice(xi, 1)[0];
+                    setImageGroups(cp.filter(g => g.length || g === cp[cp.length - 1]));
+                    setFilesBase64(prev => [...prev, removed]);
+                  }}
+                  style={{ 
+                    width: '100px', 
+                    height: 'auto', 
+                    cursor: 'grab', 
+                    transition: 'transform 0.2s' 
+                  }}
+                  onMouseEnter={e => e.currentTarget.style.transform = 'scale(1.05)'} 
+                  onMouseLeave={e => e.currentTarget.style.transform = 'scale(1)'}
+                />
+              ))}
+            </div>
+            
+            {/* Response Data section - now inside the same card */}
+            <div style={{ 
+              borderTop: '1px solid #ddd',
+              paddingTop: '1rem',
+              backgroundColor: 'transparent'
+            }}>
+              {isLoading ? (
+                <p style={{ color: '#000' }}>Generating listing...</p>
+              ) : responseData && responseData.length > gi ? (
+                renderResponseData(gi)
+              ) : (
+                <p style={{ color: '#000' }}>No listing data available. Click "Generate Listing" to create one.</p>
+              )}
+            </div>
           </div>
         </div>
       ))}
@@ -433,7 +438,7 @@ function App() {
             backgroundColor: '#f5f5f5'
           }}
         >
-          <p style={{ color: '#777' }}>Drag images here to create a new group</p>
+          <p style={{ color: '#000' }}>Drag images here to create a new group</p>
         </div>
       )}
     </div>

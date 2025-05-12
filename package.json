@@ -10,6 +10,8 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@aws-sdk/client-dynamodb": "^3.808.0",
+    "@aws-sdk/util-dynamodb": "^3.808.0",
     "aws-amplify": "^6.14.1",
     "cors": "^2.8.5",
     "react": "^19.0.0",

@@ -1,5 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
-
+import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
+import { ScanCommand, QueryCommand } from '@aws-sdk/client-dynamodb';
+import { unmarshall } from '@aws-sdk/util-dynamodb';
 
 function FormSection({
   filesBase64,
@@ -991,6 +993,59 @@ function FormSection({
   );
 
   const isValidSelection = selectedCategory !== "--" && subCategory !== "--";
+  
+  
+  // Initialize DynamoDB client
+const client = new DynamoDBClient({
+  region: 'us-east-2', // e.g. 'us-east-1'
+  credentials: {
+    accessKeyId: 'AKIA5QMLZNPJMZIFQFFS',
+    secretAccessKey: 'w00ym2XMKKtgq8d0J7lCpNq8Mcu/p9fFzE22mtML',
+  },
+});
+
+const CategorySelector = () => {
+  const [subcategories, setSubcategories] = useState([
+    'SubCategory1',
+    'SubCategory2',
+    'SubCategory3',
+  ]);
+  const [subCategory, setSubCategory] = useState('');
+  const [categoryFields, setCategoryFields] = useState([]);
+
+  const handleSubCategoryChange = (event) => {
+    const selected = event.target.value;
+    setSubCategory(selected);
+  };
+
+  useEffect(() => {
+    const fetchCategoryFields = async () => {
+      if (!subCategory) {
+        setCategoryFields([]);
+        return;
+      }
+
+      try {
+        const command = new QueryCommand({
+          TableName: 'CategoryFields',
+          KeyConditionExpression: 'SubCategoryType = :sub',
+          ExpressionAttributeValues: {
+            ':sub': { S: subCategory },
+          },
+        });
+
+        const response = await client.send(command);
+
+        const items = response.Items.map((item) => unmarshall(item));
+        setCategoryFields(items);
+      } catch (error) {
+        console.error('Error fetching CategoryFields:', error);
+        setCategoryFields([]);
+      }
+    };
+
+    fetchCategoryFields();
+  }, [subCategory]);
 
   return (
     <section className="form-section">
@@ -1006,6 +1061,46 @@ function FormSection({
           {subcategories.map((sub, i) => <option key={i}>{sub}</option>)}
         </select>
       </div>
+	  
+	  <div>
+      <h2>Select SubCategory</h2>
+      <select onChange={handleSubCategoryChange} value={subCategory}>
+        <option value="">-- Select --</option>
+        {subcategories.map((sub, i) => (
+          <option key={i} value={sub}>
+            {sub}
+          </option>
+        ))}
+      </select>
+
+      <div style={{ marginTop: '20px' }}>
+        {categoryFields.length > 0 ? (
+          categoryFields.map((field, index) => {
+            const options = field.CategoryOptions
+              ? field.CategoryOptions.split(';').map((opt) => opt.trim())
+              : [];
+
+            return (
+              <div key={index} style={{ marginBottom: '15px' }}>
+                <label style={{ fontWeight: 'bold', display: 'block', marginBottom: '5px' }}>
+                  {field.FieldLabel || `Field ${index + 1}`}
+                </label>
+                <select>
+                  <option value="">-- Select --</option>
+                  {options.map((opt, idx) => (
+                    <option key={idx} value={opt}>
+                      {opt}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            );
+          })
+        ) : (
+          <p>No category fields available for this subcategory.</p>
+        )}
+      </div>
+    </div>
 
       {/* Postcard-specific aspect fields - only shown when Postcards is selected */}
       {showPostcardFields && (

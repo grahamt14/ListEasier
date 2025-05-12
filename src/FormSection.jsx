@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
+import './App.css';
 import { ScanCommand, QueryCommand } from '@aws-sdk/client-dynamodb';
 import { unmarshall } from '@aws-sdk/util-dynamodb';
 

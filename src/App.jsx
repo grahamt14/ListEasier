@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react';
 import './App.css';
 import FormSection from './FormSection';
+import JSZip from 'jszip';
+import { saveAs } from 'file-saver';
 
 function App() {
   const [filesBase64, setFilesBase64] = useState([]);
@@ -158,6 +160,41 @@ function App() {
     setProcessingGroups([]);
   };
 
+  // Function to download all listings as a zip file
+  const downloadListingsAsZip = () => {
+    // Filter out empty or null responses
+    const validResponses = responseData.filter(response => 
+      response && !response.error
+    );
+    
+    if (validResponses.length === 0) {
+      alert("No valid listings to download!");
+      return;
+    }
+    
+    const zip = new JSZip();
+    
+    // Add each listing as a separate JSON file
+    validResponses.forEach((listing, index) => {
+      // Create a name for the file based on the listing content
+      const fileName = `listing_${index + 1}${listing.title ? '_' + listing.title.replace(/[^a-z0-9]/gi, '_').toLowerCase() : ''}.json`;
+      
+      // Add the file to the zip
+      zip.file(fileName, JSON.stringify(listing, null, 2));
+    });
+    
+    // Generate the zip file and trigger download
+    zip.generateAsync({ type: "blob" })
+      .then(content => {
+        // Use file-saver to save the zip
+        saveAs(content, `listings_${new Date().toISOString().split('T')[0]}.zip`);
+      })
+      .catch(err => {
+        console.error("Error creating zip file:", err);
+        alert("Failed to create download. Please try again.");
+      });
+  };
+
   const renderResponseData = (index) => {
     const response = responseData[index];
     if (!response) return null;
@@ -201,6 +238,9 @@ function App() {
     </div>
   );
 
+  // Check if there are valid listings to download
+  const hasValidListings = responseData.some(item => item && !item.error);
+
   return (
     <div className="app-container">
       <header className="header">
@@ -235,7 +275,19 @@ function App() {
         />
 
         <section className="preview-section">
-          <h2>Image Groups & Listings</h2>
+          <div className="section-header">
+            <h2>Image Groups & Listings</h2>
+            {hasValidListings && (
+              <button 
+                className="download-button"
+                onClick={downloadListingsAsZip}
+                disabled={isLoading}
+              >
+                Download All Listings
+              </button>
+            )}
+          </div>
+          
           {isLoading && (
             <div className="loading-progress">
               <div className="loading-bar-container">
@@ -267,7 +319,23 @@ function App() {
                       <p>Generating listing for group {gi+1}...</p>
                     </div>
                   ) : (
-                    renderResponseData(gi) || <p>No data. Click "Generate Listing".</p>
+                    <div>
+                      {renderResponseData(gi) || <p>No data. Click "Generate Listing".</p>}
+                      {responseData[gi] && !responseData[gi].error && (
+                        <button 
+                          className="download-single-button"
+                          onClick={() => {
+                            const blob = new Blob(
+                              [JSON.stringify(responseData[gi], null, 2)], 
+                              {type: 'application/json'}
+                            );
+                            saveAs(blob, `listing_${gi+1}${responseData[gi].title ? '_' + responseData[gi].title.replace(/[^a-z0-9]/gi, '_').toLowerCase() : ''}.json`);
+                          }}
+                        >
+                          Download This Listing
+                        </button>
+                      )}
+                    </div>
                   )}
                 </div>
               </div>

@@ -153,6 +153,132 @@ function FormSection({
         break;
     }
   };
+  
+  const convertToBase64 = (file) => {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => {
+        const maxWidth = 800;
+        let width = img.width;
+        let height = img.height;
+        if (width > maxWidth) {
+          height = Math.floor(height * (maxWidth / width));
+          width = maxWidth;
+        }
+        const canvas = document.createElement("canvas");
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext("2d");
+        ctx.drawImage(img, 0, 0, width, height);
+        resolve(canvas.toDataURL(file.type));
+      };
+      img.onerror = (err) => reject(err);
+      img.src = URL.createObjectURL(file);
+    });
+  };
+
+  const handleFileChange = async (e) => {
+    const files = Array.from(e.target.files);
+    if (files.length === 0) return;
+    
+    // Set uploading state and initialize progress
+    setIsUploading(true);
+    setTotalFiles(files.length);
+    setProcessedFiles(0);
+    setUploadProgress(0);
+    
+    const base64List = [];
+    
+    // Process files sequentially for better progress tracking
+    for (let i = 0; i < files.length; i++) {
+      try {
+        const base64 = await convertToBase64(files[i]);
+        base64List.push(base64);
+        
+        // Update progress
+        setProcessedFiles(i + 1);
+        setUploadProgress(Math.round(((i + 1) / files.length) * 100));
+      } catch (error) {
+        console.error("Error converting file:", error);
+      }
+    }
+    
+    setFilesBase64(prev => [...prev, ...base64List]);
+    setErrorMessages(prev => prev.filter(msg => msg !== "Please upload at least one image."));
+    setIsDirty(true);
+    
+    // Clear uploading state
+    setTimeout(() => {
+      setIsUploading(false);
+    }, 500); // Small delay to show 100% briefly
+  };
+
+  const handleDrop = async (e) => {
+    e.preventDefault();
+    const imgs = Array.from(e.dataTransfer.files).filter(f => f.type.startsWith("image/"));
+    if (imgs.length === 0) return;
+    
+    // Set uploading state and initialize progress
+    setIsUploading(true);
+    setTotalFiles(imgs.length);
+    setProcessedFiles(0);
+    setUploadProgress(0);
+    
+    const base64List = [];
+    
+    // Process files sequentially for better progress tracking
+    for (let i = 0; i < imgs.length; i++) {
+      try {
+        const base64 = await convertToBase64(imgs[i]);
+        base64List.push(base64);
+        
+        // Update progress
+        setProcessedFiles(i + 1);
+        setUploadProgress(Math.round(((i + 1) / imgs.length) * 100));
+      } catch (error) {
+        console.error("Error converting file:", error);
+      }
+    }
+    
+    setFilesBase64(prev => [...prev, ...base64List]);
+    setIsDirty(true);
+    
+    // Clear uploading state
+    setTimeout(() => {
+      setIsUploading(false);
+    }, 500); // Small delay to show 100% briefly
+  };
+
+  const handleDragOver = (e) => e.preventDefault();
+  const triggerFileInput = () => fileInputRef.current.click();
+
+  const toggleImageSelection = (idx) => {
+    setSelectedImages(prev =>
+      prev.includes(idx) ? prev.filter(i => i !== idx) : [...prev, idx]
+    );
+  };
+
+  const handleGroupSelected = () => {
+    const groupImgs = selectedImages.map(i => filesBase64[i]);
+    const remaining = filesBase64.filter((_, i) => !selectedImages.includes(i));
+    setImageGroups(prev => {
+      let updated = [...prev];
+      const firstEmptyIndex = updated.findIndex(g => g.length === 0);
+      if (firstEmptyIndex !== -1) {
+        updated[firstEmptyIndex] = [...updated[firstEmptyIndex], ...groupImgs];
+      } else {
+        updated.push(groupImgs);
+      }
+      if (updated[updated.length - 1].length > 0) {
+        updated.push([]);
+      }
+      return updated;
+    });
+    setFilesBase64(remaining);
+    setSelectedImages([]);
+  };
+
+  const isValidSelection = selectedCategory !== "--" && subCategory !== "--";
 
   const ProgressBar = ({ progress }) => (
     <div className="progress-container">

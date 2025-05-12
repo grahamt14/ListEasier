@@ -203,14 +203,143 @@ function FormSection({
         )}
       </div>
 
-      {/* Postcard-specific attributes */}
-      {selectedCategory === "Postcards" && (
+{/* Postcard-specific aspect fields - only shown when Postcards is selected */}
+      {showPostcardFields && (
         <div className="postcard-attributes">
-          {/* Your postcard aspect fields remain unchanged */}
+          <h3>Postcard Details</h3>
+          
+          <div className="form-group">
+            <label>Postage Condition</label>
+            <select 
+              value={postageCondition} 
+              onChange={(e) => handleAspectChange("postageCondition", e.target.value)}
+            >
+              <option value="">Select Postage Condition</option>
+              {aspectData.postageCondition.map((option, i) => (
+                <option key={i} value={option.localizedValue}>
+                  {option.localizedValue}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="form-group">
+            <label>Era</label>
+            <select 
+              value={era} 
+              onChange={(e) => handleAspectChange("era", e.target.value)}
+            >
+              <option value="">Select Era</option>
+              {aspectData.era.map((option, i) => (
+                <option key={i} value={option.localizedValue}>
+                  {option.localizedValue}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="form-group">
+            <label>Original/Licensed Reprint</label>
+            <select 
+              value={originalLicensed} 
+              onChange={(e) => handleAspectChange("originalLicensed", e.target.value)}
+            >
+              <option value="">Select Type</option>
+              {aspectData.originalLicensed.map((option, i) => (
+                <option key={i} value={option.localizedValue}>
+                  {option.localizedValue}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="form-group">
+            <label>Subject</label>
+            <select 
+              value={subject} 
+              onChange={(e) => handleAspectChange("subject", e.target.value)}
+            >
+              <option value="">Select Subject</option>
+              {aspectData.subject.map((option, i) => (
+                <option key={i} value={option.localizedValue}>
+                  {option.localizedValue}
+                </option>
+              ))}
+            </select>
+          </div>
         </div>
       )}
 
-      {/* Your file upload, image selection, grouping, error handling UI remains unchanged */}
+      <div className="upload-area" 
+           onDrop={handleDrop} 
+           onDragOver={handleDragOver} 
+           onClick={triggerFileInput}>
+        {isUploading ? (
+          <div className="upload-loading">
+            <p>Processing images... ({processedFiles}/{totalFiles})</p>
+            <ProgressBar progress={uploadProgress} />
+          </div>
+        ) : (
+          <p>Click or drag images to upload</p>
+        )}
+        <input ref={fileInputRef} type="file" multiple accept="image/*" onChange={handleFileChange} hidden />
+      </div>
+
+      <div className="form-group">
+        <label>Images Per Item</label>
+        <select disabled={!filesBase64.length} value={batchSize} onChange={e => setBatchSize(Number(e.target.value))}>
+          {!filesBase64.length
+            ? <option>0</option>
+            : Array.from({ length: filesBase64.length }, (_, i) => i + 1)
+                .filter(n => filesBase64.length % n === 0 && n <= 24)
+                .map(n => <option key={n} value={n}>{n}</option>)
+          }
+        </select>
+      </div>
+
+      <div className="button-group">
+        <button className="primary" disabled={!selectedImages.length} onClick={handleGroupSelected}>Group Selected</button>
+        <button className="danger" onClick={handleClearAll}>Clear All</button>
+      </div>
+
+      <div className="generate-area" onMouseEnter={() => !isValidSelection && setShowTooltip(true)} onMouseLeave={() => setShowTooltip(false)}>
+        <button className="primary large" disabled={!isValidSelection || isLoading || !isDirty} onClick={handleGenerateListing}>
+          {isLoading ? (
+            <span className="loading-button">
+              <Spinner /> Generating... ({completedChunks}/{totalChunks})
+            </span>
+          ) : 'Generate Listing'}
+        </button>
+        {showTooltip && <span className="tooltip">Please select a valid category and subcategory.</span>}
+      </div>
+
+      {errorMessages.length > 0 && (
+        <div className="errors">
+          {errorMessages.map((msg, i) => <p key={i} className="error-msg">{msg}</p>)}
+        </div>
+      )}
+
+      {filesBase64.length > 0 && (
+        <div className="uploaded-images">
+          {filesBase64.map((src, i) => {
+            const isSelected = selectedImages.includes(i);
+            return (
+              <img
+                key={i}
+                src={src}
+                alt={`upload-${i}`}
+                draggable
+                onDragStart={e => {
+                  e.dataTransfer.setData("from", "pool");
+                  e.dataTransfer.setData("index", i.toString());
+                }}
+                onClick={() => toggleImageSelection(i)}
+                style={{ outline: isSelected ? '3px solid #007bff' : 'none' }}
+              />
+            );
+          })}
+        </div>
+      )}
     </section>
   );
 }

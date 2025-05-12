@@ -1,9 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
 
-import React, { useEffect, useState } from 'react';
-import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
-import { ScanCommand, QueryCommand } from '@aws-sdk/client-dynamodb';
-import { unmarshall } from '@aws-sdk/util-dynamodb';
 
 function FormSection({
   filesBase64,

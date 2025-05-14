@@ -2,6 +2,17 @@ import { useState, useRef, useEffect } from 'react';
 import { DynamoDBClient, QueryCommand } from '@aws-sdk/client-dynamodb';
 import { unmarshall } from '@aws-sdk/util-dynamodb';
 
+export const getSelectedCategoryOptionsJSON = (fieldSelections) => {
+  const output = {};
+  Object.entries(fieldSelections).forEach(([label, value]) => {
+    if (value && value !== "-- Select --") {
+      output[label] = value;
+    }
+  });
+  console.log(output);
+  return output;
+};
+
 function FormSection({
   filesBase64,
   setFilesBase64,

@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import './App.css';
-import FormSection from './FormSection';
+import FormSection, { getSelectedCategoryOptionsJSON } from './FormSection';
 import JSZip from 'jszip';
 import { saveAs } from 'file-saver';
 
@@ -84,8 +84,9 @@ function App() {
   setIsLoading(true);
   setProcessingGroups(Array(nonEmptyGroups.length).fill(true));
 
-  // 4. Prepare selected category options JSON
-  const selectedCategoryOptions = getSelectedCategoryOptionsJSON();
+
+    // 4. Prepare selected category options JSON
+    const selectedCategoryOptions = getSelectedCategoryOptionsJSON(fieldSelections);
 
   // 5. Fire off each fetch separately and update state upon completion
   nonEmptyGroups.forEach((group, idx) => {
@@ -284,6 +285,8 @@ function App() {
           handleGenerateListing={handleGenerateListing}
           handleClearAll={handleClearAll}
           Spinner={Spinner}
+          fieldSelections={fieldSelections}  // Pass fieldSelections down
+          setFieldSelections={setFieldSelections}  // Pass setter down
         />
 
         <section className="preview-section">

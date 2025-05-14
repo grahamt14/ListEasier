@@ -283,35 +283,39 @@ function FormSection({
       </div>
 
       <div className="form-group">
-        {categoryFields.length > 0 ? (
-          categoryFields.map((field, index) => {
-            const options = field.CategoryOptions
-              ? field.CategoryOptions.split(';').map(opt => opt.trim())
-              : [];
-            return (
-              <div key={index}>
-                <label>{field.FieldLabel || `Field ${index + 1}`}</label>
-                <select
-                  value={fieldSelections[field.FieldLabel] || ""}
-                  onChange={(e) => {
-                    const selectedValue = e.target.value;
-                    setFieldSelections(prev => ({
-                      ...prev,
-                      [field.FieldLabel]: selectedValue
-                    }));
-                  }}
-                >
-                  <option value="">-- Select --</option>
-                  {options.map((opt, idx) => (
-                    <option key={idx} value={opt}>{opt}</option>
-                  ))}
-                </select>
-              </div>
-            );
-          })
-        ) : (
-          <p>No category fields available for this subcategory.</p>
-        )}
+        <label>Category Fields</label>
+        <div className="scrollable-fields">
+          {categoryFields.length > 0 ? (
+            categoryFields.map((field, index) => {
+              const options = field.CategoryOptions
+                ? field.CategoryOptions.split(';').map(opt => opt.trim())
+                : [];
+              return (
+                <div key={index} className="field-row">
+                  <label>{field.FieldLabel || `Field ${index + 1}`}</label>
+                  <select
+                    className="uniform-select"
+                    value={fieldSelections[field.FieldLabel] || ""}
+                    onChange={(e) => {
+                      const selectedValue = e.target.value;
+                      setFieldSelections(prev => ({
+                        ...prev,
+                        [field.FieldLabel]: selectedValue
+                      }));
+                    }}
+                  >
+                    <option value="">-- Select --</option>
+                    {options.map((opt, idx) => (
+                      <option key={idx} value={opt}>{opt}</option>
+                    ))}
+                  </select>
+                </div>
+              );
+            })
+          ) : (
+            <p>No category fields available for this subcategory.</p>
+          )}
+        </div>
       </div>
 
       <div

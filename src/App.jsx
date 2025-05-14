@@ -19,6 +19,17 @@ function App() {
   const [totalChunks, setTotalChunks] = useState(0);
   const [completedChunks, setCompletedChunks] = useState(0);
   const [processingGroups, setProcessingGroups] = useState([]);
+  
+    const getSelectedCategoryOptionsJSON = () => {
+    const output = {};
+    Object.entries(fieldSelections).forEach(([label, value]) => {
+      if (value && value !== "-- Select --") {
+        output[label] = value;
+      }
+    });
+    console.log(output);
+    return output;
+  };
 
   // Effect to log responseData changes for debugging
   useEffect(() => {

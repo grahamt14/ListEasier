@@ -5,6 +5,7 @@ import JSZip from 'jszip';
 import { saveAs } from 'file-saver';
 
 function App() {
+  const [fieldSelections, setFieldSelections] = useState({});
   const [filesBase64, setFilesBase64] = useState([]);
   const [category, setCategory] = useState();
   const [subCategory, setsubCategory] = useState();
@@ -20,7 +21,8 @@ function App() {
   const [completedChunks, setCompletedChunks] = useState(0);
   const [processingGroups, setProcessingGroups] = useState([]);
   
-    const getSelectedCategoryOptionsJSON = () => {
+    // Function now lives in App and can be called anywhere in App
+  const getSelectedCategoryOptionsJSON = () => {
     const output = {};
     Object.entries(fieldSelections).forEach(([label, value]) => {
       if (value && value !== "-- Select --") {
@@ -30,6 +32,8 @@ function App() {
     console.log(output);
     return output;
   };
+
+
 
   // Effect to log responseData changes for debugging
   useEffect(() => {

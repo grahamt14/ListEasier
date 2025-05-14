@@ -25,8 +25,6 @@ function FormSection({
   handleGenerateListing,
   handleClearAll,
   Spinner,
-  fieldSelections,
-  setFieldSelections 
 }) {
   const [selectedCategory, setSelectedCategory] = useState("--");
   const [subcategories, setSubcategories] = useState(["--"]);

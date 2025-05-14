@@ -21,18 +21,6 @@ function App() {
   const [completedChunks, setCompletedChunks] = useState(0);
   const [processingGroups, setProcessingGroups] = useState([]);
   
-    // Function now lives in App and can be called anywhere in App
-  const getSelectedCategoryOptionsJSON = () => {
-    const output = {};
-    Object.entries(fieldSelections).forEach(([label, value]) => {
-      if (value && value !== "-- Select --") {
-        output[label] = value;
-      }
-    });
-    console.log(output);
-    return output;
-  };
-
 
 
   // Effect to log responseData changes for debugging

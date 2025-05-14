@@ -31,18 +31,14 @@ function FormSection({
   const [categoryFields, setCategoryFields] = useState([]);
   const [showTooltip, setShowTooltip] = useState(false);
 
-  // Postcard-specific aspect states
-  const [postageCondition, setPostageCondition] = useState("");
-  const [era, setEra] = useState("");
-  const [originalLicensed, setOriginalLicensed] = useState("");
-  const [subject, setSubject] = useState("");
-
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [totalFiles, setTotalFiles] = useState(0);
   const [processedFiles, setProcessedFiles] = useState(0);
 
   const fileInputRef = useRef(null);
+
+  const [fieldSelections, setFieldSelections] = useState({});
 
   const data = {
     "--": ["--"],
@@ -52,23 +48,6 @@ function FormSection({
     "Music": ["Other Formats", "Vinyl Records", "CDs", "Cassettes"],
     "Video Games": ["None"],
     "Postcards": ["Non-Topographical Postcards", "Topographical Postcards"]
-  };
-
-  const aspectData = {
-    postageCondition: [{ localizedValue: "Posted" }, { localizedValue: "Unposted" }],
-    era: [
-      { localizedValue: "Pre-Postcard (Pre-1870)" },
-      { localizedValue: "Pioneer (1870-1898)" },
-      { localizedValue: "Private Mailing Card (1898-1901)" },
-      { localizedValue: "Undivided Back (1901-1907)" }
-    ],
-    originalLicensed: [{ localizedValue: "Licensed Reprint" }, { localizedValue: "Original" }],
-    subject: [
-      { localizedValue: "Actors" },
-      { localizedValue: "Aircraft" },
-      { localizedValue: "Air Force" },
-      { localizedValue: "Airline" }
-    ]
   };
 
   const client = new DynamoDBClient({
@@ -82,6 +61,7 @@ function FormSection({
   useEffect(() => {
     if (!subCategory || subCategory === "--") {
       setCategoryFields([]);
+      setFieldSelections({});
       return;
     }
 
@@ -98,9 +78,16 @@ function FormSection({
         const response = await client.send(command);
         const items = response.Items?.map(item => unmarshall(item)) || [];
         setCategoryFields(items);
+
+        const initialSelections = {};
+        items.forEach(item => {
+          initialSelections[item.FieldLabel] = "";
+        });
+        setFieldSelections(initialSelections);
       } catch (error) {
         console.error('Error fetching category fields:', error);
         setCategoryFields([]);
+        setFieldSelections({});
       }
     };
 
@@ -134,26 +121,6 @@ function FormSection({
     }
   };
 
-  const handleAspectChange = (aspect, value) => {
-    setIsDirty(true);
-    switch (aspect) {
-      case "postageCondition":
-        setPostageCondition(value);
-        break;
-      case "era":
-        setEra(value);
-        break;
-      case "originalLicensed":
-        setOriginalLicensed(value);
-        break;
-      case "subject":
-        setSubject(value);
-        break;
-      default:
-        break;
-    }
-  };
-  
   const convertToBase64 = (file) => {
     return new Promise((resolve, reject) => {
       const img = new Image();
@@ -180,73 +147,63 @@ function FormSection({
   const handleFileChange = async (e) => {
     const files = Array.from(e.target.files);
     if (files.length === 0) return;
-    
-    // Set uploading state and initialize progress
+
     setIsUploading(true);
     setTotalFiles(files.length);
     setProcessedFiles(0);
     setUploadProgress(0);
-    
+
     const base64List = [];
-    
-    // Process files sequentially for better progress tracking
+
     for (let i = 0; i < files.length; i++) {
       try {
         const base64 = await convertToBase64(files[i]);
         base64List.push(base64);
-        
-        // Update progress
         setProcessedFiles(i + 1);
         setUploadProgress(Math.round(((i + 1) / files.length) * 100));
       } catch (error) {
         console.error("Error converting file:", error);
       }
     }
-    
+
     setFilesBase64(prev => [...prev, ...base64List]);
     setErrorMessages(prev => prev.filter(msg => msg !== "Please upload at least one image."));
     setIsDirty(true);
-    
-    // Clear uploading state
+
     setTimeout(() => {
       setIsUploading(false);
-    }, 500); // Small delay to show 100% briefly
+    }, 500);
   };
 
   const handleDrop = async (e) => {
     e.preventDefault();
     const imgs = Array.from(e.dataTransfer.files).filter(f => f.type.startsWith("image/"));
     if (imgs.length === 0) return;
-    
-    // Set uploading state and initialize progress
+
     setIsUploading(true);
     setTotalFiles(imgs.length);
     setProcessedFiles(0);
     setUploadProgress(0);
-    
+
     const base64List = [];
-    
-    // Process files sequentially for better progress tracking
+
     for (let i = 0; i < imgs.length; i++) {
       try {
         const base64 = await convertToBase64(imgs[i]);
         base64List.push(base64);
-        
-        // Update progress
         setProcessedFiles(i + 1);
         setUploadProgress(Math.round(((i + 1) / imgs.length) * 100));
       } catch (error) {
         console.error("Error converting file:", error);
       }
     }
-    
+
     setFilesBase64(prev => [...prev, ...base64List]);
     setIsDirty(true);
-    
-    // Clear uploading state
+
     setTimeout(() => {
       setIsUploading(false);
-    }, 500); // Small delay to show 100% briefly
+    }, 500);
   };
 
   const handleDragOver = (e) => e.preventDefault();
@@ -287,7 +244,16 @@ function FormSection({
     </div>
   );
 
-  // --- Rest of your file upload, image selection, grouping logic remains unchanged (you already did that correctly).
+  const getSelectedCategoryOptionsJSON = () => {
+    const output = {};
+    Object.entries(fieldSelections).forEach(([label, value]) => {
+      if (value && value !== "-- Select --") {
+        output[label] = value;
+      }
+    });
+    console.log(output);
+    return output;
+  };
 
   return (
     <section className="form-section">
@@ -311,11 +277,19 @@ function FormSection({
             const options = field.CategoryOptions
               ? field.CategoryOptions.split(';').map(opt => opt.trim())
               : [];
-
             return (
               <div key={index}>
                 <label>{field.FieldLabel || `Field ${index + 1}`}</label>
-                <select>
+                <select
+                  value={fieldSelections[field.FieldLabel] || ""}
+                  onChange={(e) => {
+                    const selectedValue = e.target.value;
+                    setFieldSelections(prev => ({
+                      ...prev,
+                      [field.FieldLabel]: selectedValue
+                    }));
+                  }}
+                >
                   <option value="">-- Select --</option>
                   {options.map((opt, idx) => (
                     <option key={idx} value={opt}>{opt}</option>
@@ -329,11 +303,14 @@ function FormSection({
         )}
       </div>
 
+      <button onClick={getSelectedCategoryOptionsJSON}>Log Selected Category Options</button>
 
-      <div className="upload-area" 
-           onDrop={handleDrop} 
-           onDragOver={handleDragOver} 
-           onClick={triggerFileInput}>
+      <div
+        className="upload-area"
+        onDrop={handleDrop}
+        onDragOver={handleDragOver}
+        onClick={triggerFileInput}
+      >
         {isUploading ? (
           <div className="upload-loading">
             <p>Processing images... ({processedFiles}/{totalFiles})</p>

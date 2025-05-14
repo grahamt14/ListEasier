@@ -61,90 +61,99 @@ function App() {
   };
 
   const handleGenerateListing = async () => {
-    // 1. Gather all non-empty groups
-    const nonEmptyGroups = imageGroups.filter(g => g.length > 0);
+  // 1. Gather all non-empty groups
+  const nonEmptyGroups = imageGroups.filter(g => g.length > 0);
 
-    // 2. If there are leftover pool images, batch them too
-    if (filesBase64.length > 0 && batchSize > 0) {
-      for (let i = 0; i < filesBase64.length; i += batchSize) {
-        nonEmptyGroups.push(filesBase64.slice(i, i + batchSize));
-      }
+  // 2. If there are leftover pool images, batch them too
+  if (filesBase64.length > 0 && batchSize > 0) {
+    for (let i = 0; i < filesBase64.length; i += batchSize) {
+      nonEmptyGroups.push(filesBase64.slice(i, i + batchSize));
     }
+  }
 
-    // 3. Initialize UI state
-    setTotalChunks(nonEmptyGroups.length);
-    setCompletedChunks(0);
-    setResponseData(Array(nonEmptyGroups.length).fill(null));
-    setImageGroups([...nonEmptyGroups, []]);
-    setFilesBase64([]);
-    setIsDirty(false);
-    setIsLoading(true);
-    setProcessingGroups(Array(nonEmptyGroups.length).fill(true));
+  // 3. Initialize UI state
+  setTotalChunks(nonEmptyGroups.length);
+  setCompletedChunks(0);
+  setResponseData(Array(nonEmptyGroups.length).fill(null));
+  setImageGroups([...nonEmptyGroups, []]);
+  setFilesBase64([]);
+  setIsDirty(false);
+  setIsLoading(true);
+  setProcessingGroups(Array(nonEmptyGroups.length).fill(true));
 
-    // 4. Fire off each fetch separately and update state upon completion
-    nonEmptyGroups.forEach((group, idx) => {
-      console.log(`Starting API call for group ${idx}`);
-      
-      fetch(
-        "https://7f26uyyjs5.execute-api.us-east-2.amazonaws.com/ListEasily/ListEasilyAPI",
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ category, subCategory, Base64Key: [group] })
-        }
-      )
-        .then(res => res.json())
-        .then(data => {
-          console.log(`Group ${idx} API call completed`);
-          let parsed = data.body;
-          if (typeof parsed === "string") parsed = JSON.parse(parsed);
-          
-          // Use setTimeout to force this update to be processed separately
-          setTimeout(() => {
-            setResponseData(prev => {
-              const next = [...prev];
-              next[idx] = Array.isArray(parsed) ? parsed[0] : parsed;
-              return next;
-            });
-            
-            setProcessingGroups(prev => {
-              const next = [...prev];
-              next[idx] = false;
-              return next;
-            });
-          }, 0);
+  // 4. Prepare selected category options JSON
+  const selectedCategoryOptions = getSelectedCategoryOptionsJSON();
+
+  // 5. Fire off each fetch separately and update state upon completion
+  nonEmptyGroups.forEach((group, idx) => {
+    console.log(`Starting API call for group ${idx}`);
+
+    fetch(
+      "https://7f26uyyjs5.execute-api.us-east-2.amazonaws.com/ListEasily/ListEasilyAPI",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          category,
+          subCategory,
+          Base64Key: [group],
+          SelectedCategoryOptions: selectedCategoryOptions
         })
-        .catch(err => {
-          console.error(`Error during fetch for group ${idx}:`, err);
-          
-          setTimeout(() => {
-            setResponseData(prev => {
-              const next = [...prev];
-              next[idx] = { error: "Failed to fetch listing data", raw_content: err.message };
-              return next;
-            });
-            
-            setProcessingGroups(prev => {
-              const next = [...prev];
-              next[idx] = false;
-              return next;
-            });
-          }, 0);
-        })
-        .finally(() => {
-          setTimeout(() => {
-            setCompletedChunks(c => {
-              const done = c + 1;
-              console.log(`Completed ${done} of ${nonEmptyGroups.length} chunks`);
-              if (done === nonEmptyGroups.length) {
-                setIsLoading(false);
-              }
-              return done;
-            });
-          }, 0);
-        });
-    });
-  };
+      }
+    )
+      .then(res => res.json())
+      .then(data => {
+        console.log(`Group ${idx} API call completed`);
+        let parsed = data.body;
+        if (typeof parsed === "string") parsed = JSON.parse(parsed);
+
+        // Use setTimeout to force this update to be processed separately
+        setTimeout(() => {
+          setResponseData(prev => {
+            const next = [...prev];
+            next[idx] = Array.isArray(parsed) ? parsed[0] : parsed;
+            return next;
+          });
+
+          setProcessingGroups(prev => {
+            const next = [...prev];
+            next[idx] = false;
+            return next;
+          });
+        }, 0);
+      })
+      .catch(err => {
+        console.error(`Error during fetch for group ${idx}:`, err);
+
+        setTimeout(() => {
+          setResponseData(prev => {
+            const next = [...prev];
+            next[idx] = { error: "Failed to fetch listing data", raw_content: err.message };
+            return next;
+          });
+
+          setProcessingGroups(prev => {
+            const next = [...prev];
+            next[idx] = false;
+            return next;
+          });
+        }, 0);
+      })
+      .finally(() => {
+        setTimeout(() => {
+          setCompletedChunks(c => {
+            const done = c + 1;
+            console.log(`Completed ${done} of ${nonEmptyGroups.length} chunks`);
+            if (done === nonEmptyGroups.length) {
+              setIsLoading(false);
+            }
+            return done;
+          });
+        }, 0);
+      });
+  });
+};
+
 
   const handleClearAll = () => {
     setFilesBase64([]);
@@ -321,20 +330,7 @@ function App() {
                   ) : (
                     <div>
                       {renderResponseData(gi) || <p>No data. Click "Generate Listing".</p>}
-                      {responseData[gi] && !responseData[gi].error && (
-                        <button 
-                          className="download-single-button"
-                          onClick={() => {
-                            const blob = new Blob(
-                              [JSON.stringify(responseData[gi], null, 2)], 
-                              {type: 'application/json'}
-                            );
-                            saveAs(blob, `listing_${gi+1}${responseData[gi].title ? '_' + responseData[gi].title.replace(/[^a-z0-9]/gi, '_').toLowerCase() : ''}.json`);
-                          }}
-                        >
-                          Download This Listing
-                        </button>
-                      )}
+                      {responseData[gi] && !responseData[gi].error}
                     </div>
                   )}
                 </div>

@@ -303,8 +303,6 @@ function FormSection({
         )}
       </div>
 
-      <button onClick={getSelectedCategoryOptionsJSON}>Log Selected Category Options</button>
-
       <div
         className="upload-area"
         onDrop={handleDrop}

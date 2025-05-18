@@ -112,11 +112,11 @@
   max-height: 300px;
   overflow-y: auto;
   padding: 0.25rem 0.25rem 0.25rem 0;
-  background-color: #3b3b3b;
 }
 
 .field-row {
   margin-bottom: 0.8rem;
+  background-color: #3b3b3b;
 }
 
 .field-row select {

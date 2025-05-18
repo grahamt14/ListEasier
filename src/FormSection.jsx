@@ -192,8 +192,8 @@ const convertToBase64AndUploadToS3 = (file) => {
 
         const img = new Image();
         img.onload = async () => {
-          // Added resizing logic here
-          const maxWidth = 800; // you can adjust this as needed
+          // All the existing resizing logic stays here, even if we don’t use it for upload:
+          const maxWidth = 800; // adjustable
           let width = img.width;
           let height = img.height;
 
@@ -209,28 +209,14 @@ const convertToBase64AndUploadToS3 = (file) => {
           const ctx = canvas.getContext("2d");
           ctx.drawImage(img, 0, 0, width, height);
 
-          const base64DataUrl = canvas.toDataURL(file.type);
-          const base64Data = base64DataUrl.split(",")[1];
+          // We no longer convert to base64 or create buffer for upload here
 
-          // Browser-friendly base64 to Uint8Array conversion
-          function base64ToUint8Array(base64) {
-            const binaryString = atob(base64);
-            const len = binaryString.length;
-            const bytes = new Uint8Array(len);
-            for (let i = 0; i < len; i++) {
-              bytes[i] = binaryString.charCodeAt(i);
-            }
-            return bytes;
-          }
-
-          const buffer = base64ToUint8Array(base64Data);
-
-          // Upload to S3
+          // Instead, upload the original file directly:
           const fileName = `${Date.now()}_${file.name}`;
           const uploadParams = {
             Bucket: BUCKET_NAME,
             Key: fileName,
-            Body: buffer,
+            Body: file,  // <--- original file uploaded here
             ContentType: file.type,
           };
 
@@ -256,6 +242,7 @@ const convertToBase64AndUploadToS3 = (file) => {
     reader.readAsDataURL(file);
   });
 };
+
 
 
   const convertToBase64 = (file) => {

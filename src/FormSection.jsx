@@ -5,13 +5,16 @@ import { DynamoDBDocumentClient, ScanCommand } from '@aws-sdk/lib-dynamodb';
 import EXIF from 'exif-js';
 import piexif from 'piexifjs';
 
-export const getSelectedCategoryOptionsJSON = (fieldSelections) => {
+export const getSelectedCategoryOptionsJSON = (fieldSelections, price, sku) => {
   const output = {};
   Object.entries(fieldSelections).forEach(([label, value]) => {
     if (value && value !== "-- Select --") {
       output[label] = value;
     }
   });
+  if (price) output["Price"] = price;
+  if (sku) output["SKU"] = sku;
+
   console.log(output);
   return output;
 };
@@ -65,41 +68,31 @@ function FormSection({
       secretAccessKey: 'w00ym2XMKKtgq8d0J7lCpNq8Mcu/p9fFzE22mtML',
     },
   });
-  
+
   const docClient = DynamoDBDocumentClient.from(client);
 
-  // Fetch categories from DynamoDB
   useEffect(() => {
     const fetchCategories = async () => {
       try {
         setCategoriesLoading(true);
-        
-        // Scan the ListCategory table
         const scanCommand = new ScanCommand({
           TableName: 'ListCategory',
         });
-        
+
         const response = await docClient.send(scanCommand);
-        
-        // Process the data to create our categories object
         const categoryData = {};
         response.Items.forEach(item => {
           const category = item.Category;
           const subcategory = item.SubCategory;
-          
           if (!categoryData[category]) {
             categoryData[category] = [];
           }
-          
           categoryData[category].push(subcategory);
         });
-        
-        // Add default option
         categoryData['--'] = ['--'];
-        
         setCategories(categoryData);
       } catch (err) {
-        console.error('Error fetching categories:', err);;
+        console.error('Error fetching categories:', err);
       } finally {
         setCategoriesLoading(false);
       }
@@ -148,10 +141,11 @@ function FormSection({
     const cat = e.target.value;
     setSelectedCategory(cat);
     setSubcategories(categories[cat] || ['--']);
-    setsubCategory(categories[cat]?.[0] || '--');
+    const defaultSub = categories[cat]?.[0] || '--';
+    setsubCategory(defaultSub);
     setCategory(cat);
     setIsDirty(true);
-    validateSelection(cat, categories[cat]?.[0] || '--');
+    validateSelection(cat, defaultSub);
   };
 
   const handleSubCategoryChange = (e) => {
@@ -171,69 +165,50 @@ function FormSection({
     }
   };
 
+  const convertToBase64 = (file) => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
 
-const convertToBase64 = (file) => {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
+      reader.onload = (e) => {
+        try {
+          const dataUrl = e.target.result;
+          const exifObj = piexif.load(dataUrl);
 
-    reader.onload = (e) => {
-      try {
-        const dataUrl = e.target.result;
+          const xDPI = exifObj['0th'][piexif.ImageIFD.XResolution];
+          const yDPI = exifObj['0th'][piexif.ImageIFD.YResolution];
 
-        // Extract EXIF metadata
-        const exifObj = piexif.load(dataUrl);
+          const img = new Image();
+          img.onload = () => {
+            const maxWidth = 1600;
+            let width = img.width;
+            let height = img.height;
 
-        const xDPI = exifObj['0th'][piexif.ImageIFD.XResolution];
-        const yDPI = exifObj['0th'][piexif.ImageIFD.YResolution];
+            if (width > maxWidth) {
+              height = Math.floor(height * (maxWidth / width));
+              width = maxWidth;
+            }
 
-        console.log('EXIF Metadata:');
-        console.log('X DPI:', xDPI ? xDPI[0] / xDPI[1] : 'Not available');
-        console.log('Y DPI:', yDPI ? yDPI[0] / yDPI[1] : 'Not available');
+            const canvas = document.createElement('canvas');
+            canvas.width = width;
+            canvas.height = height;
 
-        // Now load image
-        const img = new Image();
-        img.onload = () => {
-          console.log('Original Image:');
-          console.log('Width:', img.width);
-          console.log('Height:', img.height);
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(img, 0, 0, width, height);
 
-          const maxWidth = 1600;
-          let width = img.width;
-          let height = img.height;
+            resolve(canvas.toDataURL(file.type));
+          };
 
-          if (width > maxWidth) {
-            height = Math.floor(height * (maxWidth / width));
-            width = maxWidth;
-          }
+          img.onerror = (err) => reject(err);
+          img.src = dataUrl;
+        } catch (err) {
+          reject('Error reading EXIF data: ' + err);
+        }
+      };
 
-          console.log('Resized Image:');
-          console.log('Width:', width);
-          console.log('Height:', height);
-
-          const canvas = document.createElement('canvas');
-          canvas.width = width;
-          canvas.height = height;
-
-          const ctx = canvas.getContext('2d');
-          ctx.drawImage(img, 0, 0, width, height);
-
-          resolve(canvas.toDataURL(file.type));
-        };
-
-        img.onerror = (err) => reject(err);
-        img.src = dataUrl;
-      } catch (err) {
-        reject('Error reading EXIF data: ' + err);
-      }
-    };
-
-    reader.onerror = (err) => reject(err);
-    reader.readAsDataURL(file);
-  });
-};
-
-
-
+      reader.onerror = (err) => reject(err);
+      reader.readAsDataURL(file);
+    });
+  };
 
   const handleFileChange = async (e) => {
     const files = Array.from(e.target.files);
@@ -260,10 +235,7 @@ const convertToBase64 = (file) => {
     setFilesBase64(prev => [...prev, ...base64List]);
     setErrorMessages(prev => prev.filter(msg => msg !== "Please upload at least one image."));
     setIsDirty(true);
-
-    setTimeout(() => {
-      setIsUploading(false);
-    }, 500);
+    setTimeout(() => setIsUploading(false), 500);
   };
 
   const handleDrop = async (e) => {
@@ -291,18 +263,14 @@ const convertToBase64 = (file) => {
 
     setFilesBase64(prev => [...prev, ...base64List]);
     setIsDirty(true);
-
-    setTimeout(() => {
-      setIsUploading(false);
-    }, 500);
+    setTimeout(() => setIsUploading(false), 500);
   };
 
   const handleDragOver = (e) => e.preventDefault();
   const triggerFileInput = () => fileInputRef.current.click();
-  
+
   const handlePriceChange = (e) => {
     const value = e.target.value;
-    // Allow only numbers and decimal point
     if (/^$|^\d+\.?\d*$/.test(value)) {
       setPrice(value);
       setIsDirty(true);
@@ -349,21 +317,6 @@ const convertToBase64 = (file) => {
     </div>
   );
 
-  const getSelectedCategoryOptionsJSON = () => {
-    const output = {};
-    Object.entries(fieldSelections).forEach(([label, value]) => {
-      if (value && value !== "-- Select --") {
-        output[label] = value;
-      }
-    });
-    // Add price and SKU to the output
-    if (price) output["Price"] = price;
-    if (sku) output["SKU"] = sku;
-    
-    console.log(output);
-    return output;
-  };
-
   return (
     <section className="form-section">
       <div className="form-group">
@@ -386,67 +339,41 @@ const convertToBase64 = (file) => {
 
       <div className="form-group">
         <label>Price ($)</label>
-        <input
-          type="text"
-          value={price}
-          onChange={handlePriceChange}
-          placeholder="Enter price"
-          className="form-control"
-        />
+        <input type="text" value={price} onChange={handlePriceChange} placeholder="Enter price" className="form-control" />
       </div>
 
       <div className="form-group">
         <label>SKU</label>
-        <input
-          type="text"
-          value={sku}
-          onChange={handleSkuChange}
-          placeholder="Enter SKU"
-          className="form-control"
-        />
+        <input type="text" value={sku} onChange={handleSkuChange} placeholder="Enter SKU" className="form-control" />
       </div>
 
       <div className="form-group">
         <label>Category Fields</label>
         <div className="scrollable-fields">
-          {categoryFields.length > 0 ? (
-            categoryFields.map((field, index) => {
-              const options = field.CategoryOptions
-                ? field.CategoryOptions.split(';').map(opt => opt.trim())
-                : [];
-              return (
-                <div key={index} className="field-row">
-                  <label>{field.FieldLabel || `Field ${index + 1}`}</label>
-                  <select
-                    className="uniform-select"
-                    value={fieldSelections[field.FieldLabel] || ""}
-                    onChange={(e) => {
-                      const selectedValue = e.target.value;
-                      setFieldSelections(prev => ({
-                        ...prev,
-                        [field.FieldLabel]: selectedValue
-                      }));
-                    }}
-                  >
-                    <option value="">-- Select --</option>
-                    {options.map((opt, idx) => (
-                      <option key={idx} value={opt}>{opt}</option>
-                    ))}
-                  </select>
-                </div>
-              );
-            })
-          ) : (
-          )}
+          {categoryFields.map((field, index) => {
+            const options = field.CategoryOptions ? field.CategoryOptions.split(';').map(opt => opt.trim()) : [];
+            return (
+              <div key={index} className="field-row">
+                <label>{field.FieldLabel || `Field ${index + 1}`}</label>
+                <select
+                  className="uniform-select"
+                  value={fieldSelections[field.FieldLabel] || ""}
+                  onChange={(e) =>
+                    setFieldSelections(prev => ({ ...prev, [field.FieldLabel]: e.target.value }))
+                  }
+                >
+                  <option value="">-- Select --</option>
+                  {options.map((opt, idx) => (
+                    <option key={idx} value={opt}>{opt}</option>
+                  ))}
+                </select>
+              </div>
+            );
+          })}
         </div>
       </div>
 
-      <div
-        className="upload-area"
-        onDrop={handleDrop}
-        onDragOver={handleDragOver}
-        onClick={triggerFileInput}
-      >
+      <div className="upload-area" onDrop={handleDrop} onDragOver={handleDragOver} onClick={triggerFileInput}>
         {isUploading ? (
           <div className="upload-loading">
             <p>Processing images... ({processedFiles}/{totalFiles})</p>

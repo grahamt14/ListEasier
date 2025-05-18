@@ -188,12 +188,16 @@ const convertToBase64AndUploadToS3 = (file) => {
     reader.onload = async (e) => {
       try {
         const dataUrl = e.target.result;
-        const exifObj = piexif.load(dataUrl);
-
-        const xDPI = exifObj["0th"][piexif.ImageIFD.XResolution];
-        const yDPI = exifObj["0th"][piexif.ImageIFD.YResolution];
-
-        console.log(`Image DPI - X: ${xDPI}, Y: ${yDPI}`);
+        // Try/catch for EXIF data extraction since not all images will have it
+        let exifObj;
+        try {
+          exifObj = piexif.load(dataUrl);
+          const xDPI = exifObj["0th"][piexif.ImageIFD.XResolution];
+          const yDPI = exifObj["0th"][piexif.ImageIFD.YResolution];
+          console.log(`Image DPI - X: ${xDPI}, Y: ${yDPI}`);
+        } catch (exifError) {
+          console.warn("Could not read EXIF data:", exifError);
+        }
 
         const img = new Image();
         img.onload = async () => {
@@ -219,25 +223,17 @@ const convertToBase64AndUploadToS3 = (file) => {
 
           const base64DataUrl = canvas.toDataURL(file.type);
 
-          // Convert base64 to Blob for S3 upload
-          const byteString = atob(base64DataUrl.split(",")[1]);
-          const mimeString = base64DataUrl.split(",")[0].split(":")[1].split(";")[0];
-
-          const ab = new ArrayBuffer(byteString.length);
-          const ia = new Uint8Array(ab);
-          for (let i = 0; i < byteString.length; i++) {
-            ia[i] = byteString.charCodeAt(i);
-          }
-
-          const blob = new Blob([ab], { type: mimeString });
+          // Convert base64 to Buffer for S3 upload
+          const base64Data = base64DataUrl.split(",")[1];
+          const buffer = Buffer.from(base64Data, 'base64');
 
           // Upload to S3
           const fileName = `${Date.now()}_${file.name}`;
           const uploadParams = {
             Bucket: BUCKET_NAME,
             Key: fileName,
-            Body: blob,
-            ContentType: mimeString,
+            Body: buffer,
+            ContentType: file.type,
           };
 
           try {

@@ -179,28 +179,45 @@ function FormSection({
     }
   };
 
-  const convertToBase64 = (file) => {
-    return new Promise((resolve, reject) => {
-      const img = new Image();
-      img.onload = () => {
-        const maxWidth = 800;
-        let width = img.width;
-        let height = img.height;
-        if (width > maxWidth) {
-          height = Math.floor(height * (maxWidth / width));
-          width = maxWidth;
-        }
-        const canvas = document.createElement("canvas");
-        canvas.width = width;
-        canvas.height = height;
-        const ctx = canvas.getContext("2d");
-        ctx.drawImage(img, 0, 0, width, height);
-        resolve(canvas.toDataURL(file.type));
-      };
-      img.onerror = (err) => reject(err);
-      img.src = URL.createObjectURL(file);
-    });
-  };
+const convertToBase64 = (file) => {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+
+    img.onload = () => {
+      // Log original image dimensions
+      console.log("Original Image:");
+      console.log("Width:", img.width);
+      console.log("Height:", img.height);
+
+      const maxWidth = 1600;
+      let width = img.width;
+      let height = img.height;
+
+      if (width > maxWidth) {
+        height = Math.floor(height * (maxWidth / width));
+        width = maxWidth;
+      }
+
+      // Log resized image dimensions
+      console.log("Resized Image:");
+      console.log("Width:", width);
+      console.log("Height:", height);
+
+      const canvas = document.createElement("canvas");
+      canvas.width = width;
+      canvas.height = height;
+
+      const ctx = canvas.getContext("2d");
+      ctx.drawImage(img, 0, 0, width, height);
+
+      resolve(canvas.toDataURL(file.type));
+    };
+
+    img.onerror = (err) => reject(err);
+
+    img.src = URL.createObjectURL(file);
+  });
+};
 
   const handleFileChange = async (e) => {
     const files = Array.from(e.target.files);

@@ -6,7 +6,6 @@ import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
 import { fromCognitoIdentityPool } from "@aws-sdk/credential-provider-cognito-identity";
 import piexif from "piexifjs";
 import EXIF from 'exif-js';
-import piexif from 'piexifjs';
 
 export const getSelectedCategoryOptionsJSON = (fieldSelections, price, sku) => {
   const output = {};

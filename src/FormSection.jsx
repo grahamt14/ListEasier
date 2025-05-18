@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import { DynamoDBClient, QueryCommand } from '@aws-sdk/client-dynamodb';
 import { unmarshall } from '@aws-sdk/util-dynamodb';
 import { DynamoDBDocumentClient, ScanCommand } from '@aws-sdk/lib-dynamodb';
+import EXIF from 'exif-js';
 
 export const getSelectedCategoryOptionsJSON = (fieldSelections) => {
   const output = {};
@@ -97,17 +98,7 @@ function FormSection({
         
         setCategories(categoryData);
       } catch (err) {
-        console.error('Error fetching categories:', err);
-        // Fallback to default data if there's an error
-        setCategories({
-          "--": ["--"],
-          "Movies & TV": ["Other Formats", "VHS Tapes", "UMDs", "Laserdiscs", "DVDs & Blu-ray Discs"],
-          "Books & Magazines": ["Textbooks", "Magazines", "Catalogs", "Books"],
-          "Photographic Images": ["Stereoviews & Stereoscopes", "Photographs", "Negatives", "Magic Lantern Slides", "Film Slides"],
-          "Music": ["Other Formats", "Vinyl Records", "CDs", "Cassettes"],
-          "Video Games": ["None"],
-          "Postcards": ["Non-Topographical Postcards", "Topographical Postcards"]
-        });
+        console.error('Error fetching categories:', err);;
       } finally {
         setCategoriesLoading(false);
       }
@@ -179,45 +170,57 @@ function FormSection({
     }
   };
 
+
 const convertToBase64 = (file) => {
   return new Promise((resolve, reject) => {
-    const img = new Image();
+    // First, extract EXIF metadata (especially DPI)
+    EXIF.getData(file, function () {
+      const xDPI = EXIF.getTag(this, 'XResolution');
+      const yDPI = EXIF.getTag(this, 'YResolution');
 
-    img.onload = () => {
-      // Log original image dimensions
-      console.log("Original Image:");
-      console.log("Width:", img.width);
-      console.log("Height:", img.height);
+      console.log('EXIF Metadata:');
+      console.log('X DPI:', xDPI ?? 'Not available');
+      console.log('Y DPI:', yDPI ?? 'Not available');
 
-      const maxWidth = 1600;
-      let width = img.width;
-      let height = img.height;
+      // Proceed to image processing
+      const img = new Image();
 
-      if (width > maxWidth) {
-        height = Math.floor(height * (maxWidth / width));
-        width = maxWidth;
-      }
+      img.onload = () => {
+        // Log original image dimensions
+        console.log('Original Image:');
+        console.log('Width:', img.width);
+        console.log('Height:', img.height);
 
-      // Log resized image dimensions
-      console.log("Resized Image:");
-      console.log("Width:", width);
-      console.log("Height:", height);
+        const maxWidth = 1600;
+        let width = img.width;
+        let height = img.height;
 
-      const canvas = document.createElement("canvas");
-      canvas.width = width;
-      canvas.height = height;
+        if (width > maxWidth) {
+          height = Math.floor(height * (maxWidth / width));
+          width = maxWidth;
+        }
 
-      const ctx = canvas.getContext("2d");
-      ctx.drawImage(img, 0, 0, width, height);
+        // Log resized image dimensions
+        console.log('Resized Image:');
+        console.log('Width:', width);
+        console.log('Height:', height);
 
-      resolve(canvas.toDataURL(file.type));
-    };
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
 
-    img.onerror = (err) => reject(err);
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, width, height);
 
-    img.src = URL.createObjectURL(file);
+        resolve(canvas.toDataURL(file.type));
+      };
+
+      img.onerror = (err) => reject(err);
+      img.src = URL.createObjectURL(file);
+    });
   });
 };
+
 
   const handleFileChange = async (e) => {
     const files = Array.from(e.target.files);

@@ -380,40 +380,70 @@ function FormSection({
     setSelectedImages([]);
   };
 
-  // Modified to include S3 upload
-  const handleGenerateListingWithUpload = async () => {
-    try {
-      setIsUploading(true);
-      
-      // Upload all raw files to S3
-      const s3UrlsList = [];
-      setTotalFiles(rawFiles.length);
-      
-      for (let i = 0; i < rawFiles.length; i++) {
-        try {
-          const s3Url = await uploadToS3(rawFiles[i]);
-          s3UrlsList.push(s3Url);
-          setProcessedFiles(i + 1);
-          setUploadProgress(Math.round(((i + 1) / rawFiles.length) * 100));
-        } catch (error) {
-          console.error("Error uploading file:", error);
-        }
+
+// Modified to include S3 upload and comprehensive logging
+const handleGenerateListingWithUpload = async () => {
+  console.log('🚀 Starting handleGenerateListingWithUpload');
+  console.log(`Initial state - rawFiles: ${rawFiles.length}, filesBase64: ${filesBase64.length}`);
+  
+  try {
+    console.log('Setting isUploading to true');
+    setIsUploading(true);
+    
+    // Upload all raw files to S3
+    const s3UrlsList = [];
+    console.log(`Setting totalFiles to ${rawFiles.length}`);
+    setTotalFiles(rawFiles.length);
+    
+    console.log('Beginning file upload loop');
+    for (let i = 0; i < rawFiles.length; i++) {
+      try {
+        console.log(`Processing file ${i + 1}/${rawFiles.length}: ${rawFiles[i].name || 'unnamed file'}`);
+        console.log(`File type: ${rawFiles[i].type}, size: ${rawFiles[i].size} bytes`);
+        
+        console.log(`Uploading file ${i + 1} to S3...`);
+        const s3Url = await uploadToS3(rawFiles[i]);
+        console.log(`Upload successful, received S3 URL: ${s3Url}`);
+        
+        s3UrlsList.push(s3Url);
+        console.log(`Added S3 URL to list, current count: ${s3UrlsList.length}`);
+        
+        setProcessedFiles(i + 1);
+        const progressPercent = Math.round(((i + 1) / rawFiles.length) * 100);
+        console.log(`Setting upload progress to ${progressPercent}%`);
+        setUploadProgress(progressPercent);
+      } catch (error) {
+        console.error(`❌ Error uploading file ${i + 1}:`, error);
+        console.error('Error details:', JSON.stringify(error, Object.getOwnPropertyNames(error)));
       }
-      
-      // Replace base64 images with S3 URLs
-      if (s3UrlsList.length === filesBase64.length) {
-        setFilesBase64(s3UrlsList);
-      }
-      
-      // After upload is complete, call the original handler
-      setIsUploading(false);
-      handleGenerateListing();
-      
-    } catch (error) {
-      console.error("Error during upload process:", error);
-      setIsUploading(false);
     }
-  };
+    
+    // Replace base64 images with S3 URLs
+    console.log(`Comparing counts - s3UrlsList: ${s3UrlsList.length}, filesBase64: ${filesBase64.length}`);
+    if (s3UrlsList.length === filesBase64.length) {
+      console.log('Replacing base64 images with S3 URLs');
+      setFilesBase64(s3UrlsList);
+    } else {
+      console.warn(`⚠️ Mismatch in file counts - S3 URLs: ${s3UrlsList.length}, Base64 files: ${filesBase64.length}`);
+    }
+    
+    // After upload is complete, call the original handler
+    console.log('Upload process complete, setting isUploading to false');
+    setIsUploading(false);
+    
+    console.log('Calling handleGenerateListing');
+    handleGenerateListing();
+    
+  } catch (error) {
+    console.error('❌ Fatal error during upload process:', error);
+    console.error('Error stack:', error.stack);
+    console.error('Error details:', JSON.stringify(error, Object.getOwnPropertyNames(error)));
+    console.log('Setting isUploading to false due to error');
+    setIsUploading(false);
+  }
+  
+  console.log('🏁 Exiting handleGenerateListingWithUpload');
+};
 
   const isValidSelection = selectedCategory !== "--" && subCategory !== "--";
 

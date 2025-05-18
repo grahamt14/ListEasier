@@ -165,50 +165,57 @@ function FormSection({
     }
   };
 
-  const convertToBase64 = (file) => {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
+const convertToBase64 = (file) => {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
 
-      reader.onload = (e) => {
-        try {
-          const dataUrl = e.target.result;
-          const exifObj = piexif.load(dataUrl);
+    reader.onload = (e) => {
+      try {
+        const dataUrl = e.target.result;
+        const exifObj = piexif.load(dataUrl);
 
-          const xDPI = exifObj['0th'][piexif.ImageIFD.XResolution];
-          const yDPI = exifObj['0th'][piexif.ImageIFD.YResolution];
+        const xDPI = exifObj['0th'][piexif.ImageIFD.XResolution];
+        const yDPI = exifObj['0th'][piexif.ImageIFD.YResolution];
 
-          const img = new Image();
-          img.onload = () => {
-            const maxWidth = 1600;
-            let width = img.width;
-            let height = img.height;
+        console.log(`Image DPI - X: ${xDPI}, Y: ${yDPI}`);
 
-            if (width > maxWidth) {
-              height = Math.floor(height * (maxWidth / width));
-              width = maxWidth;
-            }
+        const img = new Image();
+        img.onload = () => {
+          const maxWidth = 1600;
+          let width = img.width;
+          let height = img.height;
 
-            const canvas = document.createElement('canvas');
-            canvas.width = width;
-            canvas.height = height;
+          console.log(`Original Pixel Dimensions - Width: ${img.width}, Height: ${img.height}`);
 
-            const ctx = canvas.getContext('2d');
-            ctx.drawImage(img, 0, 0, width, height);
+          if (width > maxWidth) {
+            height = Math.floor(height * (maxWidth / width));
+            width = maxWidth;
+          }
 
-            resolve(canvas.toDataURL(file.type));
-          };
+          console.log(`Resized Pixel Dimensions - Width: ${width}, Height: ${height}`);
 
-          img.onerror = (err) => reject(err);
-          img.src = dataUrl;
-        } catch (err) {
-          reject('Error reading EXIF data: ' + err);
-        }
-      };
+          const canvas = document.createElement('canvas');
+          canvas.width = width;
+          canvas.height = height;
 
-      reader.onerror = (err) => reject(err);
-      reader.readAsDataURL(file);
-    });
-  };
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(img, 0, 0, width, height);
+
+          resolve(canvas.toDataURL(file.type));
+        };
+
+        img.onerror = (err) => reject(err);
+        img.src = dataUrl;
+      } catch (err) {
+        reject('Error reading EXIF data: ' + err);
+      }
+    };
+
+    reader.onerror = (err) => reject(err);
+    reader.readAsDataURL(file);
+  });
+};
+
 
   const handleFileChange = async (e) => {
     const files = Array.from(e.target.files);

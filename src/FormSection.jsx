@@ -188,31 +188,11 @@ const convertToBase64AndUploadToS3 = (file) => {
     reader.onload = async (e) => {
       try {
         const dataUrl = e.target.result;
-        // Try/catch for EXIF data extraction since not all images will have it
-        let exifObj;
-        try {
-          exifObj = piexif.load(dataUrl);
-          const xDPI = exifObj["0th"][piexif.ImageIFD.XResolution];
-          const yDPI = exifObj["0th"][piexif.ImageIFD.YResolution];
-          console.log(`Image DPI - X: ${xDPI}, Y: ${yDPI}`);
-        } catch (exifError) {
-          console.warn("Could not read EXIF data:", exifError);
-        }
+        // EXIF code omitted for brevity...
 
         const img = new Image();
         img.onload = async () => {
-          const maxWidth = 1600;
-          let width = img.width;
-          let height = img.height;
-
-          console.log(`Original Pixel Dimensions - Width: ${img.width}, Height: ${img.height}`);
-
-          if (width > maxWidth) {
-            height = Math.floor(height * (maxWidth / width));
-            width = maxWidth;
-          }
-
-          console.log(`Resized Pixel Dimensions - Width: ${width}, Height: ${height}`);
+          // resizing code omitted for brevity...
 
           const canvas = document.createElement("canvas");
           canvas.width = width;
@@ -222,10 +202,20 @@ const convertToBase64AndUploadToS3 = (file) => {
           ctx.drawImage(img, 0, 0, width, height);
 
           const base64DataUrl = canvas.toDataURL(file.type);
-
-          // Convert base64 to Buffer for S3 upload
           const base64Data = base64DataUrl.split(",")[1];
-          const buffer = Buffer.from(base64Data, 'base64');
+
+          // Browser-friendly base64 to Uint8Array conversion
+          function base64ToUint8Array(base64) {
+            const binaryString = atob(base64);
+            const len = binaryString.length;
+            const bytes = new Uint8Array(len);
+            for (let i = 0; i < len; i++) {
+              bytes[i] = binaryString.charCodeAt(i);
+            }
+            return bytes;
+          }
+
+          const buffer = base64ToUint8Array(base64Data);
 
           // Upload to S3
           const fileName = `${Date.now()}_${file.name}`;

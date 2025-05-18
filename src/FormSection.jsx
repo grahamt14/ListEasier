@@ -192,7 +192,15 @@ const convertToBase64AndUploadToS3 = (file) => {
 
         const img = new Image();
         img.onload = async () => {
-          // resizing code omitted for brevity...
+          // Added resizing logic here
+          const maxWidth = 800; // you can adjust this as needed
+          let width = img.width;
+          let height = img.height;
+
+          if (width > maxWidth) {
+            height = Math.floor(height * (maxWidth / width));
+            width = maxWidth;
+          }
 
           const canvas = document.createElement("canvas");
           canvas.width = width;
@@ -248,6 +256,7 @@ const convertToBase64AndUploadToS3 = (file) => {
     reader.readAsDataURL(file);
   });
 };
+
 
   const convertToBase64 = (file) => {
     return new Promise((resolve, reject) => {

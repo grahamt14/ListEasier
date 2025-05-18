@@ -59,6 +59,13 @@ function FormSection({
   const [totalFiles, setTotalFiles] = useState(0);
   const [processedFiles, setProcessedFiles] = useState(0);
   
+  // Scanner states
+  const [scannerConnected, setScannerConnected] = useState(false);
+  const [scannerList, setScannerList] = useState([]);
+  const [selectedScanner, setSelectedScanner] = useState(null);
+  const [isScanning, setIsScanning] = useState(false);
+  const [scanError, setScanError] = useState("");
+  
   // Store the raw files instead of immediately uploading them
   const [rawFiles, setRawFiles] = useState([]);
 
@@ -91,6 +98,201 @@ function FormSection({
       identityPoolId: IDENTITY_POOL_ID,
     }),
   });
+
+  // Initialize dynamic scanner library
+  useEffect(() => {
+    const initScanner = async () => {
+      try {
+        // Check if scanner.js is already loaded
+        if (window.scanner) {
+          checkForScanners();
+          return;
+        }
+
+        // Load Dynamic Web TWAIN library dynamically
+        const script = document.createElement('script');
+        script.src = 'https://cdn.jsdelivr.net/npm/dynamsoft-javascript-twain@8.8.3/dist/dynamsoft.webtwain.min.js';
+        script.async = true;
+        script.onload = () => {
+          if (window.Dynamsoft) {
+            // Configure Dynamsoft WebTWAIN
+            window.Dynamsoft.WebTwainEnv.Containers = [{ ContainerId: 'dwtcontrolContainer', Width: '0px', Height: '0px' }];
+            window.Dynamsoft.WebTwainEnv.ProductKey = 'DLS2eyJoYW5kc2hha2VDb2RlIjoiMjAwMDAxLTE2NDk4Mjk3OTI2MzUiLCJvcmdhbml6YXRpb25JRCI6IjIwMDAwMSIsInNlc3Npb25QYXNzd29yZCI6IndTcGR6Vm05WDJrcEQ5YUoifQ=='; // Replace with your own key
+            
+            // Initialize WebTWAIN
+            window.Dynamsoft.WebTwainEnv.Load();
+            
+            // Create a hidden container for the scanner control
+            const container = document.createElement('div');
+            container.id = 'dwtcontrolContainer';
+            container.style.height = '0px';
+            container.style.width = '0px';
+            container.style.position = 'absolute';
+            container.style.top = '-9999px';
+            document.body.appendChild(container);
+            
+            // Wait for the library to load
+            window.Dynamsoft.WebTwainEnv.RegisterEvent('OnWebTwainReady', () => {
+              console.log('Web TWAIN Ready');
+              window.scanner = window.Dynamsoft.WebTwainEnv.GetWebTwain('dwtcontrolContainer');
+              checkForScanners();
+            });
+          }
+        };
+        script.onerror = () => {
+          console.error('Failed to load Dynamsoft WebTWAIN library');
+          setScanError('Failed to load scanner library');
+        };
+        document.body.appendChild(script);
+      } catch (error) {
+        console.error('Error initializing scanner:', error);
+        setScanError('Failed to initialize scanner');
+      }
+    };
+
+    initScanner();
+
+    // Cleanup function
+    return () => {
+      if (window.scanner) {
+        try {
+          // Clean up the scanner instance if needed
+          window.scanner = null;
+        } catch (e) {
+          console.error('Error cleaning up scanner:', e);
+        }
+      }
+    };
+  }, []);
+
+  // Function to check for connected scanners
+  const checkForScanners = () => {
+    if (!window.scanner) {
+      setScannerConnected(false);
+      setScannerList([]);
+      return;
+    }
+
+    try {
+      const sourceCount = window.scanner.SourceCount;
+      console.log(`Found ${sourceCount} scanner sources`);
+      
+      if (sourceCount > 0) {
+        const sources = [];
+        for (let i = 0; i < sourceCount; i++) {
+          sources.push({
+            index: i,
+            name: window.scanner.GetSourceNameItems(i)
+          });
+        }
+        setScannerList(sources);
+        setScannerConnected(true);
+        
+        // Set the first scanner as default if available
+        if (sources.length > 0 && !selectedScanner) {
+          setSelectedScanner(sources[0].index);
+        }
+      } else {
+        setScannerConnected(false);
+        setScannerList([]);
+      }
+    } catch (error) {
+      console.error('Error checking for scanners:', error);
+      setScannerConnected(false);
+      setScannerList([]);
+    }
+  };
+
+  // Function to handle scanning from the connected scanner
+  const handleScan = async () => {
+    if (!window.scanner || !scannerConnected || selectedScanner === null) {
+      setScanError('No scanner connected or selected');
+      return;
+    }
+
+    try {
+      setIsScanning(true);
+      setScanError('');
+
+      // Select the source
+      const success = window.scanner.SelectSourceByIndex(selectedScanner);
+      if (!success) {
+        throw new Error('Failed to select scanner source');
+      }
+
+      // Set up callbacks for scan completion
+      window.scanner.IfDisableSourceAfterAcquire = true;
+      window.scanner.RegisterEvent('OnPostTransfer', function() {
+        console.log('Scan complete');
+      });
+
+      // Set up callback for when all scanned images are ready
+      window.scanner.RegisterEvent('OnPostAllTransfers', async function() {
+        console.log('All scanned images ready');
+        
+        try {
+          const scannedImagesCount = window.scanner.HowManyImagesInBuffer;
+          console.log(`Scanned ${scannedImagesCount} images`);
+          
+          const base64List = [];
+          const newRawFiles = [];
+          
+          // Process each scanned image
+          for (let i = 0; i < scannedImagesCount; i++) {
+            // Convert to JPG base64
+            let base64 = window.scanner.GetImageAsBase64(i);
+            base64 = 'data:image/jpeg;base64,' + base64;
+            base64List.push(base64);
+            
+            // Convert base64 to File object for raw files
+            const byteString = atob(base64.split(',')[1]);
+            const mimeString = base64.split(',')[0].split(':')[1].split(';')[0];
+            const ab = new ArrayBuffer(byteString.length);
+            const ia = new Uint8Array(ab);
+            
+            for (let j = 0; j < byteString.length; j++) {
+                ia[j] = byteString.charCodeAt(j);
+            }
+            
+            const blob = new Blob([ab], {type: mimeString});
+            const file = new File([blob], `scan_${Date.now()}_${i}.jpg`, {type: 'image/jpeg'});
+            newRawFiles.push(file);
+          }
+          
+          // Update state with scanned images
+          setFilesBase64(prev => [...prev, ...base64List]);
+          setRawFiles(prev => [...prev, ...newRawFiles]);
+          setErrorMessages(prev => prev.filter(msg => msg !== "Please upload at least one image."));
+          setIsDirty(true);
+          
+          // Clear the buffer for the next scan
+          window.scanner.RemoveAllImages();
+          
+          setIsScanning(false);
+        } catch (error) {
+          console.error('Error processing scanned images:', error);
+          setScanError('Error processing scanned images');
+          setIsScanning(false);
+        }
+      });
+
+      // Start scanning
+      const acquired = window.scanner.AcquireImage();
+      if (!acquired) {
+        throw new Error('Failed to acquire image from scanner');
+      }
+      
+    } catch (error) {
+      console.error('Scanning error:', error);
+      setScanError(error.message || 'Scanning failed');
+      setIsScanning(false);
+    }
+  };
+
+  // Function to refresh scanner list
+  const refreshScanners = () => {
+    checkForScanners();
+  };
 
   useEffect(() => {
     const fetchCategories = async () => {
@@ -580,16 +782,69 @@ function FormSection({
         </div>
       </div>
 
-      <div className="upload-area" onDrop={handleDrop} onDragOver={handleDragOver} onClick={triggerFileInput}>
-        {isUploading ? (
-          <div className="upload-loading">
-            <p>Processing images... ({processedFiles}/{totalFiles})</p>
-            <ProgressBar progress={uploadProgress} />
+      <div className="upload-section">
+        {/* Scanner Controls */}
+        <div className="scanner-controls">
+          <h4>Scanner Options</h4>
+          <div className="scanner-status">
+            <span className={`status-indicator ${scannerConnected ? 'connected' : 'disconnected'}`}>
+              {scannerConnected ? 'Scanner Connected' : 'No Scanner Connected'}
+            </span>
+            <button 
+              className="refresh-scanners" 
+              onClick={refreshScanners}
+              title="Refresh Scanner List"
+            >
+              ⟳ Refresh
+            </button>
           </div>
-        ) : (
-          <p>Click or drag images to upload</p>
-        )}
-        <input ref={fileInputRef} type="file" multiple accept="image/*" onChange={handleFileChange} hidden />
+          
+          {scannerList.length > 0 && (
+            <div className="scanner-selection">
+              <label>Select Scanner:</label>
+              <select 
+                value={selectedScanner !== null ? selectedScanner : ""}
+                onChange={(e) => setSelectedScanner(Number(e.target.value))}
+              >
+                {scannerList.map((scanner) => (
+                  <option key={scanner.index} value={scanner.index}>
+                    {scanner.name}
+                  </option>
+                ))}
+              </select>
+              
+              <button 
+                className="scan-button" 
+                onClick={handleScan}
+                disabled={isScanning || !scannerConnected || selectedScanner === null}
+              >
+                {isScanning ? 'Scanning...' : 'Scan Now'}
+              </button>
+              
+              {scanError && <div className="scan-error">{scanError}</div>}
+            </div>
+          )}
+        </div>
+
+        <div className="upload-area" onDrop={handleDrop} onDragOver={handleDragOver} onClick={triggerFileInput}>
+          {isUploading ? (
+            <div className="upload-loading">
+              <p>Processing images... ({processedFiles}/{totalFiles})</p>
+              <ProgressBar progress={uploadProgress} />
+            </div>
+          ) : isScanning ? (
+            <div className="scanning-indicator">
+              <p>Scanning in progress...</p>
+              <div className="scanner-spinner"></div>
+            </div>
+          ) : (
+            <div>
+              <p>Click or drag images to upload</p>
+              {scannerConnected && <p>or use the scanner options above</p>}
+            </div>
+          )}
+          <input ref={fileInputRef} type="file" multiple accept="image/*" onChange={handleFileChange} hidden />
+        </div>
       </div>
 
       <div className="form-group">

@@ -96,16 +96,6 @@ function FormSection({
         setCategories(categoryData);
       } catch (err) {
         console.error('Error fetching categories:', err);
-        // Fallback to default data if there's an error
-        setCategories({
-          "--": ["--"],
-          "Movies & TV": ["Other Formats", "VHS Tapes", "UMDs", "Laserdiscs", "DVDs & Blu-ray Discs"],
-          "Books & Magazines": ["Textbooks", "Magazines", "Catalogs", "Books"],
-          "Photographic Images": ["Stereoviews & Stereoscopes", "Photographs", "Negatives", "Magic Lantern Slides", "Film Slides"],
-          "Music": ["Other Formats", "Vinyl Records", "CDs", "Cassettes"],
-          "Video Games": ["None"],
-          "Postcards": ["Non-Topographical Postcards", "Topographical Postcards"]
-        });
       } finally {
         setCategoriesLoading(false);
       }

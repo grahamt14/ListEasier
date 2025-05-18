@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { DynamoDBClient, QueryCommand } from '@aws-sdk/client-dynamodb';
 import { unmarshall } from '@aws-sdk/util-dynamodb';
+import { DynamoDBDocumentClient, ScanCommand } from '@aws-sdk/lib-dynamodb';
 
 export const getSelectedCategoryOptionsJSON = (fieldSelections) => {
   const output = {};
@@ -41,6 +42,8 @@ function FormSection({
   const [subcategories, setSubcategories] = useState(["--"]);
   const [categoryFields, setCategoryFields] = useState([]);
   const [showTooltip, setShowTooltip] = useState(false);
+  const [categories, setCategories] = useState({});
+  const [categoriesLoading, setCategoriesLoading] = useState(true);
 
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
@@ -51,16 +54,6 @@ function FormSection({
 
   const [fieldSelections, setFieldSelections] = useState({});
 
-  const data = {
-    "--": ["--"],
-    "Movies & TV": ["Other Formats", "VHS Tapes", "UMDs", "Laserdiscs", "DVDs & Blu-ray Discs"],
-    "Books & Magazines": ["Textbooks", "Magazines", "Catalogs", "Books"],
-    "Photographic Images": ["Stereoviews & Stereoscopes", "Photographs", "Negatives", "Magic Lantern Slides", "Film Slides"],
-    "Music": ["Other Formats", "Vinyl Records", "CDs", "Cassettes"],
-    "Video Games": ["None"],
-    "Postcards": ["Non-Topographical Postcards", "Topographical Postcards"]
-  };
-
   const client = new DynamoDBClient({
     region: 'us-east-2',
     credentials: {
@@ -68,6 +61,58 @@ function FormSection({
       secretAccessKey: 'w00ym2XMKKtgq8d0J7lCpNq8Mcu/p9fFzE22mtML',
     },
   });
+  
+  const docClient = DynamoDBDocumentClient.from(client);
+
+  // Fetch categories from DynamoDB
+  useEffect(() => {
+    const fetchCategories = async () => {
+      try {
+        setCategoriesLoading(true);
+        
+        // Scan the ListCategory table
+        const scanCommand = new ScanCommand({
+          TableName: 'ListCategory',
+        });
+        
+        const response = await docClient.send(scanCommand);
+        
+        // Process the data to create our categories object
+        const categoryData = {};
+        response.Items.forEach(item => {
+          const category = item.Category;
+          const subcategory = item.SubCategory;
+          
+          if (!categoryData[category]) {
+            categoryData[category] = [];
+          }
+          
+          categoryData[category].push(subcategory);
+        });
+        
+        // Add default option
+        categoryData['--'] = ['--'];
+        
+        setCategories(categoryData);
+      } catch (err) {
+        console.error('Error fetching categories:', err);
+        // Fallback to default data if there's an error
+        setCategories({
+          "--": ["--"],
+          "Movies & TV": ["Other Formats", "VHS Tapes", "UMDs", "Laserdiscs", "DVDs & Blu-ray Discs"],
+          "Books & Magazines": ["Textbooks", "Magazines", "Catalogs", "Books"],
+          "Photographic Images": ["Stereoviews & Stereoscopes", "Photographs", "Negatives", "Magic Lantern Slides", "Film Slides"],
+          "Music": ["Other Formats", "Vinyl Records", "CDs", "Cassettes"],
+          "Video Games": ["None"],
+          "Postcards": ["Non-Topographical Postcards", "Topographical Postcards"]
+        });
+      } finally {
+        setCategoriesLoading(false);
+      }
+    };
+
+    fetchCategories();
+  }, []);
 
   useEffect(() => {
     if (!subCategory || subCategory === "--") {
@@ -108,11 +153,11 @@ function FormSection({
   const handleCategoryChange = (e) => {
     const cat = e.target.value;
     setSelectedCategory(cat);
-    setSubcategories(data[cat]);
-    setsubCategory(data[cat][0]);
+    setSubcategories(categories[cat] || ['--']);
+    setsubCategory(categories[cat]?.[0] || '--');
     setCategory(cat);
     setIsDirty(true);
-    validateSelection(cat, data[cat][0]);
+    validateSelection(cat, categories[cat]?.[0] || '--');
   };
 
   const handleSubCategoryChange = (e) => {
@@ -270,9 +315,13 @@ function FormSection({
     <section className="form-section">
       <div className="form-group">
         <label>Category</label>
-        <select onChange={handleCategoryChange} value={selectedCategory}>
-          {Object.keys(data).map(cat => <option key={cat} value={cat}>{cat}</option>)}
-        </select>
+        {categoriesLoading ? (
+          <div>Loading categories...</div>
+        ) : (
+          <select onChange={handleCategoryChange} value={selectedCategory}>
+            {Object.keys(categories).map(cat => <option key={cat} value={cat}>{cat}</option>)}
+          </select>
+        )}
       </div>
 
       <div className="form-group">

@@ -58,6 +58,9 @@ function FormSection({
   const [uploadProgress, setUploadProgress] = useState(0);
   const [totalFiles, setTotalFiles] = useState(0);
   const [processedFiles, setProcessedFiles] = useState(0);
+  
+  // Store the raw files instead of immediately uploading them
+  const [rawFiles, setRawFiles] = useState([]);
 
   const fileInputRef = useRef(null);
 
@@ -74,18 +77,17 @@ function FormSection({
   const docClient = DynamoDBDocumentClient.from(client);
   
   // AWS config
-const REGION = "us-east-2"; // Update your region
-const BUCKET_NAME = "listeasierimages"; // Update your bucket name
-const IDENTITY_POOL_ID = "us-east-2:f81d1240-32a8-4aff-87e8-940effdf5908"; // Update your Identity Pool ID
+  const REGION = "us-east-2"; // Update your region
+  const BUCKET_NAME = "listeasierimages"; // Update your bucket name
+  const IDENTITY_POOL_ID = "us-east-2:f81d1240-32a8-4aff-87e8-940effdf5908"; // Update your Identity Pool ID
 
-const s3Client = new S3Client({
-  region: REGION,
-  credentials: fromCognitoIdentityPool({
-    clientConfig: { region: REGION },
-    identityPoolId: IDENTITY_POOL_ID,
-  }),
-});
-
+  const s3Client = new S3Client({
+    region: REGION,
+    credentials: fromCognitoIdentityPool({
+      clientConfig: { region: REGION },
+      identityPoolId: IDENTITY_POOL_ID,
+    }),
+  });
 
   useEffect(() => {
     const fetchCategories = async () => {
@@ -181,69 +183,64 @@ const s3Client = new S3Client({
     }
   };
 
-const convertToBase64AndUploadToS3 = (file) => {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
+  const uploadToS3 = async (file) => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
 
-    reader.onload = async (e) => {
-      try {
-        const dataUrl = e.target.result;
-        // EXIF code omitted for brevity...
+      reader.onload = async (e) => {
+        try {
+          const dataUrl = e.target.result;
+          const img = new Image();
+          img.onload = async () => {
+            // All the existing resizing logic stays here, even if we don't use it for upload:
+            const maxWidth = 800; // adjustable
+            let width = img.width;
+            let height = img.height;
 
-        const img = new Image();
-        img.onload = async () => {
-          // All the existing resizing logic stays here, even if we don’t use it for upload:
-          const maxWidth = 800; // adjustable
-          let width = img.width;
-          let height = img.height;
+            if (width > maxWidth) {
+              height = Math.floor(height * (maxWidth / width));
+              width = maxWidth;
+            }
 
-          if (width > maxWidth) {
-            height = Math.floor(height * (maxWidth / width));
-            width = maxWidth;
-          }
+            const canvas = document.createElement("canvas");
+            canvas.width = width;
+            canvas.height = height;
 
-          const canvas = document.createElement("canvas");
-          canvas.width = width;
-          canvas.height = height;
+            const ctx = canvas.getContext("2d");
+            ctx.drawImage(img, 0, 0, width, height);
 
-          const ctx = canvas.getContext("2d");
-          ctx.drawImage(img, 0, 0, width, height);
+            // Upload the original file directly:
+            const fileName = `${Date.now()}_${file.name}`;
+            const uploadParams = {
+              Bucket: BUCKET_NAME,
+              Key: fileName,
+              Body: file,  // <--- original file uploaded here
+              ContentType: file.type,
+              ACL: "public-read",
+            };
 
-          // We no longer convert to base64 or create buffer for upload here
-
-          // Instead, upload the original file directly:
-          const fileName = `${Date.now()}_${file.name}`;
-          const uploadParams = {
-            Bucket: BUCKET_NAME,
-            Key: fileName,
-            Body: file,  // <--- original file uploaded here
-            ContentType: file.type,
+            try {
+              await s3Client.send(new PutObjectCommand(uploadParams));
+              const s3Url = `https://${BUCKET_NAME}.s3.${REGION}.amazonaws.com/${fileName}`;
+              console.log("Upload success:", s3Url);
+              resolve(s3Url);
+            } catch (uploadError) {
+              console.error("Upload error:", uploadError);
+              reject(uploadError);
+            }
           };
 
-          try {
-            await s3Client.send(new PutObjectCommand(uploadParams));
-            const s3Url = `https://${BUCKET_NAME}.s3.${REGION}.amazonaws.com/${fileName}`;
-            console.log("Upload success:", s3Url);
-            resolve(s3Url);
-          } catch (uploadError) {
-            console.error("Upload error:", uploadError);
-            reject(uploadError);
-          }
-        };
+          img.onerror = (err) => reject(err);
+          img.src = dataUrl;
+        } catch (err) {
+          reject("Error reading EXIF data: " + err);
+        }
+      };
 
-        img.onerror = (err) => reject(err);
-        img.src = dataUrl;
-      } catch (err) {
-        reject("Error reading EXIF data: " + err);
-      }
-    };
-
-    reader.onerror = (err) => reject(err);
-    reader.readAsDataURL(file);
-  });
-};
-
-
+      reader.onerror = (err) => reject(err);
+      reader.readAsDataURL(file);
+    });
+  };
 
   const convertToBase64 = (file) => {
     return new Promise((resolve, reject) => {
@@ -268,7 +265,6 @@ const convertToBase64AndUploadToS3 = (file) => {
     });
   };
 
-
   const handleFileChange = async (e) => {
     const files = Array.from(e.target.files);
     if (files.length === 0) return;
@@ -282,8 +278,13 @@ const convertToBase64AndUploadToS3 = (file) => {
 
     for (let i = 0; i < files.length; i++) {
       try {
-        const base64 = await convertToBase64AndUploadToS3(files[i]);
+        // Instead of uploading, just convert to base64 for preview
+        const base64 = await convertToBase64(files[i]);
         base64List.push(base64);
+        
+        // Store the raw file for later upload
+        setRawFiles(prev => [...prev, files[i]]);
+        
         setProcessedFiles(i + 1);
         setUploadProgress(Math.round(((i + 1) / files.length) * 100));
       } catch (error) {
@@ -311,8 +312,13 @@ const convertToBase64AndUploadToS3 = (file) => {
 
     for (let i = 0; i < imgs.length; i++) {
       try {
-        const base64 = await convertToBase64AndUploadToS3(imgs[i]);
+        // Instead of uploading, just convert to base64 for preview
+        const base64 = await convertToBase64(imgs[i]);
         base64List.push(base64);
+        
+        // Store the raw file for later upload
+        setRawFiles(prev => [...prev, imgs[i]]);
+        
         setProcessedFiles(i + 1);
         setUploadProgress(Math.round(((i + 1) / imgs.length) * 100));
       } catch (error) {
@@ -349,7 +355,12 @@ const convertToBase64AndUploadToS3 = (file) => {
 
   const handleGroupSelected = () => {
     const groupImgs = selectedImages.map(i => filesBase64[i]);
-    const remaining = filesBase64.filter((_, i) => !selectedImages.includes(i));
+    // Also group the corresponding raw files
+    const groupRawFiles = selectedImages.map(i => rawFiles[i]);
+    
+    const remainingBase64 = filesBase64.filter((_, i) => !selectedImages.includes(i));
+    const remainingRawFiles = rawFiles.filter((_, i) => !selectedImages.includes(i));
+    
     setImageGroups(prev => {
       let updated = [...prev];
       const firstEmptyIndex = updated.findIndex(g => g.length === 0);
@@ -363,8 +374,45 @@ const convertToBase64AndUploadToS3 = (file) => {
       }
       return updated;
     });
-    setFilesBase64(remaining);
+    
+    setFilesBase64(remainingBase64);
+    setRawFiles(remainingRawFiles);
     setSelectedImages([]);
+  };
+
+  // Modified to include S3 upload
+  const handleGenerateListingWithUpload = async () => {
+    try {
+      setIsUploading(true);
+      
+      // Upload all raw files to S3
+      const s3UrlsList = [];
+      setTotalFiles(rawFiles.length);
+      
+      for (let i = 0; i < rawFiles.length; i++) {
+        try {
+          const s3Url = await uploadToS3(rawFiles[i]);
+          s3UrlsList.push(s3Url);
+          setProcessedFiles(i + 1);
+          setUploadProgress(Math.round(((i + 1) / rawFiles.length) * 100));
+        } catch (error) {
+          console.error("Error uploading file:", error);
+        }
+      }
+      
+      // Replace base64 images with S3 URLs
+      if (s3UrlsList.length === filesBase64.length) {
+        setFilesBase64(s3UrlsList);
+      }
+      
+      // After upload is complete, call the original handler
+      setIsUploading(false);
+      handleGenerateListing();
+      
+    } catch (error) {
+      console.error("Error during upload process:", error);
+      setIsUploading(false);
+    }
   };
 
   const isValidSelection = selectedCategory !== "--" && subCategory !== "--";
@@ -462,10 +510,10 @@ const convertToBase64AndUploadToS3 = (file) => {
       </div>
 
       <div className="generate-area" onMouseEnter={() => !isValidSelection && setShowTooltip(true)} onMouseLeave={() => setShowTooltip(false)}>
-        <button className="primary large" disabled={!isValidSelection || isLoading || !isDirty} onClick={handleGenerateListing}>
-          {isLoading ? (
+        <button className="primary large" disabled={!isValidSelection || isLoading || !isDirty} onClick={handleGenerateListingWithUpload}>
+          {isLoading || isUploading ? (
             <span className="loading-button">
-              <Spinner /> Generating... ({completedChunks}/{totalChunks})
+              <Spinner /> {isUploading ? `Uploading... (${processedFiles}/${totalFiles})` : `Generating... (${completedChunks}/${totalChunks})`}
             </span>
           ) : 'Generate Listing'}
         </button>

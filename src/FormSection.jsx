@@ -62,6 +62,9 @@ function FormSection({
   // Store the raw files instead of immediately uploading them
   const [rawFiles, setRawFiles] = useState([]);
 
+  // Add a state to track raw files in image groups
+  const [rawImageGroups, setRawImageGroups] = useState([[]]);
+
   const fileInputRef = useRef(null);
 
   const [fieldSelections, setFieldSelections] = useState({});
@@ -275,15 +278,16 @@ function FormSection({
     setUploadProgress(0);
 
     const base64List = [];
+    const newRawFiles = [];
 
     for (let i = 0; i < files.length; i++) {
       try {
-        // Instead of uploading, just convert to base64 for preview
+        // Convert to base64 for preview
         const base64 = await convertToBase64(files[i]);
         base64List.push(base64);
         
         // Store the raw file for later upload
-        setRawFiles(prev => [...prev, files[i]]);
+        newRawFiles.push(files[i]);
         
         setProcessedFiles(i + 1);
         setUploadProgress(Math.round(((i + 1) / files.length) * 100));
@@ -293,6 +297,7 @@ function FormSection({
     }
 
     setFilesBase64(prev => [...prev, ...base64List]);
+    setRawFiles(prev => [...prev, ...newRawFiles]);
     setErrorMessages(prev => prev.filter(msg => msg !== "Please upload at least one image."));
     setIsDirty(true);
     setTimeout(() => setIsUploading(false), 500);
@@ -309,15 +314,16 @@ function FormSection({
     setUploadProgress(0);
 
     const base64List = [];
+    const newRawFiles = [];
 
     for (let i = 0; i < imgs.length; i++) {
       try {
-        // Instead of uploading, just convert to base64 for preview
+        // Convert to base64 for preview
         const base64 = await convertToBase64(imgs[i]);
         base64List.push(base64);
         
         // Store the raw file for later upload
-        setRawFiles(prev => [...prev, imgs[i]]);
+        newRawFiles.push(imgs[i]);
         
         setProcessedFiles(i + 1);
         setUploadProgress(Math.round(((i + 1) / imgs.length) * 100));
@@ -327,6 +333,7 @@ function FormSection({
     }
 
     setFilesBase64(prev => [...prev, ...base64List]);
+    setRawFiles(prev => [...prev, ...newRawFiles]);
     setIsDirty(true);
     setTimeout(() => setIsUploading(false), 500);
   };
@@ -353,14 +360,17 @@ function FormSection({
     );
   };
 
+  // Modified to keep track of raw files in groups
   const handleGroupSelected = () => {
+    // Get selected base64 images and raw files
     const groupImgs = selectedImages.map(i => filesBase64[i]);
-    // Also group the corresponding raw files
     const groupRawFiles = selectedImages.map(i => rawFiles[i]);
     
+    // Remove selected images from main arrays
     const remainingBase64 = filesBase64.filter((_, i) => !selectedImages.includes(i));
     const remainingRawFiles = rawFiles.filter((_, i) => !selectedImages.includes(i));
     
+    // Update image groups - now tracking both base64 and raw files
     setImageGroups(prev => {
       let updated = [...prev];
       const firstEmptyIndex = updated.findIndex(g => g.length === 0);
@@ -375,75 +385,135 @@ function FormSection({
       return updated;
     });
     
+    // Update raw file groups in parallel
+    setRawImageGroups(prev => {
+      let updated = [...prev];
+      const firstEmptyIndex = updated.findIndex(g => !g || g.length === 0);
+      if (firstEmptyIndex !== -1) {
+        updated[firstEmptyIndex] = [...(updated[firstEmptyIndex] || []), ...groupRawFiles];
+      } else {
+        updated.push(groupRawFiles);
+      }
+      if (updated[updated.length - 1] && updated[updated.length - 1].length > 0) {
+        updated.push([]);
+      }
+      return updated;
+    });
+    
+    // Update the main file arrays
     setFilesBase64(remainingBase64);
     setRawFiles(remainingRawFiles);
     setSelectedImages([]);
   };
 
-
-// Modified to include S3 upload and comprehensive logging
-const handleGenerateListingWithUpload = async () => {
-  console.log('🚀 Starting handleGenerateListingWithUpload');
-  console.log(`Initial state - rawFiles: ${rawFiles.length}, filesBase64: ${filesBase64.length}`);
-  
-  try {
-    console.log('Setting isUploading to true');
-    setIsUploading(true);
+  // Modified to upload all files (ungrouped and grouped)
+  const handleGenerateListingWithUpload = async () => {
+    console.log('🚀 Starting handleGenerateListingWithUpload');
+    console.log(`Initial state - rawFiles: ${rawFiles.length}, filesBase64: ${filesBase64.length}`);
+    console.log(`Image groups: ${imageGroups.length}, Raw image groups: ${rawImageGroups.length}`);
     
-    // Upload all raw files to S3
-    const s3UrlsList = [];
-    console.log(`Setting totalFiles to ${rawFiles.length}`);
-    setTotalFiles(rawFiles.length);
-    
-    console.log('Beginning file upload loop');
-    for (let i = 0; i < rawFiles.length; i++) {
-      try {
-        console.log(`Processing file ${i + 1}/${rawFiles.length}: ${rawFiles[i].name || 'unnamed file'}`);
-        console.log(`File type: ${rawFiles[i].type}, size: ${rawFiles[i].size} bytes`);
-        
-        console.log(`Uploading file ${i + 1} to S3...`);
-        const s3Url = await uploadToS3(rawFiles[i]);
-        console.log(`Upload successful, received S3 URL: ${s3Url}`);
-        
-        s3UrlsList.push(s3Url);
-        console.log(`Added S3 URL to list, current count: ${s3UrlsList.length}`);
-        
-        setProcessedFiles(i + 1);
-        const progressPercent = Math.round(((i + 1) / rawFiles.length) * 100);
-        console.log(`Setting upload progress to ${progressPercent}%`);
-        setUploadProgress(progressPercent);
-      } catch (error) {
-        console.error(`❌ Error uploading file ${i + 1}:`, error);
-        console.error('Error details:', JSON.stringify(error, Object.getOwnPropertyNames(error)));
+    try {
+      console.log('Setting isUploading to true');
+      setIsUploading(true);
+      
+      // Collect ALL raw files that need uploading
+      let allRawFiles = [...rawFiles];
+      
+      // Add raw files from image groups
+      rawImageGroups.forEach(group => {
+        if (group && group.length) {
+          allRawFiles = [...allRawFiles, ...group];
+        }
+      });
+      
+      console.log(`Total files to upload: ${allRawFiles.length}`);
+      setTotalFiles(allRawFiles.length);
+      
+      if (allRawFiles.length === 0) {
+        console.log('⚠️ No raw files to upload');
+        setIsUploading(false);
+        handleGenerateListing();
+        return;
       }
+      
+      // Upload all raw files to S3
+      const s3UrlsList = [];
+      
+      console.log('Beginning file upload loop');
+      for (let i = 0; i < allRawFiles.length; i++) {
+        try {
+          if (!allRawFiles[i]) {
+            console.log(`Skipping undefined file at index ${i}`);
+            continue;
+          }
+          
+          console.log(`Processing file ${i + 1}/${allRawFiles.length}: ${allRawFiles[i].name || 'unnamed file'}`);
+          console.log(`File type: ${allRawFiles[i].type}, size: ${allRawFiles[i].size} bytes`);
+          
+          console.log(`Uploading file ${i + 1} to S3...`);
+          const s3Url = await uploadToS3(allRawFiles[i]);
+          console.log(`Upload successful, received S3 URL: ${s3Url}`);
+          
+          s3UrlsList.push(s3Url);
+          console.log(`Added S3 URL to list, current count: ${s3UrlsList.length}`);
+          
+          setProcessedFiles(i + 1);
+          const progressPercent = Math.round(((i + 1) / allRawFiles.length) * 100);
+          console.log(`Setting upload progress to ${progressPercent}%`);
+          setUploadProgress(progressPercent);
+        } catch (error) {
+          console.error(`❌ Error uploading file ${i + 1}:`, error);
+          console.error('Error details:', JSON.stringify(error, Object.getOwnPropertyNames(error)));
+        }
+      }
+      
+      console.log(`Upload complete. Total S3 URLs: ${s3UrlsList.length}`);
+      
+      // Replace base64 images with S3 URLs
+      // First determine how many URLs go to the main array vs. groups
+      let urlIndex = 0;
+      
+      // Replace main filesBase64 array
+      if (filesBase64.length > 0) {
+        const mainUrls = s3UrlsList.slice(urlIndex, urlIndex + filesBase64.length);
+        console.log(`Replacing ${filesBase64.length} main images with S3 URLs`);
+        setFilesBase64(mainUrls);
+        urlIndex += filesBase64.length;
+      }
+      
+      // Replace image groups with S3 URLs
+      if (imageGroups.length > 0) {
+        const newImageGroups = [...imageGroups];
+        
+        for (let i = 0; i < newImageGroups.length; i++) {
+          const group = newImageGroups[i];
+          if (group && group.length > 0) {
+            const groupUrls = s3UrlsList.slice(urlIndex, urlIndex + group.length);
+            console.log(`Replacing group ${i} with ${groupUrls.length} S3 URLs`);
+            newImageGroups[i] = groupUrls;
+            urlIndex += group.length;
+          }
+        }
+        
+        setImageGroups(newImageGroups);
+      }
+      
+      console.log('Upload process complete, setting isUploading to false');
+      setIsUploading(false);
+      
+      console.log('Calling handleGenerateListing');
+      handleGenerateListing();
+      
+    } catch (error) {
+      console.error('❌ Fatal error during upload process:', error);
+      console.error('Error stack:', error.stack);
+      console.error('Error details:', JSON.stringify(error, Object.getOwnPropertyNames(error)));
+      console.log('Setting isUploading to false due to error');
+      setIsUploading(false);
     }
     
-    // Replace base64 images with S3 URLs
-    console.log(`Comparing counts - s3UrlsList: ${s3UrlsList.length}, filesBase64: ${filesBase64.length}`);
-    if (s3UrlsList.length === filesBase64.length) {
-      console.log('Replacing base64 images with S3 URLs');
-      setFilesBase64(s3UrlsList);
-    } else {
-      console.warn(`⚠️ Mismatch in file counts - S3 URLs: ${s3UrlsList.length}, Base64 files: ${filesBase64.length}`);
-    }
-    
-    // After upload is complete, call the original handler
-    console.log('Upload process complete, setting isUploading to false');
-    setIsUploading(false);
-    
-    console.log('Calling handleGenerateListing');
-    handleGenerateListing();
-    
-  } catch (error) {
-    console.error('❌ Fatal error during upload process:', error);
-    console.error('Error stack:', error.stack);
-    console.error('Error details:', JSON.stringify(error, Object.getOwnPropertyNames(error)));
-    console.log('Setting isUploading to false due to error');
-    setIsUploading(false);
-  }
-  
-  console.log('🏁 Exiting handleGenerateListingWithUpload');
-};
+    console.log('🏁 Exiting handleGenerateListingWithUpload');
+  };
 
   const isValidSelection = selectedCategory !== "--" && subCategory !== "--";
 

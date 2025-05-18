@@ -44,6 +44,8 @@ function FormSection({
   const [showTooltip, setShowTooltip] = useState(false);
   const [categories, setCategories] = useState({});
   const [categoriesLoading, setCategoriesLoading] = useState(true);
+  const [price, setPrice] = useState("");
+  const [sku, setSku] = useState("");
 
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
@@ -96,6 +98,16 @@ function FormSection({
         setCategories(categoryData);
       } catch (err) {
         console.error('Error fetching categories:', err);
+        // Fallback to default data if there's an error
+        setCategories({
+          "--": ["--"],
+          "Movies & TV": ["Other Formats", "VHS Tapes", "UMDs", "Laserdiscs", "DVDs & Blu-ray Discs"],
+          "Books & Magazines": ["Textbooks", "Magazines", "Catalogs", "Books"],
+          "Photographic Images": ["Stereoviews & Stereoscopes", "Photographs", "Negatives", "Magic Lantern Slides", "Film Slides"],
+          "Music": ["Other Formats", "Vinyl Records", "CDs", "Cassettes"],
+          "Video Games": ["None"],
+          "Postcards": ["Non-Topographical Postcards", "Topographical Postcards"]
+        });
       } finally {
         setCategoriesLoading(false);
       }
@@ -254,6 +266,20 @@ function FormSection({
 
   const handleDragOver = (e) => e.preventDefault();
   const triggerFileInput = () => fileInputRef.current.click();
+  
+  const handlePriceChange = (e) => {
+    const value = e.target.value;
+    // Allow only numbers and decimal point
+    if (/^$|^\d+\.?\d*$/.test(value)) {
+      setPrice(value);
+      setIsDirty(true);
+    }
+  };
+
+  const handleSkuChange = (e) => {
+    setSku(e.target.value);
+    setIsDirty(true);
+  };
 
   const toggleImageSelection = (idx) => {
     setSelectedImages(prev =>
@@ -297,6 +323,10 @@ function FormSection({
         output[label] = value;
       }
     });
+    // Add price and SKU to the output
+    if (price) output["Price"] = price;
+    if (sku) output["SKU"] = sku;
+    
     console.log(output);
     return output;
   };
@@ -319,6 +349,28 @@ function FormSection({
         <select onChange={handleSubCategoryChange} value={subCategory}>
           {subcategories.map((sub, i) => <option key={i} value={sub}>{sub}</option>)}
         </select>
+      </div>
+
+      <div className="form-group">
+        <label>Price ($)</label>
+        <input
+          type="text"
+          value={price}
+          onChange={handlePriceChange}
+          placeholder="Enter price"
+          className="form-control"
+        />
+      </div>
+
+      <div className="form-group">
+        <label>SKU</label>
+        <input
+          type="text"
+          value={sku}
+          onChange={handleSkuChange}
+          placeholder="Enter SKU"
+          className="form-control"
+        />
       </div>
 
       <div className="form-group">

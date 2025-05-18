@@ -3,6 +3,7 @@ import { DynamoDBClient, QueryCommand } from '@aws-sdk/client-dynamodb';
 import { unmarshall } from '@aws-sdk/util-dynamodb';
 import { DynamoDBDocumentClient, ScanCommand } from '@aws-sdk/lib-dynamodb';
 import EXIF from 'exif-js';
+import piexif from 'piexifjs';
 
 export const getSelectedCategoryOptionsJSON = (fieldSelections) => {
   const output = {};
@@ -170,27 +171,28 @@ function FormSection({
     }
   };
 
+
 const convertToBase64 = (file) => {
   return new Promise((resolve, reject) => {
-    const img = new Image();
+    const reader = new FileReader();
 
-    // Create a blob URL from the File object
-    const objectUrl = URL.createObjectURL(file);
+    reader.onload = (e) => {
+      try {
+        const dataUrl = e.target.result;
 
-    // First set up EXIF extraction using a temporary Image object
-    const tempImg = new Image();
-    tempImg.onload = function () {
-      EXIF.getData(tempImg, function () {
-        const xDPI = EXIF.getTag(this, 'XResolution');
-        const yDPI = EXIF.getTag(this, 'YResolution');
+        // Extract EXIF metadata
+        const exifObj = piexif.load(dataUrl);
+
+        const xDPI = exifObj['0th'][piexif.ImageIFD.XResolution];
+        const yDPI = exifObj['0th'][piexif.ImageIFD.YResolution];
 
         console.log('EXIF Metadata:');
-        console.log('X DPI:', xDPI ?? 'Not available');
-        console.log('Y DPI:', yDPI ?? 'Not available');
+        console.log('X DPI:', xDPI ? xDPI[0] / xDPI[1] : 'Not available');
+        console.log('Y DPI:', yDPI ? yDPI[0] / yDPI[1] : 'Not available');
 
-        // Now load the actual image for resizing
+        // Now load image
+        const img = new Image();
         img.onload = () => {
-          // Original dimensions
           console.log('Original Image:');
           console.log('Width:', img.width);
           console.log('Height:', img.height);
@@ -219,14 +221,17 @@ const convertToBase64 = (file) => {
         };
 
         img.onerror = (err) => reject(err);
-        img.src = objectUrl;
-      });
+        img.src = dataUrl;
+      } catch (err) {
+        reject('Error reading EXIF data: ' + err);
+      }
     };
 
-    tempImg.onerror = (err) => reject(err);
-    tempImg.src = objectUrl;
+    reader.onerror = (err) => reject(err);
+    reader.readAsDataURL(file);
   });
 };
+
 
 
 

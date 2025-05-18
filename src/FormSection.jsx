@@ -2,6 +2,9 @@ import { useState, useRef, useEffect } from 'react';
 import { DynamoDBClient, QueryCommand } from '@aws-sdk/client-dynamodb';
 import { unmarshall } from '@aws-sdk/util-dynamodb';
 import { DynamoDBDocumentClient, ScanCommand } from '@aws-sdk/lib-dynamodb';
+import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
+import { fromCognitoIdentityPool } from "@aws-sdk/credential-provider-cognito-identity";
+import piexif from "piexifjs";
 import EXIF from 'exif-js';
 import piexif from 'piexifjs';
 
@@ -70,6 +73,20 @@ function FormSection({
   });
 
   const docClient = DynamoDBDocumentClient.from(client);
+  
+  // AWS config
+const REGION = "us-east-2"; // Update your region
+const BUCKET_NAME = "listeasierimages"; // Update your bucket name
+const IDENTITY_POOL_ID = "us-east-2:f81d1240-32a8-4aff-87e8-940effdf5908"; // Update your Identity Pool ID
+
+const s3Client = new S3Client({
+  region: REGION,
+  credentials: fromCognitoIdentityPool({
+    clientConfig: { region: REGION },
+    identityPoolId: IDENTITY_POOL_ID,
+  }),
+});
+
 
   useEffect(() => {
     const fetchCategories = async () => {
@@ -165,22 +182,22 @@ function FormSection({
     }
   };
 
-const convertToBase64 = (file) => {
+const convertToBase64AndUploadToS3 = (file) => {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
 
-    reader.onload = (e) => {
+    reader.onload = async (e) => {
       try {
         const dataUrl = e.target.result;
         const exifObj = piexif.load(dataUrl);
 
-        const xDPI = exifObj['0th'][piexif.ImageIFD.XResolution];
-        const yDPI = exifObj['0th'][piexif.ImageIFD.YResolution];
+        const xDPI = exifObj["0th"][piexif.ImageIFD.XResolution];
+        const yDPI = exifObj["0th"][piexif.ImageIFD.YResolution];
 
         console.log(`Image DPI - X: ${xDPI}, Y: ${yDPI}`);
 
         const img = new Image();
-        img.onload = () => {
+        img.onload = async () => {
           const maxWidth = 1600;
           let width = img.width;
           let height = img.height;
@@ -194,20 +211,51 @@ const convertToBase64 = (file) => {
 
           console.log(`Resized Pixel Dimensions - Width: ${width}, Height: ${height}`);
 
-          const canvas = document.createElement('canvas');
+          const canvas = document.createElement("canvas");
           canvas.width = width;
           canvas.height = height;
 
-          const ctx = canvas.getContext('2d');
+          const ctx = canvas.getContext("2d");
           ctx.drawImage(img, 0, 0, width, height);
 
-          resolve(canvas.toDataURL(file.type));
+          const base64DataUrl = canvas.toDataURL(file.type);
+
+          // Convert base64 to Blob for S3 upload
+          const byteString = atob(base64DataUrl.split(",")[1]);
+          const mimeString = base64DataUrl.split(",")[0].split(":")[1].split(";")[0];
+
+          const ab = new ArrayBuffer(byteString.length);
+          const ia = new Uint8Array(ab);
+          for (let i = 0; i < byteString.length; i++) {
+            ia[i] = byteString.charCodeAt(i);
+          }
+
+          const blob = new Blob([ab], { type: mimeString });
+
+          // Upload to S3
+          const fileName = `${Date.now()}_${file.name}`;
+          const uploadParams = {
+            Bucket: BUCKET_NAME,
+            Key: fileName,
+            Body: blob,
+            ContentType: mimeString,
+          };
+
+          try {
+            await s3Client.send(new PutObjectCommand(uploadParams));
+            const s3Url = `https://${BUCKET_NAME}.s3.${REGION}.amazonaws.com/${fileName}`;
+            console.log("Upload success:", s3Url);
+            resolve(s3Url);
+          } catch (uploadError) {
+            console.error("Upload error:", uploadError);
+            reject(uploadError);
+          }
         };
 
         img.onerror = (err) => reject(err);
         img.src = dataUrl;
       } catch (err) {
-        reject('Error reading EXIF data: ' + err);
+        reject("Error reading EXIF data: " + err);
       }
     };
 

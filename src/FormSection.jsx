@@ -170,56 +170,64 @@ function FormSection({
     }
   };
 
-
 const convertToBase64 = (file) => {
   return new Promise((resolve, reject) => {
-    // First, extract EXIF metadata (especially DPI)
-    EXIF.getData(file, function () {
-      const xDPI = EXIF.getTag(this, 'XResolution');
-      const yDPI = EXIF.getTag(this, 'YResolution');
+    const img = new Image();
 
-      console.log('EXIF Metadata:');
-      console.log('X DPI:', xDPI ?? 'Not available');
-      console.log('Y DPI:', yDPI ?? 'Not available');
+    // Create a blob URL from the File object
+    const objectUrl = URL.createObjectURL(file);
 
-      // Proceed to image processing
-      const img = new Image();
+    // First set up EXIF extraction using a temporary Image object
+    const tempImg = new Image();
+    tempImg.onload = function () {
+      EXIF.getData(tempImg, function () {
+        const xDPI = EXIF.getTag(this, 'XResolution');
+        const yDPI = EXIF.getTag(this, 'YResolution');
 
-      img.onload = () => {
-        // Log original image dimensions
-        console.log('Original Image:');
-        console.log('Width:', img.width);
-        console.log('Height:', img.height);
+        console.log('EXIF Metadata:');
+        console.log('X DPI:', xDPI ?? 'Not available');
+        console.log('Y DPI:', yDPI ?? 'Not available');
 
-        const maxWidth = 1600;
-        let width = img.width;
-        let height = img.height;
+        // Now load the actual image for resizing
+        img.onload = () => {
+          // Original dimensions
+          console.log('Original Image:');
+          console.log('Width:', img.width);
+          console.log('Height:', img.height);
 
-        if (width > maxWidth) {
-          height = Math.floor(height * (maxWidth / width));
-          width = maxWidth;
-        }
+          const maxWidth = 1600;
+          let width = img.width;
+          let height = img.height;
 
-        // Log resized image dimensions
-        console.log('Resized Image:');
-        console.log('Width:', width);
-        console.log('Height:', height);
+          if (width > maxWidth) {
+            height = Math.floor(height * (maxWidth / width));
+            width = maxWidth;
+          }
 
-        const canvas = document.createElement('canvas');
-        canvas.width = width;
-        canvas.height = height;
+          console.log('Resized Image:');
+          console.log('Width:', width);
+          console.log('Height:', height);
 
-        const ctx = canvas.getContext('2d');
-        ctx.drawImage(img, 0, 0, width, height);
+          const canvas = document.createElement('canvas');
+          canvas.width = width;
+          canvas.height = height;
 
-        resolve(canvas.toDataURL(file.type));
-      };
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(img, 0, 0, width, height);
 
-      img.onerror = (err) => reject(err);
-      img.src = URL.createObjectURL(file);
-    });
+          resolve(canvas.toDataURL(file.type));
+        };
+
+        img.onerror = (err) => reject(err);
+        img.src = objectUrl;
+      });
+    };
+
+    tempImg.onerror = (err) => reject(err);
+    tempImg.src = objectUrl;
   });
 };
+
 
 
   const handleFileChange = async (e) => {
@@ -424,7 +432,6 @@ const convertToBase64 = (file) => {
               );
             })
           ) : (
-            <p>No category fields available for this subcategory.</p>
           )}
         </div>
       </div>

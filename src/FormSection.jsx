@@ -263,6 +263,29 @@ const convertToBase64AndUploadToS3 = (file) => {
   });
 };
 
+  const convertToBase64 = (file) => {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => {
+        const maxWidth = 800;
+        let width = img.width;
+        let height = img.height;
+        if (width > maxWidth) {
+          height = Math.floor(height * (maxWidth / width));
+          width = maxWidth;
+        }
+        const canvas = document.createElement("canvas");
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext("2d");
+        ctx.drawImage(img, 0, 0, width, height);
+        resolve(canvas.toDataURL(file.type));
+      };
+      img.onerror = (err) => reject(err);
+      img.src = URL.createObjectURL(file);
+    });
+  };
+
 
   const handleFileChange = async (e) => {
     const files = Array.from(e.target.files);
@@ -277,7 +300,7 @@ const convertToBase64AndUploadToS3 = (file) => {
 
     for (let i = 0; i < files.length; i++) {
       try {
-        const base64 = await convertToBase64(files[i]);
+        const base64 = await convertToBase64AndUploadToS3(files[i]);
         base64List.push(base64);
         setProcessedFiles(i + 1);
         setUploadProgress(Math.round(((i + 1) / files.length) * 100));
@@ -306,7 +329,7 @@ const convertToBase64AndUploadToS3 = (file) => {
 
     for (let i = 0; i < imgs.length; i++) {
       try {
-        const base64 = await convertToBase64(imgs[i]);
+        const base64 = await convertToBase64AndUploadToS3(imgs[i]);
         base64List.push(base64);
         setProcessedFiles(i + 1);
         setUploadProgress(Math.round(((i + 1) / imgs.length) * 100));

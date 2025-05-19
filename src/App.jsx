@@ -250,7 +250,6 @@ const handleGenerateListing = async () => {
     setProcessingGroups([]);
   };
 
-  // Function to download all listings as a zip file
 const downloadListingsAsZip = () => {
   // Filter out empty or null responses
   const validResponses = responseData.filter(response =>
@@ -266,12 +265,18 @@ const downloadListingsAsZip = () => {
 
   validResponses.forEach((listing, index) => {
     const title = listing.title ? listing.title.replace(/\r?\n|\r/g, ' ').replace(/"/g, '""') : '';
-    const photoUrls = newImageGroups[index];
-	console.log(photoUrls);
-	console.log(index);
-	const formattedUrls = photoUrls.join('||');
+    
+    // Safety check for photoUrls - use the corresponding image group if available, otherwise use an empty string
+    let formattedUrls = '';
+    if (newImageGroups && newImageGroups[index] && Array.isArray(newImageGroups[index])) {
+      formattedUrls = newImageGroups[index].join('||');
+    } else if (imageGroups && imageGroups[index] && Array.isArray(imageGroups[index])) {
+      // Fallback to imageGroups if newImageGroups isn't available
+      formattedUrls = imageGroups[index].join('||');
+    }
+    
     const description = listing.description ? listing.description.replace(/\r?\n|\r/g, ' ').replace(/"/g, '""') : '';
-	 const header = `#INFO,Version=0.0.2,Template= eBay-draft-listings-template_US,,,,,,,,
+    const header = `#INFO,Version=0.0.2,Template= eBay-draft-listings-template_US,,,,,,,,
 #INFO Action and Category ID are required fields. 1) Set Action to Draft 2) Please find the category ID for your listings here: https://pages.ebay.com/sellerinformation/news/categorychanges.html,,,,,,,,,,
 "#INFO After you've successfully uploaded your draft from the Seller Hub Reports tab, complete your drafts to active listings here: https://www.ebay.com/sh/lst/drafts",,,,,,,,,,
 #INFO,,,,,,,,,,

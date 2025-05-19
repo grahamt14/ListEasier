@@ -502,6 +502,7 @@ const fetchEbayCategoryID = async (selectedCategory, subCategory) => {
         const mainUrls = s3UrlsList.slice(urlIndex, urlIndex + filesBase64.length);
         console.log(`Replacing ${filesBase64.length} main images with S3 URLs`);
        
+        console.log(`batchSize ${batchSize}`);
 		
 		const newImageGroups = [...imageGroups];
         

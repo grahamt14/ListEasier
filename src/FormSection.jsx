@@ -5,7 +5,7 @@ import { GetCommand, DynamoDBDocumentClient, ScanCommand } from '@aws-sdk/lib-dy
 import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
 import { fromCognitoIdentityPool } from "@aws-sdk/credential-provider-cognito-identity";
 //import Tesseract from 'tesseract.js'; // Import Tesseract directly
-import { createWorker } from 'tesseract.js';
+import * as Tesseract from 'tesseract.js';
 
 export const getSelectedCategoryOptionsJSON = (fieldSelections, price, sku) => {
   const output = {};
@@ -380,14 +380,14 @@ const autoRotateWithTesseract = async (base64Img) => {
   try {
     console.log("Starting Tesseract auto-rotation analysis...");
 
-    const worker = createWorker(); // this should return a valid worker object
+    const worker = Tesseract.createWorker();
 
-    await worker.load();                    // Load core engine
-    await worker.loadLanguage('eng');       // Load language
-    await worker.initialize('eng');         // Init engine with language
+    await worker.load();
+    await worker.loadLanguage('eng');
+    await worker.initialize('eng');
 
     await worker.setParameters({
-      tessedit_pageseg_mode: '0',  // Orientation and script detection only
+      tessedit_pageseg_mode: '0',
       tessedit_ocr_engine_mode: '2',
       tessjs_create_osd: '1',
     });

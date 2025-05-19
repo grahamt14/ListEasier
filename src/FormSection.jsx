@@ -489,6 +489,7 @@ const uploadToS3 = async (file) => {
         }
         
         setImageGroups(newImageGroups);
+		console.log(newImageGroups);
 		console.log(imageGroups);
       }
       

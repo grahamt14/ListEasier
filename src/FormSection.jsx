@@ -170,6 +170,16 @@ const s3Client = new S3Client({
     fetchCategoryFields();
   }, [subCategory]);
 
+  // Add this effect to keep filesBase64 in sync with parent
+  useEffect(() => {
+    // This effect will run whenever the parent's filesBase64 changes
+    // No need to update if the lengths match (would create an infinite loop)
+    if (rawFiles.length > 0 && filesBase64.length === 0) {
+      console.log('Syncing with parent - clearing local raw files');
+      setRawFiles([]);
+    }
+  }, [filesBase64]);
+
   const handleCategoryChange = (e) => {
     const cat = e.target.value;
     setSelectedCategory(cat);
@@ -542,6 +552,8 @@ const fetchEbayCategoryID = async (selectedCategory, subCategory) => {
       console.log('Upload process complete, setting isUploading to false');
       setIsUploading(false);
       
+      // Explicitly clear the rawFiles state to prevent them from reappearing
+      setRawFiles([]);
       
     } catch (error) {
       console.error('❌ Fatal error during upload process:', error);

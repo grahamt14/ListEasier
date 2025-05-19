@@ -4,6 +4,7 @@ import { unmarshall } from '@aws-sdk/util-dynamodb';
 import { GetCommand, DynamoDBDocumentClient, ScanCommand } from '@aws-sdk/lib-dynamodb';
 import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
 import { fromCognitoIdentityPool } from "@aws-sdk/credential-provider-cognito-identity";
+import { createWorker } from 'tesseract.js'; // Add this import
 
 export const getSelectedCategoryOptionsJSON = (fieldSelections, price, sku) => {
   const output = {};
@@ -372,72 +373,123 @@ const rotateImage = (base64Img, degrees) => {
       console.error("Error rotating image:", error);
     }
   };
+  
+  const autoRotateWithTesseract = async (base64Img) => {
+  try {
+    // Create a Tesseract worker
+    const worker = await createWorker();
+    
+    // Initialize the worker with English language
+    await worker.loadLanguage('eng');
+    await worker.initialize('eng');
+    
+    // Set page segmentation mode to auto
+    await worker.setParameters({
+      tessedit_pageseg_mode: '3', // PSM_AUTO
+    });
+    
+    // Recognize text to determine orientation
+    const { data } = await worker.recognize(base64Img, {
+      rotateAuto: true, // Enable auto-rotation detection
+    });
+    
+    // Get the detected rotation angle
+    const rotation = data.orientation?.rotate || 0;
+    console.log(`Tesseract detected rotation: ${rotation}°`);
+    
+    // Terminate the worker to free resources
+    await worker.terminate();
+    
+    // If rotation is needed, apply it
+    if (rotation !== 0) {
+      return await rotateImage(base64Img, rotation);
+    }
+    
+    // Return original image if no rotation needed
+    return base64Img;
+  } catch (error) {
+    console.error("Tesseract auto-rotation failed:", error);
+    // Return original image if the process fails
+    return base64Img;
+  }
+};
+
 
   // File input change handler
   const handleFileChange = async (e) => {
-    const files = Array.from(e.target.files);
-    if (files.length === 0) return;
+  const files = Array.from(e.target.files);
+  if (files.length === 0) return;
 
-    setIsUploading(true);
-    setTotalFiles(files.length);
-    setProcessedFiles(0);
-    setUploadProgress(0);
+  setIsUploading(true);
+  setTotalFiles(files.length);
+  setProcessedFiles(0);
+  setUploadProgress(0);
 
-    const base64List = [];
-    const newRawFiles = [];
+  const base64List = [];
+  const newRawFiles = [];
 
-    for (let i = 0; i < files.length; i++) {
-      try {
-        const base64 = await convertToBase64(files[i]);
-        base64List.push(base64);
-        newRawFiles.push(files[i]);
-        
-        setProcessedFiles(i + 1);
-        setUploadProgress(Math.round(((i + 1) / files.length) * 100));
-      } catch (error) {
-        console.error("Error converting file:", error);
-      }
+  for (let i = 0; i < files.length; i++) {
+    try {
+      // First convert to base64
+      let base64 = await convertToBase64(files[i]);
+      
+      // Then attempt to auto-rotate using Tesseract
+      base64 = await autoRotateWithTesseract(base64);
+      
+      base64List.push(base64);
+      newRawFiles.push(files[i]);
+      
+      setProcessedFiles(i + 1);
+      setUploadProgress(Math.round(((i + 1) / files.length) * 100));
+    } catch (error) {
+      console.error("Error processing file:", error);
     }
+  }
 
-    setFilesBase64(prev => [...prev, ...base64List]);
-    setRawFiles(prev => [...prev, ...newRawFiles]);
-    setErrorMessages(prev => prev.filter(msg => msg !== "Please upload at least one image."));
-    setIsDirty(true);
-    setTimeout(() => setIsUploading(false), 500);
-  };
+  setFilesBase64(prev => [...prev, ...base64List]);
+  setRawFiles(prev => [...prev, ...newRawFiles]);
+  setErrorMessages(prev => prev.filter(msg => msg !== "Please upload at least one image."));
+  setIsDirty(true);
+  setTimeout(() => setIsUploading(false), 500);
+};
 
   // File drop handler
   const handleDrop = async (e) => {
-    e.preventDefault();
-    const imgs = Array.from(e.dataTransfer.files).filter(f => f.type.startsWith("image/"));
-    if (imgs.length === 0) return;
+  e.preventDefault();
+  const imgs = Array.from(e.dataTransfer.files).filter(f => f.type.startsWith("image/"));
+  if (imgs.length === 0) return;
 
-    setIsUploading(true);
-    setTotalFiles(imgs.length);
-    setProcessedFiles(0);
-    setUploadProgress(0);
+  setIsUploading(true);
+  setTotalFiles(imgs.length);
+  setProcessedFiles(0);
+  setUploadProgress(0);
 
-    const base64List = [];
-    const newRawFiles = [];
+  const base64List = [];
+  const newRawFiles = [];
 
-    for (let i = 0; i < imgs.length; i++) {
-      try {
-        const base64 = await convertToBase64(imgs[i]);
-        base64List.push(base64);
-        newRawFiles.push(imgs[i]);
-        
-        setProcessedFiles(i + 1);
-        setUploadProgress(Math.round(((i + 1) / imgs.length) * 100));
-      } catch (error) {
-        console.error("Error converting file:", error);
-      }
+  for (let i = 0; i < imgs.length; i++) {
+    try {
+      // First convert to base64
+      let base64 = await convertToBase64(imgs[i]);
+      
+      // Then attempt to auto-rotate using Tesseract
+      base64 = await autoRotateWithTesseract(base64);
+      
+      base64List.push(base64);
+      newRawFiles.push(imgs[i]);
+      
+      setProcessedFiles(i + 1);
+      setUploadProgress(Math.round(((i + 1) / imgs.length) * 100));
+    } catch (error) {
+      console.error("Error processing file:", error);
     }
+  }
 
-    setFilesBase64(prev => [...prev, ...base64List]);
-    setRawFiles(prev => [...prev, ...newRawFiles]);
-    setIsDirty(true);
-    setTimeout(() => setIsUploading(false), 500);
-  };
+  setFilesBase64(prev => [...prev, ...base64List]);
+  setRawFiles(prev => [...prev, ...newRawFiles]);
+  setIsDirty(true);
+  setTimeout(() => setIsUploading(false), 500);
+};
 
   const handleDragOver = (e) => e.preventDefault();
   const triggerFileInput = () => fileInputRef.current.click();

@@ -108,7 +108,21 @@ function App() {
     setImageGroups(newGroups);
     
     // Store the S3 URLs separately for download
-    setS3ImageGroups(groups);
+    // Make sure we're actually storing S3 URLs, not base64 data
+    const s3UrlGroups = groups.map(group => {
+      return group.map(url => {
+        // If this is already an S3 URL, just return it
+        if (typeof url === 'string' && !url.startsWith('data:')) {
+          return url;
+        }
+        // Otherwise, we're going to ignore base64 data in s3ImageGroups
+        // The actual upload will happen in FormSection component
+        return null;
+      }).filter(url => url !== null);
+    });
+    
+    // Update the S3 image groups state
+    setS3ImageGroups(s3UrlGroups);
   };
 
   const handleGenerateListing = async () => {
@@ -125,7 +139,11 @@ function App() {
   console.log(`filesBase64.length ${filesBase64.length}`);
   let allGroupsToProcess = [...nonEmptyGroups];
   let newGroups = [];
-  let s3GroupsForDownload = [...nonEmptyGroups]; // Special array for tracking s3 URLs
+  
+  // Important: Check if we have s3ImageGroups that actually contain S3 URLs
+  const s3GroupsForDownload = s3ImageGroups.filter(group => 
+    group.length > 0 && group.some(url => url && !url.startsWith('data:'))
+  );
   
   if (filesBase64.length > 0 && batchSize > 0) {
     // Create new groups from the pool images
@@ -137,9 +155,6 @@ function App() {
     // Add pool groups to processing list
     allGroupsToProcess = [...nonEmptyGroups, ...poolGroups];
     
-    // Track these separately for download later
-    s3GroupsForDownload = [...nonEmptyGroups, ...poolGroups];
-    
     // Update imageGroups to include these new groups from the pool
     // BUT don't include the existing nonEmptyGroups again (this was causing duplication)
     setImageGroups(prev => {
@@ -150,17 +165,9 @@ function App() {
     
     // Store these groups for the download function to use later
     newGroups = [...nonEmptyGroups, ...poolGroups];
-    
-    // Clear the filesBase64 pool since we've moved all images to groups
-    setFilesBase64([]);
   } else {
     newGroups = [...nonEmptyGroups];
   }
-  
-  // Update the S3 image groups state
-  // If these are already S3 URLs, use them
-  // If they're base64, they should have been uploaded via the handleGenerateListingWithUpload function
-  setS3ImageGroups(s3GroupsForDownload);
 
   // 3. Initialize UI state
   setTotalChunks(allGroupsToProcess.length);
@@ -310,7 +317,7 @@ const downloadListingsAsZip = () => {
       console.log(`s3ImageGroups[${index}] exists:`, s3ImageGroups[index]);
       
       if (Array.isArray(s3ImageGroups[index])) {
-        const s3Urls = s3ImageGroups[index].filter(url => url && !url.startsWith('data:'));
+        const s3Urls = s3ImageGroups[index].filter(url => url && typeof url === 'string' && !url.startsWith('data:'));
         photoUrls = s3Urls;
         
         console.log(`Found ${s3Urls.length} valid S3 URLs for index ${index}`);
@@ -337,7 +344,7 @@ const downloadListingsAsZip = () => {
         
         if (Array.isArray(imageGroups[index])) {
           // Only use URLs that are not base64 data
-          const standardUrls = imageGroups[index].filter(url => url && !url.startsWith('data:'));
+          const standardUrls = imageGroups[index].filter(url => url && typeof url === 'string' && !url.startsWith('data:'));
           photoUrls = standardUrls;
           
           console.log(`Found ${standardUrls.length} valid standard URLs for index ${index}`);

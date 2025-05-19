@@ -89,15 +89,15 @@ function App() {
   const handleGenerateListing = async () => {
   // 1. Gather all non-empty groups
   const nonEmptyGroups = imageGroups.filter(g => g.length > 0);
-
+  
   // 2. If there are leftover pool images, batch them too
-  console.log('filesBase64.length ${filesBase64.length}')
+  console.log(`filesBase64.length ${filesBase64.length}`);
   if (filesBase64.length > 0 && batchSize > 0) {
     for (let i = 0; i < filesBase64.length; i += batchSize) {
       nonEmptyGroups.push(filesBase64.slice(i, i + batchSize));
     }
   }
-
+  
   // 3. Initialize UI state
   setTotalChunks(nonEmptyGroups.length);
   setCompletedChunks(0);
@@ -107,68 +107,63 @@ function App() {
   setIsDirty(false);
   setIsLoading(true);
   setProcessingGroups(Array(nonEmptyGroups.length).fill(true));
-
-
-    // 4. Prepare selected category options JSON
-    const selectedCategoryOptions = getSelectedCategoryOptionsJSON(fieldSelections);
-
-  // 5. Fire off each fetch separately and update state upon completion
-  nonEmptyGroups.forEach((group, idx) => {
+  
+  // 4. Prepare selected category options JSON
+  const selectedCategoryOptions = getSelectedCategoryOptionsJSON(fieldSelections);
+  
+  // 5. Create an array of promises for each API call
+  const apiPromises = nonEmptyGroups.map((group, idx) => {
     console.log(`Starting API call for group ${idx}`);
-
-    fetch(
-      "https://7f26uyyjs5.execute-api.us-east-2.amazonaws.com/ListEasily/ListEasilyAPI",
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          category,
-          subCategory,
-          Base64Key: [group],
-          SelectedCategoryOptions: selectedCategoryOptions
-        })
-      }
-    )
-      .then(res => res.json())
-      .then(data => {
-        console.log(`Group ${idx} API call completed`);
-        let parsed = data.body;
-        if (typeof parsed === "string") parsed = JSON.parse(parsed);
-
-        // Use setTimeout to force this update to be processed separately
-        setTimeout(() => {
+    
+    return new Promise((resolve) => {
+      fetch(
+        "https://7f26uyyjs5.execute-api.us-east-2.amazonaws.com/ListEasily/ListEasilyAPI",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            category,
+            subCategory,
+            Base64Key: [group],
+            SelectedCategoryOptions: selectedCategoryOptions
+          })
+        }
+      )
+        .then(res => res.json())
+        .then(data => {
+          console.log(`Group ${idx} API call completed`);
+          let parsed = data.body;
+          if (typeof parsed === "string") parsed = JSON.parse(parsed);
+          
+          // Update state
           setResponseData(prev => {
             const next = [...prev];
             next[idx] = Array.isArray(parsed) ? parsed[0] : parsed;
             return next;
           });
-
+          
           setProcessingGroups(prev => {
             const next = [...prev];
             next[idx] = false;
             return next;
           });
-        }, 0);
-      })
-      .catch(err => {
-        console.error(`Error during fetch for group ${idx}:`, err);
-
-        setTimeout(() => {
+        })
+        .catch(err => {
+          console.error(`Error during fetch for group ${idx}:`, err);
+          
           setResponseData(prev => {
             const next = [...prev];
             next[idx] = { error: "Failed to fetch listing data", raw_content: err.message };
             return next;
           });
-
+          
           setProcessingGroups(prev => {
             const next = [...prev];
             next[idx] = false;
             return next;
           });
-        }, 0);
-      })
-      .finally(() => {
-        setTimeout(() => {
+        })
+        .finally(() => {
           setCompletedChunks(c => {
             const done = c + 1;
             console.log(`Completed ${done} of ${nonEmptyGroups.length} chunks`);
@@ -177,8 +172,16 @@ function App() {
             }
             return done;
           });
-        }, 0);
-      });
+          
+          // Important: Resolve this promise for this specific API call
+          resolve();
+        });
+    });
+  });
+  
+  // Return a Promise that resolves when all API calls are complete
+  return Promise.all(apiPromises).then(() => {
+    console.log("All listing generation API calls completed");
   });
 };
 

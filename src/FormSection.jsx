@@ -15,7 +15,7 @@ export const getSelectedCategoryOptionsJSON = (fieldSelections, price, sku) => {
     }
   });
   if (price) output["price"] = price;
-  if (sku) output["SKU"] = sku;
+  if (sku) output["sku"] = sku;
 
   console.log(output);
   return output;
@@ -46,7 +46,7 @@ function FormSection({
   Spinner,
   price, 
   onPriceChange,
-  SKU, 
+  sku, 
   onSKUChange,
 }) {
   const [selectedCategory, setSelectedCategory] = useState("--");
@@ -55,7 +55,6 @@ function FormSection({
   const [showTooltip, setShowTooltip] = useState(false);
   const [categories, setCategories] = useState({});
   const [categoriesLoading, setCategoriesLoading] = useState(true);
-  const [sku, setSku] = useState("");
 
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);

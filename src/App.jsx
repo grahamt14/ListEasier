@@ -21,7 +21,7 @@ function App() {
   const [completedChunks, setCompletedChunks] = useState(0);
   const [processingGroups, setProcessingGroups] = useState([]);
     const [price, setPrice] = useState('');
-    const [SKU, setSKU] = useState('');
+    const [sku, setSKU] = useState('');
 
   const handlePriceUpdate = (newPrice) => {
     setPrice(newPrice);
@@ -303,7 +303,7 @@ const downloadListingsAsZip = () => {
           setFieldSelections={setFieldSelections}  // Pass setter down
 		  price={price} 
 		  onPriceChange={handlePriceUpdate}
-		  SKU={SKU} 
+		  sku={sku} 
 		  onSKUChange={handleSKUUpdate}
         />
 

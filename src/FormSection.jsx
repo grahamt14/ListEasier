@@ -440,7 +440,6 @@ const fetchEbayCategoryID = async (selectedCategory, subCategory) => {
   }
 };
 
- // Updated handleGenerateListingWithUpload function for FormSection.jsx
 const handleGenerateListingWithUpload = async () => {
   console.log('🚀 Starting handleGenerateListingWithUpload');
   
@@ -463,10 +462,64 @@ const handleGenerateListingWithUpload = async () => {
     
     if (allRawFiles.length === 0) {
       console.log('⚠️ No raw files to upload');
-      setIsUploading(false);
-      // Call parent's handleGenerateListing without modifying state first
-      handleGenerateListing();
-      return;
+      
+      // Handle case where we're using base64 images directly - need to attempt upload anyway
+      if (filesBase64.length > 0) {
+        console.log(`Found ${filesBase64.length} base64 images, converting to files for upload`);
+        
+        const convertedFiles = [];
+        for (let i = 0; i < filesBase64.length; i++) {
+          try {
+            // Convert base64 to a blob/file
+            const base64 = filesBase64[i];
+            const matches = base64.match(/^data:([A-Za-z-+\/]+);base64,(.+)$/);
+            
+            if (!matches || matches.length !== 3) {
+              console.warn(`Unable to parse base64 string for image ${i}`);
+              continue;
+            }
+            
+            const contentType = matches[1];
+            const base64Data = matches[2];
+            const byteCharacters = atob(base64Data);
+            const byteArrays = [];
+            
+            for (let offset = 0; offset < byteCharacters.length; offset += 512) {
+              const slice = byteCharacters.slice(offset, offset + 512);
+              const byteNumbers = new Array(slice.length);
+              for (let i = 0; i < slice.length; i++) {
+                byteNumbers[i] = slice.charCodeAt(i);
+              }
+              const byteArray = new Uint8Array(byteNumbers);
+              byteArrays.push(byteArray);
+            }
+            
+            const blob = new Blob(byteArrays, {type: contentType});
+            const fileName = `image_${Date.now()}_${i}.${contentType.split('/')[1] || 'jpg'}`;
+            const file = new File([blob], fileName, {type: contentType});
+            
+            convertedFiles.push(file);
+          } catch (error) {
+            console.error(`Error converting base64 to file for image ${i}:`, error);
+          }
+        }
+        
+        if (convertedFiles.length > 0) {
+          console.log(`Successfully converted ${convertedFiles.length} base64 images to files`);
+          allRawFiles = convertedFiles;
+          setTotalFiles(convertedFiles.length);
+        } else {
+          console.log('No files were successfully converted, proceeding with generate listing');
+          setIsUploading(false);
+          handleGenerateListing();
+          return;
+        }
+      } else {
+        // If there are no raw files and no base64 files, just proceed with generate listing
+        setIsUploading(false);
+        handleGenerateListing();
+        return;
+      }
     }
     
     // Upload all raw files to S3

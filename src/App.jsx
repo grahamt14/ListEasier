@@ -115,8 +115,7 @@ const handleImageGroupsUpdate = (groups) => {
   setNewImageGroups(groups);
 };
 
- // Updated handleGenerateListing function for App.jsx
-const handleGenerateListing = async () => {
+ const handleGenerateListing = async () => {
   // 1. Gather all non-empty groups
   const nonEmptyGroups = imageGroups.filter(g => g.length > 0);
 
@@ -129,6 +128,7 @@ const handleGenerateListing = async () => {
   // 2. If there are leftover pool images, batch them too
   console.log(`filesBase64.length ${filesBase64.length}`);
   let allGroupsToProcess = [...nonEmptyGroups];
+  let newGroups = [];
   
   if (filesBase64.length > 0 && batchSize > 0) {
     // Create new groups from the pool images
@@ -148,9 +148,17 @@ const handleGenerateListing = async () => {
       return [...nonEmptyGroups, ...poolGroups, ...lastEmptyGroup];
     });
     
+    // Store these groups for the download function to use later
+    newGroups = [...nonEmptyGroups, ...poolGroups];
+    
     // Clear the filesBase64 pool since we've moved all images to groups
     setFilesBase64([]);
+  } else {
+    newGroups = [...nonEmptyGroups];
   }
+  
+  // Store the groups in newImageGroups state for download
+  setNewImageGroups(newGroups);
 
   // 3. Initialize UI state
   setTotalChunks(allGroupsToProcess.length);
@@ -235,7 +243,6 @@ const handleGenerateListing = async () => {
   return Promise.resolve(); // Make sure this returns a Promise
 };
 
-
   const handleClearAll = () => {
     setFilesBase64([]);
     setCategory(undefined);
@@ -263,17 +270,35 @@ const downloadListingsAsZip = () => {
 
   const zip = new JSZip();
 
+  // Debug logs to help understand what data we're working with
+  console.log("Valid responses:", validResponses.length);
+  console.log("newImageGroups:", newImageGroups);
+  console.log("imageGroups:", imageGroups);
+
   validResponses.forEach((listing, index) => {
     const title = listing.title ? listing.title.replace(/\r?\n|\r/g, ' ').replace(/"/g, '""') : '';
     
-    // Safety check for photoUrls - use the corresponding image group if available, otherwise use an empty string
-    let formattedUrls = '';
-    if (newImageGroups && newImageGroups[index] && Array.isArray(newImageGroups[index])) {
-      formattedUrls = newImageGroups[index].join('||');
-    } else if (imageGroups && imageGroups[index] && Array.isArray(imageGroups[index])) {
-      // Fallback to imageGroups if newImageGroups isn't available
-      formattedUrls = imageGroups[index].join('||');
+    // Safety check for photoUrls - use the corresponding image group if available
+    let photoUrls = [];
+    
+    // First try to use newImageGroups (which should have S3 URLs)
+    if (newImageGroups && Array.isArray(newImageGroups) && index < newImageGroups.length && Array.isArray(newImageGroups[index])) {
+      photoUrls = newImageGroups[index];
+      console.log(`Using newImageGroups for index ${index}:`, photoUrls);
+    } 
+    // Fall back to imageGroups if necessary
+    else if (imageGroups && Array.isArray(imageGroups) && index < imageGroups.length && Array.isArray(imageGroups[index])) {
+      photoUrls = imageGroups[index];
+      console.log(`Using imageGroups for index ${index}:`, photoUrls);
+      
+      // Check if these are base64 images and log a warning
+      if (photoUrls.length > 0 && photoUrls[0].startsWith('data:')) {
+        console.warn(`Warning: Using base64 images for listing ${index} instead of S3 URLs. These won't work in eBay listings.`);
+      }
     }
+    
+    // Filter out any empty strings or undefined values and join with the delimiter
+    const formattedUrls = photoUrls.filter(url => url).join('||');
     
     const description = listing.description ? listing.description.replace(/\r?\n|\r/g, ' ').replace(/"/g, '""') : '';
     const header = `#INFO,Version=0.0.2,Template= eBay-draft-listings-template_US,,,,,,,,

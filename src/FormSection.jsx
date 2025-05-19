@@ -382,15 +382,20 @@ const autoRotateWithTesseract = async (base64Img) => {
 
     const worker = Tesseract.createWorker();
 
+    console.log("Here");
     await worker.load();
+    console.log("Here");
     await worker.loadLanguage('eng');
+    console.log("Here");
     await worker.initialize('eng');
+    console.log("Here");
 
     await worker.setParameters({
       tessedit_pageseg_mode: '0',
       tessedit_ocr_engine_mode: '2',
       tessjs_create_osd: '1',
     });
+    console.log("Here");
 
     const result = await worker.recognize(base64Img, {
       logger: m => {

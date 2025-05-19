@@ -433,6 +433,8 @@ const fetchEbayCategoryID = async (selectedCategory, subCategory) => {
   // Modified to upload all files (ungrouped and grouped)
   const handleGenerateListingWithUpload = async () => {
     console.log('🚀 Starting handleGenerateListingWithUpload');
+      console.log('Calling handleGenerateListing');
+      handleGenerateListing();
     console.log(`Initial state - rawFiles: ${rawFiles.length}, filesBase64: ${filesBase64.length}`);
     console.log(`Image groups: ${imageGroups.length}, Raw image groups: ${rawImageGroups.length}`);
     
@@ -556,8 +558,6 @@ const fetchEbayCategoryID = async (selectedCategory, subCategory) => {
       console.log('Upload process complete, setting isUploading to false');
       setIsUploading(false);
       
-      console.log('Calling handleGenerateListing');
-      handleGenerateListing();
       
     } catch (error) {
       console.error('❌ Fatal error during upload process:', error);

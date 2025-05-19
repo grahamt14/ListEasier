@@ -49,10 +49,12 @@ function FormSection({
   sku, 
   onSKUChange,
   onImageGroupsChange,
+  onCategoryChange,
 }) {
   const [selectedCategory, setSelectedCategory] = useState("--");
   const [subcategories, setSubcategories] = useState(["--"]);
   const [categoryFields, setCategoryFields] = useState([]);
+  const [localCategoryID, setLocalCategoryID] = useState('');
   const [showTooltip, setShowTooltip] = useState(false);
   const [categories, setCategories] = useState({});
   const [categoriesLoading, setCategoriesLoading] = useState(true);
@@ -113,6 +115,7 @@ const s3Client = new S3Client({
         response.Items.forEach(item => {
           const category = item.Category;
           const subcategory = item.SubCategory;
+          const categoryID = item.EbayCategoryID;
           if (!categoryData[category]) {
             categoryData[category] = [];
           }
@@ -120,6 +123,9 @@ const s3Client = new S3Client({
         });
         categoryData['--'] = ['--'];
         setCategories(categoryData);
+		
+    setLocalCategoryID(categoryID);
+    onCategoryChange(categoryID); // Send to parent
       } catch (err) {
         console.error('Error fetching categories:', err);
       } finally {

@@ -22,6 +22,12 @@ function App() {
   const [processingGroups, setProcessingGroups] = useState([]);
     const [price, setPrice] = useState('');
     const [sku, setSKU] = useState('');
+  const [categoryID, setCategoryID] = useState('');
+  
+   const handleCategoryChange = (newCategoryID) => {
+    setCategoryID(newCategoryID);
+    console.log('Updated categoryID in parent:', newCategoryID);
+  };
 
   const handlePriceUpdate = (newPrice) => {
     setPrice(newPrice);
@@ -208,9 +214,10 @@ const downloadListingsAsZip = () => {
     const categoryId = listing.categoryId || '';
     const title = listing.title ? listing.title.replace(/\r?\n|\r/g, ' ').replace(/"/g, '""') : '';
     const photoUrls = newImageGroups[index];
+	const formattedUrls = photoUrls.join('||');
     const description = listing.description ? listing.description.replace(/\r?\n|\r/g, ' ').replace(/"/g, '""') : '';
 
-    const line = `Draft,${sku},${categoryId},"${title}",,${price},1,"${photoUrls}",3000,"${description}",FixedPrice`;
+    const line = `Draft,${sku},${categoryId},"${title}",,${price},1,${formattedUrls},3000,"${description}",FixedPrice`;
 
     const fileName = `listing_${index + 1}${title ? '_' + title.replace(/[^a-z0-9]/gi, '_').toLowerCase().slice(0, 30) : ''}.csv`;
 
@@ -313,6 +320,7 @@ const downloadListingsAsZip = () => {
 		  sku={sku} 
 		  onSKUChange={handleSKUUpdate}
 		  onImageGroupsChange={handleImageGroupsUpdate}
+		  onCategoryChange={handleCategoryChange}
         />
 
         <section className="preview-section">

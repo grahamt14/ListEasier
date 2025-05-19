@@ -193,36 +193,42 @@ const uploadToS3 = async (file) => {
 
     reader.onload = async (e) => {
       try {
-        const dataUrl = e.target.result;
-        const base64Content = dataUrl.split(',')[1];
-        const binaryData = Buffer.from(base64Content, 'base64');
+        // Read the file as an ArrayBuffer which works in browsers
+        const arrayBuffer = e.target.result;
         
-        // Upload file with proper binary content
+        // Create a Blob from the ArrayBuffer with the correct MIME type
+        const blob = new Blob([arrayBuffer], { type: file.type });
+        
+        // Upload file with Blob as the Body
         const fileName = `${Date.now()}_${file.name}`;
         const uploadParams = {
           Bucket: BUCKET_NAME,
           Key: fileName,
-          Body: binaryData,
+          Body: blob,
           ContentType: file.type,
           ACL: "public-read",
         };
 
         try {
+          console.log("Attempting to upload:", fileName);
           await s3Client.send(new PutObjectCommand(uploadParams));
           const s3Url = `https://${BUCKET_NAME}.s3.${REGION}.amazonaws.com/${fileName}`;
           console.log("Upload success:", s3Url);
           resolve(s3Url);
         } catch (uploadError) {
           console.error("Upload error:", uploadError);
+          console.error("Error details:", JSON.stringify(uploadError, Object.getOwnPropertyNames(uploadError)));
           reject(uploadError);
         }
       } catch (err) {
-        reject("Error reading image: " + err);
+        console.error("Error processing file:", err);
+        reject("Error processing image: " + err);
       }
     };
 
     reader.onerror = (err) => reject(err);
-    reader.readAsDataURL(file);
+    // Read as ArrayBuffer instead of DataURL
+    reader.readAsArrayBuffer(file);
   });
 };
 

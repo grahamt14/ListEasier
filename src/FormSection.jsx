@@ -505,12 +505,12 @@ const fetchEbayCategoryID = async (selectedCategory, subCategory) => {
       // Replace main filesBase64 array
         console.log(`filesBase64.length ${filesBase64.length}`);
             // Replace main filesBase64 array
-      if (filesBase64.length > 0) {
-        const mainUrls = s3UrlsList.slice(urlIndex, urlIndex + filesBase64.length);
-        console.log(`Replacing ${filesBase64.length} main images with S3 URLs`);
-        setFilesBase64(mainUrls);
-        urlIndex += filesBase64.length;
-      }
+     // if (filesBase64.length > 0) {
+     //   const mainUrls = s3UrlsList.slice(urlIndex, urlIndex + filesBase64.length);
+     //   console.log(`Replacing ${filesBase64.length} main images with S3 URLs`);
+     //   setFilesBase64(mainUrls);
+     //   urlIndex += filesBase64.length;
+    //  }
       
         console.log(`imageGroups.length ${imageGroups.length}`);
       // Replace image groups with S3 URLs

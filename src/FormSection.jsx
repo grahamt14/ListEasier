@@ -206,7 +206,6 @@ const uploadToS3 = async (file) => {
           Key: fileName,
           Body: new Uint8Array(arrayBuffer),  // Convert to Uint8Array which AWS SDK can handle
           ContentType: file.type,
-          ACL: "public-read",
         };
 
         console.log("Preparing to upload:", fileName);

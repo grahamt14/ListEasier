@@ -174,39 +174,45 @@ function App() {
   };
 
   // Function to download all listings as a zip file
-  const downloadListingsAsZip = () => {
-    // Filter out empty or null responses
-    const validResponses = responseData.filter(response => 
-      response && !response.error
-    );
-    
-    if (validResponses.length === 0) {
-      alert("No valid listings to download!");
-      return;
-    }
-    
-    const zip = new JSZip();
-    
-    // Add each listing as a separate JSON file
-    validResponses.forEach((listing, index) => {
-      // Create a name for the file based on the listing content
-      const fileName = `listing_${index + 1}${listing.title ? '_' + listing.title.replace(/[^a-z0-9]/gi, '_').toLowerCase() : ''}.json`;
-      
-      // Add the file to the zip
-      zip.file(fileName, JSON.stringify(listing, null, 2));
+const downloadListingsAsZip = () => {
+  // Filter out empty or null responses
+  const validResponses = responseData.filter(response =>
+    response && !response.error
+  );
+
+  if (validResponses.length === 0) {
+    alert("No valid listings to download!");
+    return;
+  }
+
+  const zip = new JSZip();
+
+  validResponses.forEach((listing, index) => {
+    const sku = listing.sku || `SKU${index + 1}`;
+    const categoryId = listing.categoryId || '';
+    const title = listing.title ? listing.title.replace(/\r?\n|\r/g, ' ').replace(/"/g, '""') : '';
+    const price = listing.price || '';
+    const photoUrls = Array.isArray(listing.photoUrls) ? listing.photoUrls.join('|') : '';
+    const description = listing.description ? listing.description.replace(/\r?\n|\r/g, ' ').replace(/"/g, '""') : '';
+
+    const line = `Draft,${sku},${categoryId},"${title}",,${price},1,"${photoUrls}",3000,"${description}",FixedPrice`;
+
+    const fileName = `listing_${index + 1}${title ? '_' + title.replace(/[^a-z0-9]/gi, '_').toLowerCase().slice(0, 30) : ''}.csv`;
+
+    zip.file(fileName, line);
+  });
+
+  // Generate the zip file and trigger download
+  zip.generateAsync({ type: "blob" })
+    .then(content => {
+      saveAs(content, `listings_${new Date().toISOString().split('T')[0]}.zip`);
+    })
+    .catch(err => {
+      console.error("Error creating zip file:", err);
+      alert("Failed to create download. Please try again.");
     });
-    
-    // Generate the zip file and trigger download
-    zip.generateAsync({ type: "blob" })
-      .then(content => {
-        // Use file-saver to save the zip
-        saveAs(content, `listings_${new Date().toISOString().split('T')[0]}.zip`);
-      })
-      .catch(err => {
-        console.error("Error creating zip file:", err);
-        alert("Failed to create download. Please try again.");
-      });
-  };
+};
+
 
   const renderResponseData = (index) => {
     const response = responseData[index];

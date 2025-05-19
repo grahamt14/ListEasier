@@ -75,6 +75,38 @@ function FormSection({
   const fileInputRef = useRef(null);
 
   const [fieldSelections, setFieldSelections] = useState({});
+  
+  const handleClearAllLocal = () => {
+  // Reset all local state
+  setSelectedCategory("--");
+  setSubcategories(categories["--"] || ["--"]);
+  setFieldSelections({});
+  setCategoryFields([]);
+  setLocalCategoryID('');
+  setRawFiles([]);
+  setRawImageGroups([[]]);
+  setSelectedImages([]);
+  setLocalImageGroups([]);
+  
+  // Reset parent state through props
+  setFilesBase64([]);
+  setCategory("--");
+  setsubCategory("--");
+  setErrorMessages([]);
+  setImageGroups([[]]);
+  setBatchSize(0);
+  onPriceChange("");
+  onSKUChange("");
+  onImageGroupsChange([[]], [[]]);
+  onCategoryChange("");
+  
+  // Reset the file input
+  if (fileInputRef.current) {
+    fileInputRef.current.value = "";
+  }
+  
+  setIsDirty(false);
+};
 
   const client = new DynamoDBClient({
     region: 'us-east-2',
@@ -773,7 +805,10 @@ const handleGenerateListingWithUpload = async () => {
 
       <div className="button-group">
         <button className="primary" disabled={!selectedImages.length} onClick={handleGroupSelected}>Group Selected</button>
-        <button className="danger" onClick={handleClearAll}>Clear All</button>
+        <button className="danger" onClick={() => {
+  handleClearAllLocal();
+  if (handleClearAll) handleClearAll();
+}}>Clear All</button>
       </div>
 
       <div className="generate-area" onMouseEnter={() => !isValidSelection && setShowTooltip(true)} onMouseLeave={() => setShowTooltip(false)}>

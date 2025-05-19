@@ -556,11 +556,26 @@ const handleGenerateListingWithUpload = async () => {
     
     // Replace main filesBase64 array
     const newFilesBase64 = [];
+    let mainUrlsUsed = 0;
     if (filesBase64.length > 0) {
-      const mainUrls = s3UrlsList.slice(urlIndex, urlIndex + filesBase64.length);
-      console.log(`Replacing ${filesBase64.length} main images with S3 URLs`);
+      const availableUrls = s3UrlsList.length - urlIndex;
+      const urlsToUse = Math.min(filesBase64.length, availableUrls);
+      const mainUrls = s3UrlsList.slice(urlIndex, urlIndex + urlsToUse);
+      console.log(`Replacing ${urlsToUse} main images with S3 URLs`);
       newFilesBase64.push(...mainUrls);
-      urlIndex += filesBase64.length;
+      urlIndex += urlsToUse;
+      mainUrlsUsed = urlsToUse;
+    }
+    
+    // Create new image groups based on batchSize for the main pool images
+    const mainImageGroups = [];
+    if (filesBase64.length > 0 && batchSize > 0) {
+      for (let i = 0; i < mainUrlsUsed; i += batchSize) {
+        const groupUrls = newFilesBase64.slice(i, i + batchSize);
+        if (groupUrls.length > 0) {
+          mainImageGroups.push(groupUrls);
+        }
+      }
     }
     
     // Replace image groups with S3 URLs
@@ -569,10 +584,17 @@ const handleGenerateListingWithUpload = async () => {
       for (let i = 0; i < imageGroups.length; i++) {
         const group = imageGroups[i];
         if (group && group.length > 0) {
-          const groupUrls = s3UrlsList.slice(urlIndex, urlIndex + group.length);
-          console.log(`Replacing group ${i} with ${groupUrls.length} S3 URLs`);
-          newImageGroups.push(groupUrls);
-          urlIndex += group.length;
+          const availableUrls = s3UrlsList.length - urlIndex;
+          const urlsToUse = Math.min(group.length, availableUrls);
+          if (urlsToUse > 0) {
+            const groupUrls = s3UrlsList.slice(urlIndex, urlIndex + urlsToUse);
+            console.log(`Replacing group ${i} with ${groupUrls.length} S3 URLs`);
+            newImageGroups.push(groupUrls);
+            urlIndex += urlsToUse;
+          } else {
+            // If we've run out of S3 URLs, log a warning
+            console.warn(`Warning: Not enough S3 URLs for group ${i}`);
+          }
         } else if (i === imageGroups.length - 1) {
           // Keep the last empty group
           newImageGroups.push([]);
@@ -580,16 +602,31 @@ const handleGenerateListingWithUpload = async () => {
       }
     }
     
+    // Combine the main image groups with the existing groups
+    const finalImageGroups = [...newImageGroups];
+    
+    // Add the created main image groups if they don't already exist
+    if (mainImageGroups.length > 0) {
+      mainImageGroups.forEach(group => {
+        // Only add the group if it's not empty
+        if (group.length > 0) {
+          finalImageGroups.push(group);
+        }
+      });
+    }
+    
     // Make sure we have an empty group at the end
-    if (newImageGroups.length === 0 || newImageGroups[newImageGroups.length - 1].length > 0) {
-      newImageGroups.push([]);
+    if (finalImageGroups.length === 0 || finalImageGroups[finalImageGroups.length - 1].length > 0) {
+      finalImageGroups.push([]);
     }
     
     // Pass the updated images to parent BEFORE calling handleGenerateListing
-    onImageGroupsChange(newImageGroups);
+    console.log('Sending finalImageGroups to parent:', finalImageGroups);
+    onImageGroupsChange(finalImageGroups);
     
     // Update parent state with URLs instead of base64 images
-    setFilesBase64(newFilesBase64);
+    // We'll clear filesBase64 since we've moved all images to groups
+    setFilesBase64([]);
     
     // Fetch the eBay category ID
     const ebayCategoryID = await fetchEbayCategoryID(selectedCategory, subCategory);
@@ -597,7 +634,7 @@ const handleGenerateListingWithUpload = async () => {
     onCategoryChange(ebayCategoryID);
     
     // Update local state after parent state
-    setLocalImageGroups(newImageGroups);
+    setLocalImageGroups(finalImageGroups);
     
     // Clear raw files state
     setRawFiles([]);
@@ -618,6 +655,10 @@ const handleGenerateListingWithUpload = async () => {
   
   console.log('🏁 Exiting handleGenerateListingWithUpload');
 };
+
+
+
+
   const isValidSelection = selectedCategory !== "--" && subCategory !== "--";
 
   const ProgressBar = ({ progress }) => (

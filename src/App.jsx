@@ -20,11 +20,14 @@ function App() {
   const [totalChunks, setTotalChunks] = useState(0);
   const [completedChunks, setCompletedChunks] = useState(0);
   const [processingGroups, setProcessingGroups] = useState([]);
-    const [price, setPrice] = useState('');
-    const [sku, setSKU] = useState('');
+  const [price, setPrice] = useState('');
+  const [sku, setSKU] = useState('');
   const [categoryID, setCategoryID] = useState('');
   
-   const handleCategoryChange = (newCategoryID) => {
+  // Store S3 image URLs separately from base64 images
+  const [s3ImageGroups, setS3ImageGroups] = useState([[]]);
+  
+  const handleCategoryChange = (newCategoryID) => {
     setCategoryID(newCategoryID);
     console.log('Updated categoryID in parent:', newCategoryID);
   };
@@ -33,11 +36,9 @@ function App() {
     setPrice(newPrice);
   };
   
-    const handleSKUUpdate = (newSKU) => {
+  const handleSKUUpdate = (newSKU) => {
     setSKU(newSKU);
   };
-  
-
 
   // Effect to log responseData changes for debugging
   useEffect(() => {
@@ -79,43 +80,38 @@ function App() {
     setIsDirty(true);
   };
   
-   const [newImageGroups, setNewImageGroups] = useState([]);
+  // Updated function to store S3 URLs properly
+  const handleImageGroupsUpdate = (groups) => {
+    console.log('Received updated image groups from child:', groups);
+    
+    // Store both the regular image groups (for display) and S3 URLs separately
+    // This ensures we have the correct URLs for the CSV export
+    
+    // Check if the current imageGroups has an empty group at the end
+    const hasEmptyGroupAtEnd = imageGroups.length > 0 && 
+                               imageGroups[imageGroups.length - 1].length === 0;
+    
+    // Create the new image groups, ensuring we have an empty group at the end
+    let newGroups;
+    if (hasEmptyGroupAtEnd && groups[groups.length - 1].length > 0) {
+      // If the incoming groups don't have an empty group at the end but we need one
+      newGroups = [...groups, []];
+    } else if (!hasEmptyGroupAtEnd && groups[groups.length - 1].length === 0) {
+      // If the incoming groups have an empty group at the end but we don't need one
+      newGroups = groups.slice(0, -1);
+    } else {
+      // Otherwise, just use the incoming groups as-is
+      newGroups = [...groups];
+    }
+    
+    // Update the state with the new groups for display
+    setImageGroups(newGroups);
+    
+    // Store the S3 URLs separately for download
+    setS3ImageGroups(groups);
+  };
 
-// Updated handleImageGroupsUpdate function for App.jsx
-// Add this function to your App.jsx component
-
-const handleImageGroupsUpdate = (groups) => {
-  console.log('Received updated image groups from child:', groups);
-  
-  // This function is called from FormSection when it uploads images to S3
-  // Replace the existing groups with the new S3 URL groups
-  // BUT preserve the empty group at the end
-  
-  // Check if the current imageGroups has an empty group at the end
-  const hasEmptyGroupAtEnd = imageGroups.length > 0 && 
-                             imageGroups[imageGroups.length - 1].length === 0;
-  
-  // Create the new image groups, ensuring we have an empty group at the end
-  let newGroups;
-  if (hasEmptyGroupAtEnd && groups[groups.length - 1].length > 0) {
-    // If the incoming groups don't have an empty group at the end but we need one
-    newGroups = [...groups, []];
-  } else if (!hasEmptyGroupAtEnd && groups[groups.length - 1].length === 0) {
-    // If the incoming groups have an empty group at the end but we don't need one
-    newGroups = groups.slice(0, -1);
-  } else {
-    // Otherwise, just use the incoming groups as-is
-    newGroups = [...groups];
-  }
-  
-  // Update the state with the new groups
-  setImageGroups(newGroups);
-  
-  // Also update newImageGroups state which is used for the CSV download
-  setNewImageGroups(groups);
-};
-
- const handleGenerateListing = async () => {
+  const handleGenerateListing = async () => {
   // 1. Gather all non-empty groups
   const nonEmptyGroups = imageGroups.filter(g => g.length > 0);
 
@@ -129,6 +125,7 @@ const handleImageGroupsUpdate = (groups) => {
   console.log(`filesBase64.length ${filesBase64.length}`);
   let allGroupsToProcess = [...nonEmptyGroups];
   let newGroups = [];
+  let s3GroupsForDownload = [...nonEmptyGroups]; // Special array for tracking s3 URLs
   
   if (filesBase64.length > 0 && batchSize > 0) {
     // Create new groups from the pool images
@@ -139,6 +136,9 @@ const handleImageGroupsUpdate = (groups) => {
     
     // Add pool groups to processing list
     allGroupsToProcess = [...nonEmptyGroups, ...poolGroups];
+    
+    // Track these separately for download later
+    s3GroupsForDownload = [...nonEmptyGroups, ...poolGroups];
     
     // Update imageGroups to include these new groups from the pool
     // BUT don't include the existing nonEmptyGroups again (this was causing duplication)
@@ -157,8 +157,10 @@ const handleImageGroupsUpdate = (groups) => {
     newGroups = [...nonEmptyGroups];
   }
   
-  // Store the groups in newImageGroups state for download
-  setNewImageGroups(newGroups);
+  // Update the S3 image groups state
+  // If these are already S3 URLs, use them
+  // If they're base64, they should have been uploaded via the handleGenerateListingWithUpload function
+  setS3ImageGroups(s3GroupsForDownload);
 
   // 3. Initialize UI state
   setTotalChunks(allGroupsToProcess.length);
@@ -169,7 +171,8 @@ const handleImageGroupsUpdate = (groups) => {
   setProcessingGroups(Array(allGroupsToProcess.length).fill(true));
 
   // 4. Prepare selected category options JSON
-  const selectedCategoryOptions = getSelectedCategoryOptionsJSON(fieldSelections);
+  const selectedCategoryOptions = getSelectedCategoryOptionsJSON(fieldSelections, price, sku);
+  console.log("Selected category options:", selectedCategoryOptions);
 
   // 5. Fire off each fetch separately and update state upon completion
   allGroupsToProcess.forEach((group, idx) => {
@@ -251,13 +254,14 @@ const handleImageGroupsUpdate = (groups) => {
     setBatchSize(0);
     setSelectedImages([]);
     setImageGroups([[]]);
+    setS3ImageGroups([[]]);  // Clear the S3 URLs too
     setResponseData([]);
     setIsLoading(false);
     setIsDirty(true);
     setProcessingGroups([]);
   };
 
-const downloadListingsAsZip = () => {
+ const downloadListingsAsZip = () => {
   // Filter out empty or null responses
   const validResponses = responseData.filter(response =>
     response && !response.error
@@ -272,28 +276,37 @@ const downloadListingsAsZip = () => {
 
   // Debug logs to help understand what data we're working with
   console.log("Valid responses:", validResponses.length);
-  console.log("newImageGroups:", newImageGroups);
+  console.log("s3ImageGroups:", s3ImageGroups);
   console.log("imageGroups:", imageGroups);
 
   validResponses.forEach((listing, index) => {
     const title = listing.title ? listing.title.replace(/\r?\n|\r/g, ' ').replace(/"/g, '""') : '';
     
-    // Safety check for photoUrls - use the corresponding image group if available
+    // Use S3 URLs for the CSV when available
     let photoUrls = [];
     
-    // First try to use newImageGroups (which should have S3 URLs)
-    if (newImageGroups && Array.isArray(newImageGroups) && index < newImageGroups.length && Array.isArray(newImageGroups[index])) {
-      photoUrls = newImageGroups[index];
-      console.log(`Using newImageGroups for index ${index}:`, photoUrls);
-    } 
-    // Fall back to imageGroups if necessary
-    else if (imageGroups && Array.isArray(imageGroups) && index < imageGroups.length && Array.isArray(imageGroups[index])) {
-      photoUrls = imageGroups[index];
-      console.log(`Using imageGroups for index ${index}:`, photoUrls);
+    // First check if we have S3 URLs available for this group
+    if (s3ImageGroups && Array.isArray(s3ImageGroups) && index < s3ImageGroups.length && Array.isArray(s3ImageGroups[index])) {
+      photoUrls = s3ImageGroups[index].filter(url => url && !url.startsWith('data:'));
+      console.log(`Using s3ImageGroups for index ${index}:`, photoUrls);
       
-      // Check if these are base64 images and log a warning
-      if (photoUrls.length > 0 && photoUrls[0].startsWith('data:')) {
-        console.warn(`Warning: Using base64 images for listing ${index} instead of S3 URLs. These won't work in eBay listings.`);
+      // If we found base64 images in s3ImageGroups (which shouldn't happen), log a warning
+      if (s3ImageGroups[index].some(url => url && url.startsWith('data:'))) {
+        console.warn(`Warning: Found base64 images in s3ImageGroups for listing ${index}. These won't be included in the CSV.`);
+      }
+    }
+    
+    // If we didn't get valid URLs from s3ImageGroups, check imageGroups as a fallback
+    if (photoUrls.length === 0) {
+      if (imageGroups && Array.isArray(imageGroups) && index < imageGroups.length && Array.isArray(imageGroups[index])) {
+        // Only use URLs that are not base64 data
+        photoUrls = imageGroups[index].filter(url => url && !url.startsWith('data:'));
+        
+        if (photoUrls.length > 0) {
+          console.log(`Using imageGroups for index ${index}:`, photoUrls);
+        } else if (imageGroups[index].some(url => url && url.startsWith('data:'))) {
+          console.warn(`Warning: Only found base64 images for listing ${index}. These won't work in eBay listings.`);
+        }
       }
     }
     
@@ -324,7 +337,6 @@ Action(SiteID=US|Country=US|Currency=USD|Version=1193|CC=UTF-8),Custom label (SK
       alert("Failed to create download. Please try again.");
     });
 };
-
 
   const renderResponseData = (index) => {
     const response = responseData[index];
@@ -405,12 +417,12 @@ Action(SiteID=US|Country=US|Currency=USD|Version=1193|CC=UTF-8),Custom label (SK
           Spinner={Spinner}
           fieldSelections={fieldSelections}  // Pass fieldSelections down
           setFieldSelections={setFieldSelections}  // Pass setter down
-		  price={price} 
-		  onPriceChange={handlePriceUpdate}
-		  sku={sku} 
-		  onSKUChange={handleSKUUpdate}
-		  onImageGroupsChange={handleImageGroupsUpdate}
-		  onCategoryChange={handleCategoryChange}
+          price={price} 
+          onPriceChange={handlePriceUpdate}
+          sku={sku} 
+          onSKUChange={handleSKUUpdate}
+          onImageGroupsChange={handleImageGroupsUpdate}
+          onCategoryChange={handleCategoryChange}
         />
 
         <section className="preview-section">

@@ -84,14 +84,14 @@ function FormSection({
   const BUCKET_NAME = "listeasierimages"; // Update your bucket name
   const IDENTITY_POOL_ID = "us-east-2:f81d1240-32a8-4aff-87e8-940effdf5908"; // Update your Identity Pool ID
 
-  const s3Client = new S3Client({
-    region: REGION,
-    credentials: fromCognitoIdentityPool({
-      clientConfig: { region: REGION },
-      identityPoolId: IDENTITY_POOL_ID,
-    }),
-  forcePathStyle: true,  // Try this to fix connection issues
-  });
+// Update your S3 client configuration
+const s3Client = new S3Client({
+  region: REGION,
+  credentials: fromCognitoIdentityPool({
+    clientConfig: { region: REGION },
+    identityPoolId: IDENTITY_POOL_ID,
+  }),
+});
 
   useEffect(() => {
     const fetchCategories = async () => {
@@ -194,49 +194,28 @@ function FormSection({
     reader.onload = async (e) => {
       try {
         const dataUrl = e.target.result;
-        const img = new Image();
-
-        img.onload = async () => {
-          // Resize logic — optional and currently unused for upload
-          const maxWidth = 800;
-          let width = img.width;
-          let height = img.height;
-
-          if (width > maxWidth) {
-            height = Math.floor(height * (maxWidth / width));
-            width = maxWidth;
-          }
-
-          const canvas = document.createElement("canvas");
-          canvas.width = width;
-          canvas.height = height;
-
-          const ctx = canvas.getContext("2d");
-          ctx.drawImage(img, 0, 0, width, height);
-
-          // Upload the original file using .stream() to avoid getReader error
-          const fileName = `${Date.now()}_${file.name}`;
-          const uploadParams = {
-            Bucket: BUCKET_NAME,
-            Key: fileName,
-            Body: file.stream(), // ✅ FIXED: Use stream for compatibility
-            ContentType: file.type,
-            ACL: "public-read",
-          };
-
-          try {
-            await s3Client.send(new PutObjectCommand(uploadParams));
-            const s3Url = `https://${BUCKET_NAME}.s3.${REGION}.amazonaws.com/${fileName}`;
-            console.log("Upload success:", s3Url);
-            resolve(s3Url);
-          } catch (uploadError) {
-            console.error("Upload error:", uploadError);
-            reject(uploadError);
-          }
+        const base64Content = dataUrl.split(',')[1];
+        const binaryData = Buffer.from(base64Content, 'base64');
+        
+        // Upload file with proper binary content
+        const fileName = `${Date.now()}_${file.name}`;
+        const uploadParams = {
+          Bucket: BUCKET_NAME,
+          Key: fileName,
+          Body: binaryData,
+          ContentType: file.type,
+          ACL: "public-read",
         };
 
-        img.onerror = (err) => reject(err);
-        img.src = dataUrl;
+        try {
+          await s3Client.send(new PutObjectCommand(uploadParams));
+          const s3Url = `https://${BUCKET_NAME}.s3.${REGION}.amazonaws.com/${fileName}`;
+          console.log("Upload success:", s3Url);
+          resolve(s3Url);
+        } catch (uploadError) {
+          console.error("Upload error:", uploadError);
+          reject(uploadError);
+        }
       } catch (err) {
         reject("Error reading image: " + err);
       }

@@ -81,34 +81,41 @@ function App() {
   };
   
   // Updated function to store S3 URLs properly
-  const handleImageGroupsUpdate = (groups) => {
-    console.log('Received updated image groups from child:', groups);
-    
-    // Store both the regular image groups (for display) and S3 URLs separately
-    // This ensures we have the correct URLs for the CSV export
-    
-    // Check if the current imageGroups has an empty group at the end
-    const hasEmptyGroupAtEnd = imageGroups.length > 0 && 
-                               imageGroups[imageGroups.length - 1].length === 0;
-    
-    // Create the new image groups, ensuring we have an empty group at the end
-    let newGroups;
-    if (hasEmptyGroupAtEnd && groups[groups.length - 1].length > 0) {
-      // If the incoming groups don't have an empty group at the end but we need one
-      newGroups = [...groups, []];
-    } else if (!hasEmptyGroupAtEnd && groups[groups.length - 1].length === 0) {
-      // If the incoming groups have an empty group at the end but we don't need one
-      newGroups = groups.slice(0, -1);
-    } else {
-      // Otherwise, just use the incoming groups as-is
-      newGroups = [...groups];
-    }
-    
-    // Update the state with the new groups for display
-    setImageGroups(newGroups);
-    
-    // Store the S3 URLs separately for download
-    // Make sure we're actually storing S3 URLs, not base64 data
+ const handleImageGroupsUpdate = (groups, s3Groups = null) => {
+  console.log('Received updated image groups from child:', groups);
+  console.log('Received S3 image groups from child:', s3Groups);
+  
+  // Store both the regular image groups (for display) and S3 URLs separately
+  // This ensures we have the correct URLs for the CSV export
+  
+  // Check if the current imageGroups has an empty group at the end
+  const hasEmptyGroupAtEnd = imageGroups.length > 0 && 
+                             imageGroups[imageGroups.length - 1].length === 0;
+  
+  // Create the new image groups, ensuring we have an empty group at the end
+  let newGroups;
+  if (hasEmptyGroupAtEnd && groups[groups.length - 1].length > 0) {
+    // If the incoming groups don't have an empty group at the end but we need one
+    newGroups = [...groups, []];
+  } else if (!hasEmptyGroupAtEnd && groups[groups.length - 1].length === 0) {
+    // If the incoming groups have an empty group at the end but we don't need one
+    newGroups = groups.slice(0, -1);
+  } else {
+    // Otherwise, just use the incoming groups as-is
+    newGroups = [...groups];
+  }
+  
+  // Update the state with the new groups for display
+  setImageGroups(newGroups);
+  
+  // Handle S3 URLs separately from the display groups
+  if (s3Groups) {
+    // If we explicitly received S3 URL groups, use those
+    console.log('Using provided S3 URL groups:', s3Groups);
+    setS3ImageGroups(s3Groups);
+  } else {
+    // Otherwise, try to extract S3 URLs from the display groups
+    // This is the old behavior for backward compatibility
     const s3UrlGroups = groups.map(group => {
       return group.map(url => {
         // If this is already an S3 URL, just return it
@@ -121,9 +128,11 @@ function App() {
       }).filter(url => url !== null);
     });
     
+    console.log('Extracted S3 URL groups:', s3UrlGroups);
     // Update the S3 image groups state
     setS3ImageGroups(s3UrlGroups);
-  };
+  }
+};
 
   const handleGenerateListing = async () => {
   // 1. Gather all non-empty groups

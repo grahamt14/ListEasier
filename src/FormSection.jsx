@@ -555,31 +555,35 @@ const handleGenerateListingWithUpload = async () => {
     let urlIndex = 0;
     
     // Replace main filesBase64 array
-    const newFilesBase64 = [];
+    let newFilesBase64 = [];
     let mainUrlsUsed = 0;
     if (filesBase64.length > 0) {
       const availableUrls = s3UrlsList.length - urlIndex;
       const urlsToUse = Math.min(filesBase64.length, availableUrls);
       const mainUrls = s3UrlsList.slice(urlIndex, urlIndex + urlsToUse);
       console.log(`Replacing ${urlsToUse} main images with S3 URLs`);
-      newFilesBase64.push(...mainUrls);
+      newFilesBase64 = mainUrls; // Direct assignment of URLs
       urlIndex += urlsToUse;
       mainUrlsUsed = urlsToUse;
     }
     
     // Create new image groups based on batchSize for the main pool images
     const mainImageGroups = [];
-    if (filesBase64.length > 0 && batchSize > 0) {
+    const mainS3ImageGroups = []; // Track S3 URLs separately for each group
+    if (newFilesBase64.length > 0 && batchSize > 0) {
       for (let i = 0; i < mainUrlsUsed; i += batchSize) {
         const groupUrls = newFilesBase64.slice(i, i + batchSize);
         if (groupUrls.length > 0) {
           mainImageGroups.push(groupUrls);
+          // Since these are already S3 URLs, we store them directly in s3ImageGroups too
+          mainS3ImageGroups.push(groupUrls);
         }
       }
     }
     
     // Replace image groups with S3 URLs
     const newImageGroups = [];
+    const newS3ImageGroups = []; // Track S3 URLs separately for display groups
     if (imageGroups.length > 0) {
       for (let i = 0; i < imageGroups.length; i++) {
         const group = imageGroups[i];
@@ -590,27 +594,35 @@ const handleGenerateListingWithUpload = async () => {
             const groupUrls = s3UrlsList.slice(urlIndex, urlIndex + urlsToUse);
             console.log(`Replacing group ${i} with ${groupUrls.length} S3 URLs`);
             newImageGroups.push(groupUrls);
+            // Store the same S3 URLs in the s3ImageGroups
+            newS3ImageGroups.push(groupUrls);
             urlIndex += urlsToUse;
           } else {
             // If we've run out of S3 URLs, log a warning
             console.warn(`Warning: Not enough S3 URLs for group ${i}`);
+            // Add an empty group to maintain the same structure
+            newS3ImageGroups.push([]);
           }
         } else if (i === imageGroups.length - 1) {
           // Keep the last empty group
           newImageGroups.push([]);
+          newS3ImageGroups.push([]);
         }
       }
     }
     
     // Combine the main image groups with the existing groups
     const finalImageGroups = [...newImageGroups];
+    const finalS3ImageGroups = [...newS3ImageGroups];
     
     // Add the created main image groups if they don't already exist
     if (mainImageGroups.length > 0) {
-      mainImageGroups.forEach(group => {
+      mainImageGroups.forEach((group, index) => {
         // Only add the group if it's not empty
         if (group.length > 0) {
           finalImageGroups.push(group);
+          // Also add the corresponding S3 URLs group
+          finalS3ImageGroups.push(mainS3ImageGroups[index]);
         }
       });
     }
@@ -618,11 +630,22 @@ const handleGenerateListingWithUpload = async () => {
     // Make sure we have an empty group at the end
     if (finalImageGroups.length === 0 || finalImageGroups[finalImageGroups.length - 1].length > 0) {
       finalImageGroups.push([]);
+      finalS3ImageGroups.push([]);
     }
+    
+    // Create a special payload to pass to the parent that includes both image groups and S3 URLs
+    const imageGroupsPayload = {
+      displayGroups: finalImageGroups,
+      s3Groups: finalS3ImageGroups
+    };
+    
+    // Log the payload we're sending to parent
+    console.log('Image groups payload:', imageGroupsPayload);
     
     // Pass the updated images to parent BEFORE calling handleGenerateListing
     console.log('Sending finalImageGroups to parent:', finalImageGroups);
-    onImageGroupsChange(finalImageGroups);
+    // Modified: Pass both display groups and S3 URL groups to parent
+    onImageGroupsChange(finalImageGroups, finalS3ImageGroups);
     
     // Update parent state with URLs instead of base64 images
     // We'll clear filesBase64 since we've moved all images to groups

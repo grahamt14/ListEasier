@@ -431,6 +431,154 @@ Action(SiteID=US|Country=US|Currency=USD|Version=1193|CC=UTF-8),Custom label (SK
     });
 };
 
+const downloadListingsAsCsv = () => {
+  console.log("Starting downloadListingsAsCsv function");
+  console.log("Initial responseData:", responseData);
+
+  // Filter out empty or null responses
+  const validResponses = responseData.filter(response =>
+    response && !response.error
+  );
+
+  console.log("Filtered validResponses:", validResponses);
+  console.log(`Found ${validResponses.length} valid listings to process`);
+
+  if (validResponses.length === 0) {
+    console.warn("No valid listings found, showing alert and stopping execution");
+    alert("No valid listings to download!");
+    return;
+  }
+
+  let filteredS3ImageGroups = s3ImageGroups;
+
+  if (filteredS3ImageGroups && Array.isArray(filteredS3ImageGroups)) {
+    console.log("Original s3ImageGroups length:", filteredS3ImageGroups.length);
+    filteredS3ImageGroups = filteredS3ImageGroups.filter(imageGroup =>
+      Array.isArray(imageGroup) && imageGroup.length > 0
+    );
+    console.log("Filtered s3ImageGroups length:", filteredS3ImageGroups.length);
+  }
+
+  console.log("Valid responses:", validResponses.length);
+  console.log("s3ImageGroups data structure:", s3ImageGroups);
+  console.log("imageGroups data structure:", imageGroups);
+
+  console.log(`Using categoryID: ${categoryID}`);
+  console.log(`Using SKU: ${sku}`);
+  console.log(`Using price: ${price}`);
+
+  const header = `#INFO,Version=0.0.2,Template= eBay-draft-listings-template_US,,,,,,,,
+#INFO Action and Category ID are required fields. 1) Set Action to Draft 2) Please find the category ID for your listings here: https://pages.ebay.com/sellerinformation/news/categorychanges.html,,,,,,,,,,
+"#INFO After you've successfully uploaded your draft from the Seller Hub Reports tab, complete your drafts to active listings here: https://www.ebay.com/sh/lst/drafts",,,,,,,,,,
+#INFO,,,,,,,,,,
+Action(SiteID=US|Country=US|Currency=USD|Version=1193|CC=UTF-8),Custom label (SKU),Category ID,Title,UPC,Price,Quantity,Item photo URL,Condition ID,Description,Format
+`;
+
+  let csvContent = header;
+
+  console.log("Beginning to process each listing");
+
+  validResponses.forEach((listing, index) => {
+    console.log(`---------- Processing listing ${index + 1} ----------`);
+    console.log(`Raw listing data for index ${index}:`, listing);
+
+    const title = listing.title ? listing.title.replace(/\r?\n|\r/g, ' ').replace(/"/g, '""') : '';
+    console.log(`Formatted title: "${title}"`);
+
+    let photoUrls = [];
+
+    console.log(`Attempting to find images for listing ${index}`);
+
+    if (filteredS3ImageGroups && Array.isArray(filteredS3ImageGroups) && index < filteredS3ImageGroups.length) {
+      console.log(`filteredS3ImageGroups[${index}] exists:`, filteredS3ImageGroups[index]);
+
+      if (Array.isArray(filteredS3ImageGroups[index])) {
+        const s3Urls = filteredS3ImageGroups[index].filter(url => url && typeof url === 'string' && !url.startsWith('data:'));
+        photoUrls = s3Urls;
+
+        console.log(`Found ${s3Urls.length} valid S3 URLs for index ${index}`);
+        console.log(`S3 URLs for listing ${index}:`, s3Urls);
+
+        const base64ImagesCount = filteredS3ImageGroups[index].filter(url => url && url.startsWith('data:')).length;
+        if (base64ImagesCount > 0) {
+          console.warn(`Warning: Found ${base64ImagesCount} base64 images in filteredS3ImageGroups for listing ${index}. These won't be included in the CSV.`);
+        }
+      } else {
+        console.warn(`filteredS3ImageGroups[${index}] is not an array:`, filteredS3ImageGroups[index]);
+      }
+    } else {
+      console.log(`No filteredS3ImageGroups available for index ${index}`);
+    }
+
+    if (photoUrls.length === 0) {
+      console.log(`No S3 URLs found, attempting to use imageGroups for listing ${index}`);
+
+      if (imageGroups && Array.isArray(imageGroups) && index < imageGroups.length) {
+        console.log(`imageGroups[${index}] exists:`, imageGroups[index]);
+
+        if (Array.isArray(imageGroups[index])) {
+          const standardUrls = imageGroups[index].filter(url => url && typeof url === 'string' && !url.startsWith('data:'));
+          photoUrls = standardUrls;
+
+          console.log(`Found ${standardUrls.length} valid standard URLs for index ${index}`);
+
+          if (standardUrls.length > 0) {
+            console.log(`Using imageGroups URLs for index ${index}:`, standardUrls);
+          } else {
+            const base64ImagesCount = imageGroups[index].filter(url => url && url.startsWith('data:')).length;
+            if (base64ImagesCount > 0) {
+              console.warn(`Warning: Only found ${base64ImagesCount} base64 images for listing ${index}. These won't work in eBay listings.`);
+            } else {
+              console.warn(`No valid images found for listing ${index} in either filteredS3ImageGroups or imageGroups`);
+            }
+          }
+        } else {
+          console.warn(`imageGroups[${index}] is not an array:`, imageGroups[index]);
+        }
+      } else {
+        console.log(`No imageGroups available for index ${index}`);
+      }
+    }
+
+    console.log(`Final photoUrls count for listing ${index}: ${photoUrls.length}`);
+    if (photoUrls.length === 0) {
+      console.warn(`Warning: No valid image URLs found for listing ${index}. CSV will have empty photo URLs.`);
+    }
+
+    const formattedUrls = photoUrls.filter(url => url).join('||');
+    console.log(`Formatted image URLs string length: ${formattedUrls.length} characters`);
+
+    const description = listing.description ? listing.description.replace(/\r?\n|\r/g, ' ').replace(/"/g, '""') : '';
+    console.log(`Formatted description (first 50 chars): "${description.substring(0, 50)}${description.length > 50 ? '...' : ''}"`);
+
+    const line = `Draft,${sku},${categoryID},"${title}",,${price},1,${formattedUrls},3000,"${description}",FixedPrice`;
+
+    csvContent += `${line}\n`;
+  });
+
+  console.log("All listings processed, creating Blob for CSV");
+
+  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+  const csvFileName = `listings_${new Date().toISOString().split('T')[0]}.csv`;
+
+  if (navigator.msSaveBlob) {
+    // For IE 10+
+    navigator.msSaveBlob(blob, csvFileName);
+  } else {
+    const link = document.createElement("a");
+    if (link.download !== undefined) {
+      const url = URL.createObjectURL(blob);
+      link.setAttribute("href", url);
+      link.setAttribute("download", csvFileName);
+      link.style.visibility = "hidden";
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    }
+  }
+
+  console.log("CSV download initiated");
+};
 
   const renderResponseData = (index) => {
     const response = responseData[index];
@@ -525,7 +673,7 @@ Action(SiteID=US|Country=US|Currency=USD|Version=1193|CC=UTF-8),Custom label (SK
             {hasValidListings && (
               <button 
                 className="download-button"
-                onClick={downloadListingsAsZip}
+                onClick={downloadListingsAsCsv}
                 disabled={isLoading}
               >
                 Download All Listings

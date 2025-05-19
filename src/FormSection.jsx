@@ -4,20 +4,14 @@ import { unmarshall } from '@aws-sdk/util-dynamodb';
 import { GetCommand, DynamoDBDocumentClient, ScanCommand } from '@aws-sdk/lib-dynamodb';
 import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
 import { fromCognitoIdentityPool } from "@aws-sdk/credential-provider-cognito-identity";
-import piexif from "piexifjs";
-import EXIF from 'exif-js';
 
 export const getSelectedCategoryOptionsJSON = (fieldSelections, price, sku) => {
   const output = {};
   Object.entries(fieldSelections).forEach(([label, value]) => {
-    if (value && value !== "-- Select --") {
-      output[label] = value;
-    }
+    if (value && value !== "-- Select --") output[label] = value;
   });
   if (price) output["price"] = price;
   if (sku) output["sku"] = sku;
-
-  console.log(output);
   return output;
 };
 
@@ -51,6 +45,7 @@ function FormSection({
   onImageGroupsChange,
   onCategoryChange,
 }) {
+  // State declarations
   const [selectedCategory, setSelectedCategory] = useState("--");
   const [subcategories, setSubcategories] = useState(["--"]);
   const [categoryFields, setCategoryFields] = useState([]);
@@ -58,58 +53,24 @@ function FormSection({
   const [showTooltip, setShowTooltip] = useState(false);
   const [categories, setCategories] = useState({});
   const [categoriesLoading, setCategoriesLoading] = useState(true);
-
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [totalFiles, setTotalFiles] = useState(0);
   const [processedFiles, setProcessedFiles] = useState(0);
-  
   const [localImageGroups, setLocalImageGroups] = useState([]);
-  
-  // Store the raw files instead of immediately uploading them
   const [rawFiles, setRawFiles] = useState([]);
-
-  // Add a state to track raw files in image groups
   const [rawImageGroups, setRawImageGroups] = useState([[]]);
-
-  const fileInputRef = useRef(null);
-
   const [fieldSelections, setFieldSelections] = useState({});
   
-  const handleClearAllLocal = () => {
-  // Reset all local state
-  setSelectedCategory("--");
-  setSubcategories(categories["--"] || ["--"]);
-  setFieldSelections({});
-  setCategoryFields([]);
-  setLocalCategoryID('');
-  setRawFiles([]);
-  setRawImageGroups([[]]);
-  setSelectedImages([]);
-  setLocalImageGroups([]);
-  
-  // Reset parent state through props
-  setFilesBase64([]);
-  setCategory("--");
-  setsubCategory("--");
-  setErrorMessages([]);
-  setImageGroups([[]]);
-  setBatchSize(0);
-  onPriceChange("");
-  onSKUChange("");
-  onImageGroupsChange([[]], [[]]);
-  onCategoryChange("");
-  
-  // Reset the file input
-  if (fileInputRef.current) {
-    fileInputRef.current.value = "";
-  }
-  
-  setIsDirty(false);
-};
+  const fileInputRef = useRef(null);
+
+  // AWS Configuration
+  const REGION = "us-east-2";
+  const BUCKET_NAME = "listeasier";
+  const IDENTITY_POOL_ID = "us-east-2:f81d1240-32a8-4aff-87e8-940effdf5908";
 
   const client = new DynamoDBClient({
-    region: 'us-east-2',
+    region: REGION,
     credentials: {
       accessKeyId: 'AKIA5QMLZNPJMZIFQFFS',
       secretAccessKey: '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',
@@ -118,22 +79,48 @@ function FormSection({
 
   const docClient = DynamoDBDocumentClient.from(client);
   
-  // AWS config
-  const REGION = "us-east-2"; // Update your region
-  const BUCKET_NAME = "listeasier"; // Update your bucket name
-  const IDENTITY_POOL_ID = "us-east-2:f81d1240-32a8-4aff-87e8-940effdf5908"; // Update your Identity Pool ID
+  const s3Client = new S3Client({
+    region: REGION,
+    credentials: fromCognitoIdentityPool({
+      clientConfig: { region: REGION },
+      identityPoolId: IDENTITY_POOL_ID,
+    }),
+    endpoint: `https://s3.${REGION}.amazonaws.com`,
+    forcePathStyle: false,
+  });
 
-const s3Client = new S3Client({
-  region: REGION,
-  credentials: fromCognitoIdentityPool({
-    clientConfig: { region: REGION },
-    identityPoolId: IDENTITY_POOL_ID,
-  }),
-  // Use standard endpoint URL format rather than path-style
-  endpoint: `https://s3.${REGION}.amazonaws.com`,
-  forcePathStyle: false,
-});
+  // Clear all form data
+  const handleClearAllLocal = () => {
+    setSelectedCategory("--");
+    setSubcategories(categories["--"] || ["--"]);
+    setFieldSelections({});
+    setCategoryFields([]);
+    setLocalCategoryID('');
+    setRawFiles([]);
+    setRawImageGroups([[]]);
+    setSelectedImages([]);
+    setLocalImageGroups([]);
+    
+    // Reset parent state
+    setFilesBase64([]);
+    setCategory("--");
+    setsubCategory("--");
+    setErrorMessages([]);
+    setImageGroups([[]]);
+    setBatchSize(0);
+    onPriceChange("");
+    onSKUChange("");
+    onImageGroupsChange([[]], [[]]);
+    onCategoryChange("");
+    
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
+    
+    setIsDirty(false);
+  };
 
+  // Fetch categories on component mount
   useEffect(() => {
     const fetchCategories = async () => {
       try {
@@ -147,7 +134,6 @@ const s3Client = new S3Client({
         response.Items.forEach(item => {
           const category = item.Category;
           const subcategory = item.SubCategory;
-          const categoryID = item.EbayCategoryID;
           if (!categoryData[category]) {
             categoryData[category] = [];
           }
@@ -155,7 +141,6 @@ const s3Client = new S3Client({
         });
         categoryData['--'] = ['--'];
         setCategories(categoryData);
-		
       } catch (err) {
         console.error('Error fetching categories:', err);
       } finally {
@@ -166,6 +151,7 @@ const s3Client = new S3Client({
     fetchCategories();
   }, []);
 
+  // Fetch category fields when subcategory changes
   useEffect(() => {
     if (!subCategory || subCategory === "--") {
       setCategoryFields([]);
@@ -202,16 +188,14 @@ const s3Client = new S3Client({
     fetchCategoryFields();
   }, [subCategory]);
 
-  // Add this effect to keep filesBase64 in sync with parent
+  // Synchronize with parent component
   useEffect(() => {
-    // This effect will run whenever the parent's filesBase64 changes
-    // No need to update if the lengths match (would create an infinite loop)
     if (rawFiles.length > 0 && filesBase64.length === 0) {
-      console.log('Syncing with parent - clearing local raw files');
       setRawFiles([]);
     }
   }, [filesBase64]);
 
+  // Category change handler
   const handleCategoryChange = (e) => {
     const cat = e.target.value;
     setSelectedCategory(cat);
@@ -223,6 +207,7 @@ const s3Client = new S3Client({
     validateSelection(cat, defaultSub);
   };
 
+  // Subcategory change handler
   const handleSubCategoryChange = (e) => {
     const sub = e.target.value;
     setsubCategory(sub);
@@ -230,68 +215,57 @@ const s3Client = new S3Client({
     validateSelection(selectedCategory, sub);
   };
 
+  // Validate category and subcategory selection
   const validateSelection = (cat, sub) => {
+    const errorMsg = "Please select a valid category and subcategory.";
     if (cat === "--" || sub === "--") {
-      if (!errorMessages.includes("Please select a valid category and subcategory.")) {
-        setErrorMessages(prev => [...prev, "Please select a valid category and subcategory."]);
+      if (!errorMessages.includes(errorMsg)) {
+        setErrorMessages(prev => [...prev, errorMsg]);
       }
     } else {
-      setErrorMessages(prev => prev.filter(msg => msg !== "Please select a valid category and subcategory."));
+      setErrorMessages(prev => prev.filter(msg => msg !== errorMsg));
     }
   };
 
-const uploadToS3 = async (file) => {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    
-    reader.onload = async () => {
-      try {
-        // Generate a unique file name
-        const fileName = `${Date.now()}_${file.name}`;
-        
-        // Convert the file to ArrayBuffer instead of using the File object directly
-        const arrayBuffer = reader.result;
-        
-        const uploadParams = {
-          Bucket: BUCKET_NAME,
-          Key: fileName,
-          Body: new Uint8Array(arrayBuffer),  // Convert to Uint8Array which AWS SDK can handle
-          ContentType: file.type,
-          ACL: "public-read",
-        };
-
-
-        console.log("Preparing to upload:", fileName);
-        
+  // Upload file to S3
+  const uploadToS3 = async (file) => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      
+      reader.onload = async () => {
         try {
-          const command = new PutObjectCommand(uploadParams);
-          await s3Client.send(command);
+          const fileName = `${Date.now()}_${file.name}`;
+          const arrayBuffer = reader.result;
           
-          const s3Url = `https://${BUCKET_NAME}.s3.${REGION}.amazonaws.com/${fileName}`;
-          console.log("Upload success:", s3Url);
-          resolve(s3Url);
-        } catch (uploadError) {
-          console.error("Upload error:", uploadError);
-          console.error("Error details:", JSON.stringify(uploadError, Object.getOwnPropertyNames(uploadError)));
-          reject(uploadError);
+          const uploadParams = {
+            Bucket: BUCKET_NAME,
+            Key: fileName,
+            Body: new Uint8Array(arrayBuffer),
+            ContentType: file.type,
+            ACL: "public-read",
+          };
+          
+          try {
+            const command = new PutObjectCommand(uploadParams);
+            await s3Client.send(command);
+            
+            const s3Url = `https://${BUCKET_NAME}.s3.${REGION}.amazonaws.com/${fileName}`;
+            resolve(s3Url);
+          } catch (uploadError) {
+            console.error("Upload error:", uploadError);
+            reject(uploadError);
+          }
+        } catch (err) {
+          reject("Error uploading: " + err.message);
         }
-      } catch (err) {
-        console.error("Error in upload process:", err);
-        reject("Error uploading: " + err.message);
-      }
-    };
+      };
 
-    reader.onerror = (err) => {
-      console.error("FileReader error:", err);
-      reject(err);
-    };
-    
-    // Read the file as ArrayBuffer instead of just a small slice
-    reader.readAsArrayBuffer(file);
-  });
-};
+      reader.onerror = (err) => reject(err);
+      reader.readAsArrayBuffer(file);
+    });
+  };
 
-
+  // Convert image to base64
   const convertToBase64 = (file) => {
     return new Promise((resolve, reject) => {
       const img = new Image();
@@ -315,6 +289,7 @@ const uploadToS3 = async (file) => {
     });
   };
 
+  // File input change handler
   const handleFileChange = async (e) => {
     const files = Array.from(e.target.files);
     if (files.length === 0) return;
@@ -329,11 +304,8 @@ const uploadToS3 = async (file) => {
 
     for (let i = 0; i < files.length; i++) {
       try {
-        // Convert to base64 for preview
         const base64 = await convertToBase64(files[i]);
         base64List.push(base64);
-        
-        // Store the raw file for later upload
         newRawFiles.push(files[i]);
         
         setProcessedFiles(i + 1);
@@ -350,6 +322,7 @@ const uploadToS3 = async (file) => {
     setTimeout(() => setIsUploading(false), 500);
   };
 
+  // File drop handler
   const handleDrop = async (e) => {
     e.preventDefault();
     const imgs = Array.from(e.dataTransfer.files).filter(f => f.type.startsWith("image/"));
@@ -365,11 +338,8 @@ const uploadToS3 = async (file) => {
 
     for (let i = 0; i < imgs.length; i++) {
       try {
-        // Convert to base64 for preview
         const base64 = await convertToBase64(imgs[i]);
         base64List.push(base64);
-        
-        // Store the raw file for later upload
         newRawFiles.push(imgs[i]);
         
         setProcessedFiles(i + 1);
@@ -387,32 +357,24 @@ const uploadToS3 = async (file) => {
 
   const handleDragOver = (e) => e.preventDefault();
   const triggerFileInput = () => fileInputRef.current.click();
+  const handlePriceChange = (e) => onPriceChange(e.target.value);
+  const handleSkuChange = (e) => onSKUChange(e.target.value);
 
-  const handlePriceChange = (e) => {
-    onPriceChange(e.target.value); // Send the new value up to the parent
-  };
-
-  const handleSkuChange = (e) => {
-    onSKUChange(e.target.value); // Send the new value up to the parent
-  };
-
+  // Toggle image selection
   const toggleImageSelection = (idx) => {
     setSelectedImages(prev =>
       prev.includes(idx) ? prev.filter(i => i !== idx) : [...prev, idx]
     );
   };
 
-  // Modified to keep track of raw files in groups
+  // Group selected images
   const handleGroupSelected = () => {
-    // Get selected base64 images and raw files
     const groupImgs = selectedImages.map(i => filesBase64[i]);
     const groupRawFiles = selectedImages.map(i => rawFiles[i]);
     
-    // Remove selected images from main arrays
     const remainingBase64 = filesBase64.filter((_, i) => !selectedImages.includes(i));
     const remainingRawFiles = rawFiles.filter((_, i) => !selectedImages.includes(i));
     
-    // Update image groups - now tracking both base64 and raw files
     setImageGroups(prev => {
       let updated = [...prev];
       const firstEmptyIndex = updated.findIndex(g => g.length === 0);
@@ -427,7 +389,6 @@ const uploadToS3 = async (file) => {
       return updated;
     });
     
-    // Update raw file groups in parallel
     setRawImageGroups(prev => {
       let updated = [...prev];
       const firstEmptyIndex = updated.findIndex(g => !g || g.length === 0);
@@ -442,277 +403,214 @@ const uploadToS3 = async (file) => {
       return updated;
     });
     
-    // Update the main file arrays
     setFilesBase64(remainingBase64);
     setRawFiles(remainingRawFiles);
     setSelectedImages([]);
   };
 
-const fetchEbayCategoryID = async (selectedCategory, subCategory) => {
-  try {
-    const command = new GetCommand({
-      TableName: 'ListCategory',
-      Key: {
-        Category: selectedCategory,
-        SubCategory: subCategory,
-      },
-    });
+  // Fetch eBay category ID
+  const fetchEbayCategoryID = async (selectedCategory, subCategory) => {
+    try {
+      const command = new GetCommand({
+        TableName: 'ListCategory',
+        Key: {
+          Category: selectedCategory,
+          SubCategory: subCategory,
+        },
+      });
 
-    const response = await docClient.send(command);
-
-    if (response.Item) {
-      return response.Item.EbayCategoryID;
-    } else {
-      console.warn('No matching category found in ListCategory table.');
+      const response = await docClient.send(command);
+      return response.Item?.EbayCategoryID || null;
+    } catch (err) {
+      console.error('Error fetching EbayCategoryID:', err);
       return null;
     }
-  } catch (err) {
-    console.error('Error fetching EbayCategoryID:', err);
-    return null;
-  }
-};
+  };
 
-const handleGenerateListingWithUpload = async () => {
-  console.log('🚀 Starting handleGenerateListingWithUpload');
-  
-  try {
-    console.log('Setting isUploading to true');
-    setIsUploading(true);
-    
-    // Collect ALL raw files that need uploading
-    let allRawFiles = [...rawFiles];
-    
-    // Add raw files from image groups
-    rawImageGroups.forEach(group => {
-      if (group && group.length) {
-        allRawFiles = [...allRawFiles, ...group];
-      }
-    });
-    
-    console.log(`Total files to upload: ${allRawFiles.length}`);
-    setTotalFiles(allRawFiles.length);
-    
-    if (allRawFiles.length === 0) {
-      console.log('⚠️ No raw files to upload');
+  // Handle generate listing with upload
+  const handleGenerateListingWithUpload = async () => {
+    try {
+      setIsUploading(true);
       
-      // Handle case where we're using base64 images directly - need to attempt upload anyway
-      if (filesBase64.length > 0) {
-        console.log(`Found ${filesBase64.length} base64 images, converting to files for upload`);
-        
-        const convertedFiles = [];
-        for (let i = 0; i < filesBase64.length; i++) {
-          try {
-            // Convert base64 to a blob/file
-            const base64 = filesBase64[i];
-            const matches = base64.match(/^data:([A-Za-z-+\/]+);base64,(.+)$/);
-            
-            if (!matches || matches.length !== 3) {
-              console.warn(`Unable to parse base64 string for image ${i}`);
-              continue;
-            }
-            
-            const contentType = matches[1];
-            const base64Data = matches[2];
-            const byteCharacters = atob(base64Data);
-            const byteArrays = [];
-            
-            for (let offset = 0; offset < byteCharacters.length; offset += 512) {
-              const slice = byteCharacters.slice(offset, offset + 512);
-              const byteNumbers = new Array(slice.length);
-              for (let i = 0; i < slice.length; i++) {
-                byteNumbers[i] = slice.charCodeAt(i);
-              }
-              const byteArray = new Uint8Array(byteNumbers);
-              byteArrays.push(byteArray);
-            }
-            
-            const blob = new Blob(byteArrays, {type: contentType});
-            const fileName = `image_${Date.now()}_${i}.${contentType.split('/')[1] || 'jpg'}`;
-            const file = new File([blob], fileName, {type: contentType});
-            
-            convertedFiles.push(file);
-          } catch (error) {
-            console.error(`Error converting base64 to file for image ${i}:`, error);
-          }
+      // Collect all raw files that need uploading
+      let allRawFiles = [...rawFiles];
+      
+      rawImageGroups.forEach(group => {
+        if (group && group.length) {
+          allRawFiles = [...allRawFiles, ...group];
         }
-        
-        if (convertedFiles.length > 0) {
-          console.log(`Successfully converted ${convertedFiles.length} base64 images to files`);
-          allRawFiles = convertedFiles;
-          setTotalFiles(convertedFiles.length);
+      });
+      
+      setTotalFiles(allRawFiles.length);
+      
+      // Handle case with no raw files but base64 images
+      if (allRawFiles.length === 0) {
+        if (filesBase64.length > 0) {
+          const convertedFiles = [];
+          for (let i = 0; i < filesBase64.length; i++) {
+            try {
+              const base64 = filesBase64[i];
+              const matches = base64.match(/^data:([A-Za-z-+\/]+);base64,(.+)$/);
+              
+              if (!matches || matches.length !== 3) continue;
+              
+              const contentType = matches[1];
+              const base64Data = matches[2];
+              const byteCharacters = atob(base64Data);
+              const byteArrays = [];
+              
+              for (let offset = 0; offset < byteCharacters.length; offset += 512) {
+                const slice = byteCharacters.slice(offset, offset + 512);
+                const byteNumbers = new Array(slice.length);
+                for (let i = 0; i < slice.length; i++) {
+                  byteNumbers[i] = slice.charCodeAt(i);
+                }
+                const byteArray = new Uint8Array(byteNumbers);
+                byteArrays.push(byteArray);
+              }
+              
+              const blob = new Blob(byteArrays, {type: contentType});
+              const fileName = `image_${Date.now()}_${i}.${contentType.split('/')[1] || 'jpg'}`;
+              const file = new File([blob], fileName, {type: contentType});
+              
+              convertedFiles.push(file);
+            } catch (error) {
+              console.error(`Error converting base64 to file:`, error);
+            }
+          }
+          
+          if (convertedFiles.length > 0) {
+            allRawFiles = convertedFiles;
+            setTotalFiles(convertedFiles.length);
+          } else {
+            setIsUploading(false);
+            handleGenerateListing();
+            return;
+          }
         } else {
-          console.log('No files were successfully converted, proceeding with generate listing');
           setIsUploading(false);
           handleGenerateListing();
           return;
         }
-      } else {
-        // If there are no raw files and no base64 files, just proceed with generate listing
-        setIsUploading(false);
-        handleGenerateListing();
-        return;
       }
-    }
-    
-    // Upload all raw files to S3
-    const s3UrlsList = [];
-    
-    console.log('Beginning file upload loop');
-    for (let i = 0; i < allRawFiles.length; i++) {
-      try {
-        if (!allRawFiles[i]) {
-          console.log(`Skipping undefined file at index ${i}`);
-          continue;
-        }
-        
-        console.log(`Processing file ${i + 1}/${allRawFiles.length}: ${allRawFiles[i].name || 'unnamed file'}`);
-        
-        console.log(`Uploading file ${i + 1} to S3...`);
-        const s3Url = await uploadToS3(allRawFiles[i]);
-        console.log(`Upload successful, received S3 URL: ${s3Url}`);
-        
-        s3UrlsList.push(s3Url);
-        
-        setProcessedFiles(i + 1);
-        const progressPercent = Math.round(((i + 1) / allRawFiles.length) * 100);
-        setUploadProgress(progressPercent);
-      } catch (error) {
-        console.error(`❌ Error uploading file ${i + 1}:`, error);
-      }
-    }
-    
-    console.log(`Upload complete. Total S3 URLs: ${s3UrlsList.length}`);
-    
-    // Replace base64 images with S3 URLs
-    let urlIndex = 0;
-    
-    // Replace main filesBase64 array
-    let newFilesBase64 = [];
-    let mainUrlsUsed = 0;
-    if (filesBase64.length > 0) {
-      const availableUrls = s3UrlsList.length - urlIndex;
-      const urlsToUse = Math.min(filesBase64.length, availableUrls);
-      const mainUrls = s3UrlsList.slice(urlIndex, urlIndex + urlsToUse);
-      console.log(`Replacing ${urlsToUse} main images with S3 URLs`);
-      newFilesBase64 = mainUrls; // Direct assignment of URLs
-      urlIndex += urlsToUse;
-      mainUrlsUsed = urlsToUse;
-    }
-    
-    // Create new image groups based on batchSize for the main pool images
-    const mainImageGroups = [];
-    const mainS3ImageGroups = []; // Track S3 URLs separately for each group
-    if (newFilesBase64.length > 0 && batchSize > 0) {
-      for (let i = 0; i < mainUrlsUsed; i += batchSize) {
-        const groupUrls = newFilesBase64.slice(i, i + batchSize);
-        if (groupUrls.length > 0) {
-          mainImageGroups.push(groupUrls);
-          // Since these are already S3 URLs, we store them directly in s3ImageGroups too
-          mainS3ImageGroups.push(groupUrls);
+      
+      // Upload all raw files to S3
+      const s3UrlsList = [];
+      
+      for (let i = 0; i < allRawFiles.length; i++) {
+        try {
+          if (!allRawFiles[i]) continue;
+          
+          const s3Url = await uploadToS3(allRawFiles[i]);
+          s3UrlsList.push(s3Url);
+          
+          setProcessedFiles(i + 1);
+          setUploadProgress(Math.round(((i + 1) / allRawFiles.length) * 100));
+        } catch (error) {
+          console.error(`Error uploading file:`, error);
         }
       }
-    }
-    
-    // Replace image groups with S3 URLs
-    const newImageGroups = [];
-    const newS3ImageGroups = []; // Track S3 URLs separately for display groups
-    if (imageGroups.length > 0) {
-      for (let i = 0; i < imageGroups.length; i++) {
-        const group = imageGroups[i];
-        if (group && group.length > 0) {
-          const availableUrls = s3UrlsList.length - urlIndex;
-          const urlsToUse = Math.min(group.length, availableUrls);
-          if (urlsToUse > 0) {
-            const groupUrls = s3UrlsList.slice(urlIndex, urlIndex + urlsToUse);
-            console.log(`Replacing group ${i} with ${groupUrls.length} S3 URLs`);
-            newImageGroups.push(groupUrls);
-            // Store the same S3 URLs in the s3ImageGroups
-            newS3ImageGroups.push(groupUrls);
-            urlIndex += urlsToUse;
-          } else {
-            // If we've run out of S3 URLs, log a warning
-            console.warn(`Warning: Not enough S3 URLs for group ${i}`);
-            // Add an empty group to maintain the same structure
+      
+      // Replace base64 images with S3 URLs
+      let urlIndex = 0;
+      
+      // Replace main filesBase64 array
+      let newFilesBase64 = [];
+      let mainUrlsUsed = 0;
+      if (filesBase64.length > 0) {
+        const availableUrls = s3UrlsList.length - urlIndex;
+        const urlsToUse = Math.min(filesBase64.length, availableUrls);
+        const mainUrls = s3UrlsList.slice(urlIndex, urlIndex + urlsToUse);
+        newFilesBase64 = mainUrls;
+        urlIndex += urlsToUse;
+        mainUrlsUsed = urlsToUse;
+      }
+      
+      // Create new image groups based on batchSize for the main pool images
+      const mainImageGroups = [];
+      const mainS3ImageGroups = [];
+      if (newFilesBase64.length > 0 && batchSize > 0) {
+        for (let i = 0; i < mainUrlsUsed; i += batchSize) {
+          const groupUrls = newFilesBase64.slice(i, i + batchSize);
+          if (groupUrls.length > 0) {
+            mainImageGroups.push(groupUrls);
+            mainS3ImageGroups.push(groupUrls);
+          }
+        }
+      }
+      
+      // Replace image groups with S3 URLs
+      const newImageGroups = [];
+      const newS3ImageGroups = [];
+      if (imageGroups.length > 0) {
+        for (let i = 0; i < imageGroups.length; i++) {
+          const group = imageGroups[i];
+          if (group && group.length > 0) {
+            const availableUrls = s3UrlsList.length - urlIndex;
+            const urlsToUse = Math.min(group.length, availableUrls);
+            if (urlsToUse > 0) {
+              const groupUrls = s3UrlsList.slice(urlIndex, urlIndex + urlsToUse);
+              newImageGroups.push(groupUrls);
+              newS3ImageGroups.push(groupUrls);
+              urlIndex += urlsToUse;
+            } else {
+              newS3ImageGroups.push([]);
+            }
+          } else if (i === imageGroups.length - 1) {
+            newImageGroups.push([]);
             newS3ImageGroups.push([]);
           }
-        } else if (i === imageGroups.length - 1) {
-          // Keep the last empty group
-          newImageGroups.push([]);
-          newS3ImageGroups.push([]);
         }
       }
+      
+      // Combine the main image groups with the existing groups
+      const finalImageGroups = [...newImageGroups];
+      const finalS3ImageGroups = [...newS3ImageGroups];
+      
+      // Add the created main image groups if they don't already exist
+      if (mainImageGroups.length > 0) {
+        mainImageGroups.forEach((group, index) => {
+          if (group.length > 0) {
+            finalImageGroups.push(group);
+            finalS3ImageGroups.push(mainS3ImageGroups[index]);
+          }
+        });
+      }
+      
+      // Make sure we have an empty group at the end
+      if (finalImageGroups.length === 0 || finalImageGroups[finalImageGroups.length - 1].length > 0) {
+        finalImageGroups.push([]);
+        finalS3ImageGroups.push([]);
+      }
+      
+      // Pass the updated images to parent
+      onImageGroupsChange(finalImageGroups, finalS3ImageGroups);
+      
+      // Update parent state with URLs instead of base64 images
+      setFilesBase64([]);
+      
+      // Fetch the eBay category ID
+      const ebayCategoryID = await fetchEbayCategoryID(selectedCategory, subCategory);
+      setLocalCategoryID(ebayCategoryID);
+      onCategoryChange(ebayCategoryID);
+      
+      // Update local state after parent state
+      setLocalImageGroups(finalImageGroups);
+      
+      // Clear raw files state
+      setRawFiles([]);
+      setRawImageGroups([[]]);
+      
+      setIsUploading(false);
+      
+      // Now call handleGenerateListing
+      await handleGenerateListing();
+      
+    } catch (error) {
+      console.error('Error during upload process:', error);
+      setIsUploading(false);
     }
-    
-    // Combine the main image groups with the existing groups
-    const finalImageGroups = [...newImageGroups];
-    const finalS3ImageGroups = [...newS3ImageGroups];
-    
-    // Add the created main image groups if they don't already exist
-    if (mainImageGroups.length > 0) {
-      mainImageGroups.forEach((group, index) => {
-        // Only add the group if it's not empty
-        if (group.length > 0) {
-          finalImageGroups.push(group);
-          // Also add the corresponding S3 URLs group
-          finalS3ImageGroups.push(mainS3ImageGroups[index]);
-        }
-      });
-    }
-    
-    // Make sure we have an empty group at the end
-    if (finalImageGroups.length === 0 || finalImageGroups[finalImageGroups.length - 1].length > 0) {
-      finalImageGroups.push([]);
-      finalS3ImageGroups.push([]);
-    }
-    
-    // Create a special payload to pass to the parent that includes both image groups and S3 URLs
-    const imageGroupsPayload = {
-      displayGroups: finalImageGroups,
-      s3Groups: finalS3ImageGroups
-    };
-    
-    // Log the payload we're sending to parent
-    console.log('Image groups payload:', imageGroupsPayload);
-    
-    // Pass the updated images to parent BEFORE calling handleGenerateListing
-    console.log('Sending finalImageGroups to parent:', finalImageGroups);
-    // Modified: Pass both display groups and S3 URL groups to parent
-    onImageGroupsChange(finalImageGroups, finalS3ImageGroups);
-    
-    // Update parent state with URLs instead of base64 images
-    // We'll clear filesBase64 since we've moved all images to groups
-    setFilesBase64([]);
-    
-    // Fetch the eBay category ID
-    const ebayCategoryID = await fetchEbayCategoryID(selectedCategory, subCategory);
-    setLocalCategoryID(ebayCategoryID);
-    onCategoryChange(ebayCategoryID);
-    
-    // Update local state after parent state
-    setLocalImageGroups(finalImageGroups);
-    
-    // Clear raw files state
-    setRawFiles([]);
-    setRawImageGroups([[]]);
-    
-    console.log('Upload process complete, setting isUploading to false');
-    setIsUploading(false);
-    
-    // Now call handleGenerateListing AFTER all state updates
-    console.log('Calling handleGenerateListing');
-    await handleGenerateListing();
-    console.log('handleGenerateListing completed');
-    
-  } catch (error) {
-    console.error('❌ Fatal error during upload process:', error);
-    setIsUploading(false);
-  }
-  
-  console.log('🏁 Exiting handleGenerateListingWithUpload');
-};
-
-
-
+  };
 
   const isValidSelection = selectedCategory !== "--" && subCategory !== "--";
 
@@ -806,9 +704,9 @@ const handleGenerateListingWithUpload = async () => {
       <div className="button-group">
         <button className="primary" disabled={!selectedImages.length} onClick={handleGroupSelected}>Group Selected</button>
         <button className="danger" onClick={() => {
-  handleClearAllLocal();
-  if (handleClearAll) handleClearAll();
-}}>Clear All</button>
+          handleClearAllLocal();
+          if (handleClearAll) handleClearAll();
+        }}>Clear All</button>
       </div>
 
       <div className="generate-area" onMouseEnter={() => !isValidSelection && setShowTooltip(true)} onMouseLeave={() => setShowTooltip(false)}>

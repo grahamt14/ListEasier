@@ -3,6 +3,7 @@ import './App.css';
 import FormSection, { getSelectedCategoryOptionsJSON } from './FormSection';
 import JSZip from 'jszip';
 import { saveAs } from 'file-saver';
+import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 
 function App() {
   const [fieldSelections, setFieldSelections] = useState({});
@@ -23,13 +24,18 @@ function App() {
   const [price, setPrice] = useState('');
   const [sku, setSKU] = useState('');
   const [categoryID, setCategoryID] = useState('');
-  
-  // Store S3 image URLs separately from base64 images
   const [s3ImageGroups, setS3ImageGroups] = useState([[]]);
+  
+  const client = new DynamoDBClient({
+    region: 'us-east-2',
+    credentials: {
+      accessKeyId: 'AKIA5QMLZNPJMZIFQFFS',
+      secretAccessKey: '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',
+    },
+  });
   
   const handleCategoryChange = (newCategoryID) => {
     setCategoryID(newCategoryID);
-    console.log('Updated categoryID in parent:', newCategoryID);
   };
 
   const handlePriceUpdate = (newPrice) => {
@@ -40,7 +46,6 @@ function App() {
     setSKU(newSKU);
   };
 
-  // Effect to log responseData changes for debugging
   useEffect(() => {
     if (responseData.some(item => item !== null)) {
       console.log("Response data updated:", responseData);
@@ -72,10 +77,7 @@ function App() {
           updated[groupIdx] = tgt;
         }
       }
-	  
-	  if (onImageGroupsChange) {
-  onImageGroupsChange(updated);
-}
+      
       if (updated[updated.length - 1].length > 0) updated.push([]);
       return updated;
     });
@@ -84,187 +86,138 @@ function App() {
     setIsDirty(true);
   };
   
-  // Updated function to store S3 URLs properly
- const handleImageGroupsUpdate = (groups, s3Groups = null) => {
-  console.log('Received updated image groups from child:', groups);
-  console.log('Received S3 image groups from child:', s3Groups);
-  
-  // Store both the regular image groups (for display) and S3 URLs separately
-  // This ensures we have the correct URLs for the CSV export
-  
-  // Check if the current imageGroups has an empty group at the end
-  const hasEmptyGroupAtEnd = imageGroups.length > 0 && 
-                             imageGroups[imageGroups.length - 1].length === 0;
-  
-  // Create the new image groups, ensuring we have an empty group at the end
-  let newGroups;
-  if (hasEmptyGroupAtEnd && groups[groups.length - 1].length > 0) {
-    // If the incoming groups don't have an empty group at the end but we need one
-    newGroups = [...groups, []];
-  } else if (!hasEmptyGroupAtEnd && groups[groups.length - 1].length === 0) {
-    // If the incoming groups have an empty group at the end but we don't need one
-    newGroups = groups.slice(0, -1);
-  } else {
-    // Otherwise, just use the incoming groups as-is
-    newGroups = [...groups];
-  }
-  
-  // Update the state with the new groups for display
-  setImageGroups(newGroups);
-  
-  // Handle S3 URLs separately from the display groups
-  if (s3Groups) {
-    // If we explicitly received S3 URL groups, use those
-    console.log('Using provided S3 URL groups:', s3Groups);
-    setS3ImageGroups(s3Groups);
-  } else {
-    // Otherwise, try to extract S3 URLs from the display groups
-    // This is the old behavior for backward compatibility
-    const s3UrlGroups = groups.map(group => {
-      return group.map(url => {
-        // If this is already an S3 URL, just return it
-        if (typeof url === 'string' && !url.startsWith('data:')) {
-          return url;
-        }
-        // Otherwise, we're going to ignore base64 data in s3ImageGroups
-        // The actual upload will happen in FormSection component
-        return null;
-      }).filter(url => url !== null);
-    });
+  const handleImageGroupsUpdate = (groups, s3Groups = null) => {
+    const hasEmptyGroupAtEnd = imageGroups.length > 0 && 
+                               imageGroups[imageGroups.length - 1].length === 0;
     
-    console.log('Extracted S3 URL groups:', s3UrlGroups);
-    // Update the S3 image groups state
-    setS3ImageGroups(s3UrlGroups);
-  }
-};
-
-  const handleGenerateListing = async () => {
-  // 1. Gather all non-empty groups
-  const nonEmptyGroups = imageGroups.filter(g => g.length > 0);
-
-  // Skip processing if there are no groups to process
-  if (nonEmptyGroups.length === 0 && filesBase64.length === 0) {
-    console.log("No images to process");
-    return;
-  }
-
-  // 2. If there are leftover pool images, batch them too
-  console.log(`filesBase64.length ${filesBase64.length}`);
-  let allGroupsToProcess = [...nonEmptyGroups];
-  let newGroups = [];
-  
-  // Important: Check if we have s3ImageGroups that actually contain S3 URLs
-  const s3GroupsForDownload = s3ImageGroups.filter(group => 
-    group.length > 0 && group.some(url => url && !url.startsWith('data:'))
-  );
-  
-  if (filesBase64.length > 0 && batchSize > 0) {
-    // Create new groups from the pool images
-    const poolGroups = [];
-    for (let i = 0; i < filesBase64.length; i += batchSize) {
-      poolGroups.push(filesBase64.slice(i, i + batchSize));
+    let newGroups;
+    if (hasEmptyGroupAtEnd && groups[groups.length - 1].length > 0) {
+      newGroups = [...groups, []];
+    } else if (!hasEmptyGroupAtEnd && groups[groups.length - 1].length === 0) {
+      newGroups = groups.slice(0, -1);
+    } else {
+      newGroups = [...groups];
     }
     
-    // Add pool groups to processing list
-    allGroupsToProcess = [...nonEmptyGroups, ...poolGroups];
+    setImageGroups(newGroups);
     
-    // Update imageGroups to include these new groups from the pool
-    // BUT don't include the existing nonEmptyGroups again (this was causing duplication)
-    setImageGroups(prev => {
-      // Start with a fresh array, only keeping the empty group at the end if it exists
-      const lastEmptyGroup = prev[prev.length - 1]?.length === 0 ? [prev[prev.length - 1]] : [[]];
-      return [...nonEmptyGroups, ...poolGroups, ...lastEmptyGroup];
+    if (s3Groups) {
+      setS3ImageGroups(s3Groups);
+    } else {
+      const s3UrlGroups = groups.map(group => {
+        return group.map(url => {
+          return typeof url === 'string' && !url.startsWith('data:') ? url : null;
+        }).filter(url => url !== null);
+      });
+      
+      setS3ImageGroups(s3UrlGroups);
+    }
+  };
+
+  const handleGenerateListing = async () => {
+    const nonEmptyGroups = imageGroups.filter(g => g.length > 0);
+
+    if (nonEmptyGroups.length === 0 && filesBase64.length === 0) {
+      return;
+    }
+
+    let allGroupsToProcess = [...nonEmptyGroups];
+    let newGroups = [];
+    
+    const s3GroupsForDownload = s3ImageGroups.filter(group => 
+      group.length > 0 && group.some(url => url && !url.startsWith('data:'))
+    );
+    
+    if (filesBase64.length > 0 && batchSize > 0) {
+      const poolGroups = [];
+      for (let i = 0; i < filesBase64.length; i += batchSize) {
+        poolGroups.push(filesBase64.slice(i, i + batchSize));
+      }
+      
+      allGroupsToProcess = [...nonEmptyGroups, ...poolGroups];
+      
+      setImageGroups(prev => {
+        const lastEmptyGroup = prev[prev.length - 1]?.length === 0 ? [prev[prev.length - 1]] : [[]];
+        return [...nonEmptyGroups, ...poolGroups, ...lastEmptyGroup];
+      });
+      
+      newGroups = [...nonEmptyGroups, ...poolGroups];
+    } else {
+      newGroups = [...nonEmptyGroups];
+    }
+
+    setTotalChunks(allGroupsToProcess.length);
+    setCompletedChunks(0);
+    setResponseData(Array(allGroupsToProcess.length).fill(null));
+    setIsDirty(false);
+    setIsLoading(true);
+    setProcessingGroups(Array(allGroupsToProcess.length).fill(true));
+
+    const selectedCategoryOptions = getSelectedCategoryOptionsJSON(fieldSelections, price, sku);
+
+    allGroupsToProcess.forEach((group, idx) => {
+      fetch(
+        "https://7f26uyyjs5.execute-api.us-east-2.amazonaws.com/ListEasily/ListEasilyAPI",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            category,
+            subCategory,
+            Base64Key: [group],
+            SelectedCategoryOptions: selectedCategoryOptions
+          })
+        }
+      )
+        .then(res => res.json())
+        .then(data => {
+          let parsed = data.body;
+          if (typeof parsed === "string") parsed = JSON.parse(parsed);
+
+          setTimeout(() => {
+            setResponseData(prev => {
+              const next = [...prev];
+              next[idx] = Array.isArray(parsed) ? parsed[0] : parsed;
+              return next;
+            });
+
+            setProcessingGroups(prev => {
+              const next = [...prev];
+              next[idx] = false;
+              return next;
+            });
+          }, 0);
+        })
+        .catch(err => {
+          setTimeout(() => {
+            setResponseData(prev => {
+              const next = [...prev];
+              next[idx] = { error: "Failed to fetch listing data", raw_content: err.message };
+              return next;
+            });
+
+            setProcessingGroups(prev => {
+              const next = [...prev];
+              next[idx] = false;
+              return next;
+            });
+          }, 0);
+        })
+        .finally(() => {
+          setTimeout(() => {
+            setCompletedChunks(c => {
+              const done = c + 1;
+              if (done === allGroupsToProcess.length) {
+                setIsLoading(false);
+              }
+              return done;
+            });
+          }, 0);
+        });
     });
     
-    // Store these groups for the download function to use later
-    newGroups = [...nonEmptyGroups, ...poolGroups];
-  } else {
-    newGroups = [...nonEmptyGroups];
-  }
-
-  // 3. Initialize UI state
-  setTotalChunks(allGroupsToProcess.length);
-  setCompletedChunks(0);
-  setResponseData(Array(allGroupsToProcess.length).fill(null));
-  setIsDirty(false);
-  setIsLoading(true);
-  setProcessingGroups(Array(allGroupsToProcess.length).fill(true));
-
-  // 4. Prepare selected category options JSON
-  const selectedCategoryOptions = getSelectedCategoryOptionsJSON(fieldSelections, price, sku);
-  console.log("Selected category options:", selectedCategoryOptions);
-
-  // 5. Fire off each fetch separately and update state upon completion
-  allGroupsToProcess.forEach((group, idx) => {
-    console.log(`Starting API call for group ${idx}`);
-
-    fetch(
-      "https://7f26uyyjs5.execute-api.us-east-2.amazonaws.com/ListEasily/ListEasilyAPI",
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          category,
-          subCategory,
-          Base64Key: [group],
-          SelectedCategoryOptions: selectedCategoryOptions
-        })
-      }
-    )
-      .then(res => res.json())
-      .then(data => {
-        console.log(`Group ${idx} API call completed`);
-        let parsed = data.body;
-        if (typeof parsed === "string") parsed = JSON.parse(parsed);
-
-        // Use setTimeout to force this update to be processed separately
-        setTimeout(() => {
-          setResponseData(prev => {
-            const next = [...prev];
-            next[idx] = Array.isArray(parsed) ? parsed[0] : parsed;
-            return next;
-          });
-
-          setProcessingGroups(prev => {
-            const next = [...prev];
-            next[idx] = false;
-            return next;
-          });
-        }, 0);
-      })
-      .catch(err => {
-        console.error(`Error during fetch for group ${idx}:`, err);
-
-        setTimeout(() => {
-          setResponseData(prev => {
-            const next = [...prev];
-            next[idx] = { error: "Failed to fetch listing data", raw_content: err.message };
-            return next;
-          });
-
-          setProcessingGroups(prev => {
-            const next = [...prev];
-            next[idx] = false;
-            return next;
-          });
-        }, 0);
-      })
-      .finally(() => {
-        setTimeout(() => {
-          setCompletedChunks(c => {
-            const done = c + 1;
-            console.log(`Completed ${done} of ${allGroupsToProcess.length} chunks`);
-            if (done === allGroupsToProcess.length) {
-              setIsLoading(false);
-            }
-            return done;
-          });
-        }, 0);
-      });
-  });
-  
-  return Promise.resolve(); // Make sure this returns a Promise
-};
+    return Promise.resolve();
+  };
 
   const handleClearAll = () => {
     setFilesBase64([]);
@@ -274,311 +227,102 @@ function App() {
     setBatchSize(0);
     setSelectedImages([]);
     setImageGroups([[]]);
-    setS3ImageGroups([[]]);  // Clear the S3 URLs too
+    setS3ImageGroups([[]]);
     setResponseData([]);
     setIsLoading(false);
     setIsDirty(true);
     setProcessingGroups([]);
   };
 
-const downloadListingsAsZip = () => {
-  console.log("Starting downloadListingsAsZip function");
-  console.log("Initial responseData:", responseData);
-
-  // Filter out empty or null responses
-  const validResponses = responseData.filter(response =>
-    response && !response.error
-  );
-
-  console.log("Filtered validResponses:", validResponses);
-  console.log(`Found ${validResponses.length} valid listings to process`);
-
-  if (validResponses.length === 0) {
-    console.warn("No valid listings found, showing alert and stopping execution");
-    alert("No valid listings to download!");
-    return;
-  }
-
-  let filteredS3ImageGroups = s3ImageGroups;
-
-  if (filteredS3ImageGroups && Array.isArray(filteredS3ImageGroups)) {
-    console.log("Original s3ImageGroups length:", filteredS3ImageGroups.length);
-    filteredS3ImageGroups = filteredS3ImageGroups.filter(imageGroup =>
+  const generateCSVContent = () => {
+    const validResponses = responseData.filter(response => response && !response.error);
+    
+    if (validResponses.length === 0) {
+      alert("No valid listings to download!");
+      return null;
+    }
+    
+    let filteredS3ImageGroups = s3ImageGroups.filter(imageGroup => 
       Array.isArray(imageGroup) && imageGroup.length > 0
     );
-    console.log("Filtered s3ImageGroups length:", filteredS3ImageGroups.length);
-  }
-
-  console.log("Creating new JSZip instance");
-  const zip = new JSZip();
-
-  console.log("Valid responses:", validResponses.length);
-  console.log("s3ImageGroups data structure:", s3ImageGroups);
-  console.log("imageGroups data structure:", imageGroups);
-
-  console.log(`Using categoryID: ${categoryID}`);
-  console.log(`Using SKU: ${sku}`);
-  console.log(`Using price: ${price}`);
-
-  const header = `#INFO,Version=0.0.2,Template= eBay-draft-listings-template_US,,,,,,,,
+    
+    const header = `#INFO,Version=0.0.2,Template= eBay-draft-listings-template_US,,,,,,,,
 #INFO Action and Category ID are required fields. 1) Set Action to Draft 2) Please find the category ID for your listings here: https://pages.ebay.com/sellerinformation/news/categorychanges.html,,,,,,,,,,
 "#INFO After you've successfully uploaded your draft from the Seller Hub Reports tab, complete your drafts to active listings here: https://www.ebay.com/sh/lst/drafts",,,,,,,,,,
 #INFO,,,,,,,,,,
 Action(SiteID=US|Country=US|Currency=USD|Version=1193|CC=UTF-8),Custom label (SKU),Category ID,Title,UPC,Price,Quantity,Item photo URL,Condition ID,Description,Format
 `;
 
-  let csvContent = header;
+    let csvContent = header;
 
-  console.log("Beginning to process each listing");
-
-  validResponses.forEach((listing, index) => {
-    console.log(`---------- Processing listing ${index + 1} ----------`);
-    console.log(`Raw listing data for index ${index}:`, listing);
-
-    const title = listing.title ? listing.title.replace(/\r?\n|\r/g, ' ').replace(/"/g, '""') : '';
-    console.log(`Formatted title: "${title}"`);
-
-    let photoUrls = [];
-
-    console.log(`Attempting to find images for listing ${index}`);
-
-    if (filteredS3ImageGroups && Array.isArray(filteredS3ImageGroups) && index < filteredS3ImageGroups.length) {
-      console.log(`filteredS3ImageGroups[${index}] exists:`, filteredS3ImageGroups[index]);
-
-      if (Array.isArray(filteredS3ImageGroups[index])) {
-        const s3Urls = filteredS3ImageGroups[index].filter(url => url && typeof url === 'string' && !url.startsWith('data:'));
-        photoUrls = s3Urls;
-
-        console.log(`Found ${s3Urls.length} valid S3 URLs for index ${index}`);
-        console.log(`S3 URLs for listing ${index}:`, s3Urls);
-
-        const base64ImagesCount = filteredS3ImageGroups[index].filter(url => url && url.startsWith('data:')).length;
-        if (base64ImagesCount > 0) {
-          console.warn(`Warning: Found ${base64ImagesCount} base64 images in filteredS3ImageGroups for listing ${index}. These won't be included in the CSV.`);
+    validResponses.forEach((listing, index) => {
+      const title = listing.title ? listing.title.replace(/\r?\n|\r/g, ' ').replace(/"/g, '""') : '';
+      
+      let photoUrls = [];
+      
+      // Try to get URLs from S3ImageGroups first
+      if (filteredS3ImageGroups && Array.isArray(filteredS3ImageGroups) && index < filteredS3ImageGroups.length) {
+        if (Array.isArray(filteredS3ImageGroups[index])) {
+          photoUrls = filteredS3ImageGroups[index].filter(url => url && typeof url === 'string' && !url.startsWith('data:'));
         }
-      } else {
-        console.warn(`filteredS3ImageGroups[${index}] is not an array:`, filteredS3ImageGroups[index]);
       }
-    } else {
-      console.log(`No filteredS3ImageGroups available for index ${index}`);
-    }
-
-    if (photoUrls.length === 0) {
-      console.log(`No S3 URLs found, attempting to use imageGroups for listing ${index}`);
-
-      if (imageGroups && Array.isArray(imageGroups) && index < imageGroups.length) {
-        console.log(`imageGroups[${index}] exists:`, imageGroups[index]);
-
+      
+      // If no S3 URLs found, try imageGroups
+      if (photoUrls.length === 0 && imageGroups && Array.isArray(imageGroups) && index < imageGroups.length) {
         if (Array.isArray(imageGroups[index])) {
-          const standardUrls = imageGroups[index].filter(url => url && typeof url === 'string' && !url.startsWith('data:'));
-          photoUrls = standardUrls;
-
-          console.log(`Found ${standardUrls.length} valid standard URLs for index ${index}`);
-
-          if (standardUrls.length > 0) {
-            console.log(`Using imageGroups URLs for index ${index}:`, standardUrls);
-          } else {
-            const base64ImagesCount = imageGroups[index].filter(url => url && url.startsWith('data:')).length;
-            if (base64ImagesCount > 0) {
-              console.warn(`Warning: Only found ${base64ImagesCount} base64 images for listing ${index}. These won't work in eBay listings.`);
-            } else {
-              console.warn(`No valid images found for listing ${index} in either filteredS3ImageGroups or imageGroups`);
-            }
-          }
-        } else {
-          console.warn(`imageGroups[${index}] is not an array:`, imageGroups[index]);
+          photoUrls = imageGroups[index].filter(url => url && typeof url === 'string' && !url.startsWith('data:'));
         }
-      } else {
-        console.log(`No imageGroups available for index ${index}`);
       }
-    }
-
-    console.log(`Final photoUrls count for listing ${index}: ${photoUrls.length}`);
-    if (photoUrls.length === 0) {
-      console.warn(`Warning: No valid image URLs found for listing ${index}. CSV will have empty photo URLs.`);
-    }
-
-    const formattedUrls = photoUrls.filter(url => url).join('||');
-    console.log(`Formatted image URLs string length: ${formattedUrls.length} characters`);
-
-    const description = listing.description ? listing.description.replace(/\r?\n|\r/g, ' ').replace(/"/g, '""') : '';
-    console.log(`Formatted description (first 50 chars): "${description.substring(0, 50)}${description.length > 50 ? '...' : ''}"`);
-
-    const line = `Draft,${sku},${categoryID},"${title}",,${price},1,${formattedUrls},3000,"${description}",FixedPrice`;
-
-    csvContent += `${line}\n`;
-  });
-
-  console.log("All listings processed, generating zip file");
-
-  zip.file("ebay_draft_listings.csv", csvContent);
-
-  zip.generateAsync({ type: "blob" })
-    .then(content => {
-      console.log(`Zip file created successfully. Size: ${Math.round(content.size / 1024)} KB`);
-      const zipFileName = `listings_${new Date().toISOString().split('T')[0]}.zip`;
-      console.log(`Triggering download with filename: ${zipFileName}`);
-      saveAs(content, zipFileName);
-      console.log("Download initiated");
-    })
-    .catch(err => {
-      console.error("Error creating zip file:", err);
-      console.error("Stack trace:", err.stack);
-      alert("Failed to create download. Please try again.");
-    })
-    .finally(() => {
-      console.log("downloadListingsAsZip function completed");
+      
+      const formattedUrls = photoUrls.filter(url => url).join('||');
+      const description = listing.description ? listing.description.replace(/\r?\n|\r/g, ' ').replace(/"/g, '""') : '';
+      const line = `Draft,${sku},${categoryID},"${title}",,${price},1,${formattedUrls},3000,"${description}",FixedPrice`;
+      
+      csvContent += `${line}\n`;
     });
-};
+    
+    return csvContent;
+  };
 
-const downloadListingsAsCsv = () => {
-  console.log("Starting downloadListingsAsCsv function");
-  console.log("Initial responseData:", responseData);
+  const downloadListingsAsZip = () => {
+    const csvContent = generateCSVContent();
+    if (!csvContent) return;
+    
+    const zip = new JSZip();
+    zip.file("ebay_draft_listings.csv", csvContent);
+    
+    zip.generateAsync({ type: "blob" })
+      .then(content => {
+        const zipFileName = `listings_${new Date().toISOString().split('T')[0]}.zip`;
+        saveAs(content, zipFileName);
+      })
+      .catch(err => {
+        alert("Failed to create download. Please try again.");
+      });
+  };
 
-  // Filter out empty or null responses
-  const validResponses = responseData.filter(response =>
-    response && !response.error
-  );
-
-  console.log("Filtered validResponses:", validResponses);
-  console.log(`Found ${validResponses.length} valid listings to process`);
-
-  if (validResponses.length === 0) {
-    console.warn("No valid listings found, showing alert and stopping execution");
-    alert("No valid listings to download!");
-    return;
-  }
-
-  let filteredS3ImageGroups = s3ImageGroups;
-
-  if (filteredS3ImageGroups && Array.isArray(filteredS3ImageGroups)) {
-    console.log("Original s3ImageGroups length:", filteredS3ImageGroups.length);
-    filteredS3ImageGroups = filteredS3ImageGroups.filter(imageGroup =>
-      Array.isArray(imageGroup) && imageGroup.length > 0
-    );
-    console.log("Filtered s3ImageGroups length:", filteredS3ImageGroups.length);
-  }
-
-  console.log("Valid responses:", validResponses.length);
-  console.log("s3ImageGroups data structure:", s3ImageGroups);
-  console.log("imageGroups data structure:", imageGroups);
-
-  console.log(`Using categoryID: ${categoryID}`);
-  console.log(`Using SKU: ${sku}`);
-  console.log(`Using price: ${price}`);
-
-  const header = `#INFO,Version=0.0.2,Template= eBay-draft-listings-template_US,,,,,,,,
-#INFO Action and Category ID are required fields. 1) Set Action to Draft 2) Please find the category ID for your listings here: https://pages.ebay.com/sellerinformation/news/categorychanges.html,,,,,,,,,,
-"#INFO After you've successfully uploaded your draft from the Seller Hub Reports tab, complete your drafts to active listings here: https://www.ebay.com/sh/lst/drafts",,,,,,,,,,
-#INFO,,,,,,,,,,
-Action(SiteID=US|Country=US|Currency=USD|Version=1193|CC=UTF-8),Custom label (SKU),Category ID,Title,UPC,Price,Quantity,Item photo URL,Condition ID,Description,Format
-`;
-
-  let csvContent = header;
-
-  console.log("Beginning to process each listing");
-
-  validResponses.forEach((listing, index) => {
-    console.log(`---------- Processing listing ${index + 1} ----------`);
-    console.log(`Raw listing data for index ${index}:`, listing);
-
-    const title = listing.title ? listing.title.replace(/\r?\n|\r/g, ' ').replace(/"/g, '""') : '';
-    console.log(`Formatted title: "${title}"`);
-
-    let photoUrls = [];
-
-    console.log(`Attempting to find images for listing ${index}`);
-
-    if (filteredS3ImageGroups && Array.isArray(filteredS3ImageGroups) && index < filteredS3ImageGroups.length) {
-      console.log(`filteredS3ImageGroups[${index}] exists:`, filteredS3ImageGroups[index]);
-
-      if (Array.isArray(filteredS3ImageGroups[index])) {
-        const s3Urls = filteredS3ImageGroups[index].filter(url => url && typeof url === 'string' && !url.startsWith('data:'));
-        photoUrls = s3Urls;
-
-        console.log(`Found ${s3Urls.length} valid S3 URLs for index ${index}`);
-        console.log(`S3 URLs for listing ${index}:`, s3Urls);
-
-        const base64ImagesCount = filteredS3ImageGroups[index].filter(url => url && url.startsWith('data:')).length;
-        if (base64ImagesCount > 0) {
-          console.warn(`Warning: Found ${base64ImagesCount} base64 images in filteredS3ImageGroups for listing ${index}. These won't be included in the CSV.`);
-        }
-      } else {
-        console.warn(`filteredS3ImageGroups[${index}] is not an array:`, filteredS3ImageGroups[index]);
-      }
+  const downloadListingsAsCsv = () => {
+    const csvContent = generateCSVContent();
+    if (!csvContent) return;
+    
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const csvFileName = `listings_${new Date().toISOString().split('T')[0]}.csv`;
+    
+    if (navigator.msSaveBlob) {
+      navigator.msSaveBlob(blob, csvFileName);
     } else {
-      console.log(`No filteredS3ImageGroups available for index ${index}`);
-    }
-
-    if (photoUrls.length === 0) {
-      console.log(`No S3 URLs found, attempting to use imageGroups for listing ${index}`);
-
-      if (imageGroups && Array.isArray(imageGroups) && index < imageGroups.length) {
-        console.log(`imageGroups[${index}] exists:`, imageGroups[index]);
-
-        if (Array.isArray(imageGroups[index])) {
-          const standardUrls = imageGroups[index].filter(url => url && typeof url === 'string' && !url.startsWith('data:'));
-          photoUrls = standardUrls;
-
-          console.log(`Found ${standardUrls.length} valid standard URLs for index ${index}`);
-
-          if (standardUrls.length > 0) {
-            console.log(`Using imageGroups URLs for index ${index}:`, standardUrls);
-          } else {
-            const base64ImagesCount = imageGroups[index].filter(url => url && url.startsWith('data:')).length;
-            if (base64ImagesCount > 0) {
-              console.warn(`Warning: Only found ${base64ImagesCount} base64 images for listing ${index}. These won't work in eBay listings.`);
-            } else {
-              console.warn(`No valid images found for listing ${index} in either filteredS3ImageGroups or imageGroups`);
-            }
-          }
-        } else {
-          console.warn(`imageGroups[${index}] is not an array:`, imageGroups[index]);
-        }
-      } else {
-        console.log(`No imageGroups available for index ${index}`);
+      const link = document.createElement("a");
+      if (link.download !== undefined) {
+        const url = URL.createObjectURL(blob);
+        link.setAttribute("href", url);
+        link.setAttribute("download", csvFileName);
+        link.style.visibility = "hidden";
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
       }
     }
-
-    console.log(`Final photoUrls count for listing ${index}: ${photoUrls.length}`);
-    if (photoUrls.length === 0) {
-      console.warn(`Warning: No valid image URLs found for listing ${index}. CSV will have empty photo URLs.`);
-    }
-
-    const formattedUrls = photoUrls.filter(url => url).join('||');
-    console.log(`Formatted image URLs string length: ${formattedUrls.length} characters`);
-
-    const description = listing.description ? listing.description.replace(/\r?\n|\r/g, ' ').replace(/"/g, '""') : '';
-    console.log(`Formatted description (first 50 chars): "${description.substring(0, 50)}${description.length > 50 ? '...' : ''}"`);
-
-    const line = `Draft,${sku},${categoryID},"${title}",,${price},1,${formattedUrls},3000,"${description}",FixedPrice`;
-
-    csvContent += `${line}\n`;
-  });
-
-  console.log("All listings processed, creating Blob for CSV");
-
-  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-  const csvFileName = `listings_${new Date().toISOString().split('T')[0]}.csv`;
-
-  if (navigator.msSaveBlob) {
-    // For IE 10+
-    navigator.msSaveBlob(blob, csvFileName);
-  } else {
-    const link = document.createElement("a");
-    if (link.download !== undefined) {
-      const url = URL.createObjectURL(blob);
-      link.setAttribute("href", url);
-      link.setAttribute("download", csvFileName);
-      link.style.visibility = "hidden";
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-    }
-  }
-
-  console.log("CSV download initiated");
-};
+  };
 
   const renderResponseData = (index) => {
     const response = responseData[index];
@@ -657,8 +401,8 @@ Action(SiteID=US|Country=US|Currency=USD|Version=1193|CC=UTF-8),Custom label (SK
           handleGenerateListing={handleGenerateListing}
           handleClearAll={handleClearAll}
           Spinner={Spinner}
-          fieldSelections={fieldSelections}  // Pass fieldSelections down
-          setFieldSelections={setFieldSelections}  // Pass setter down
+          fieldSelections={fieldSelections}
+          setFieldSelections={setFieldSelections}
           price={price} 
           onPriceChange={handlePriceUpdate}
           sku={sku} 

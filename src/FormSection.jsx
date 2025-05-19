@@ -90,6 +90,7 @@ function FormSection({
       clientConfig: { region: REGION },
       identityPoolId: IDENTITY_POOL_ID,
     }),
+  forcePathStyle: true,  // Try this to fix connection issues
   });
 
   useEffect(() => {

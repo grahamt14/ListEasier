@@ -213,6 +213,7 @@ const downloadListingsAsZip = () => {
   validResponses.forEach((listing, index) => {
     const title = listing.title ? listing.title.replace(/\r?\n|\r/g, ' ').replace(/"/g, '""') : '';
     const photoUrls = newImageGroups[index];
+	console.log(photoUrls);
 	const formattedUrls = photoUrls.join('||');
     const description = listing.description ? listing.description.replace(/\r?\n|\r/g, ' ').replace(/"/g, '""') : '';
 	 const header = `#INFO,Version=0.0.2,Template= eBay-draft-listings-template_US,,,,,,,,

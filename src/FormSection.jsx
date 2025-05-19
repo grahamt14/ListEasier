@@ -90,10 +90,9 @@ const s3Client = new S3Client({
     clientConfig: { region: REGION },
     identityPoolId: IDENTITY_POOL_ID,
   }),
-  // Set specific configurations needed for browser environments
-  requestHandler: new FetchHttpHandler({
-    requestTimeout: 300000 // 5 minutes timeout for larger files
-  })
+  // Use standard endpoint URL format rather than path-style
+  endpoint: `https://s3.${REGION}.amazonaws.com`,
+  forcePathStyle: false,
 });
 
   useEffect(() => {

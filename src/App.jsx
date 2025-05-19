@@ -72,6 +72,13 @@ function App() {
     setSelectedImages([]);
     setIsDirty(true);
   };
+  
+   const [newImageGroups, setNewImageGroups] = useState([]);
+
+  const handleImageGroupsUpdate = (groups) => {
+    setNewImageGroups(groups);
+    console.log('Updated in parent:', groups);
+  };
 
   const handleGenerateListing = async () => {
   // 1. Gather all non-empty groups
@@ -200,7 +207,7 @@ const downloadListingsAsZip = () => {
   validResponses.forEach((listing, index) => {
     const categoryId = listing.categoryId || '';
     const title = listing.title ? listing.title.replace(/\r?\n|\r/g, ' ').replace(/"/g, '""') : '';
-    const photoUrls = imageGroups[index];
+    const photoUrls = newImageGroups[index];
     const description = listing.description ? listing.description.replace(/\r?\n|\r/g, ' ').replace(/"/g, '""') : '';
 
     const line = `Draft,${sku},${categoryId},"${title}",,${price},1,"${photoUrls}",3000,"${description}",FixedPrice`;
@@ -305,6 +312,7 @@ const downloadListingsAsZip = () => {
 		  onPriceChange={handlePriceUpdate}
 		  sku={sku} 
 		  onSKUChange={handleSKUUpdate}
+		  onImageGroupsChange={handleImageGroupsUpdate}
         />
 
         <section className="preview-section">

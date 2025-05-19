@@ -48,6 +48,7 @@ function FormSection({
   onPriceChange,
   sku, 
   onSKUChange,
+  onImageGroupsChange,
 }) {
   const [selectedCategory, setSelectedCategory] = useState("--");
   const [subcategories, setSubcategories] = useState(["--"]);
@@ -60,6 +61,8 @@ function FormSection({
   const [uploadProgress, setUploadProgress] = useState(0);
   const [totalFiles, setTotalFiles] = useState(0);
   const [processedFiles, setProcessedFiles] = useState(0);
+  
+  const [localImageGroups, setLocalImageGroups] = useState([]);
   
   // Store the raw files instead of immediately uploading them
   const [rawFiles, setRawFiles] = useState([]);
@@ -489,8 +492,8 @@ const uploadToS3 = async (file) => {
         }
         
         setImageGroups(newImageGroups);
-		console.log(newImageGroups);
-		console.log(imageGroups);
+		 setLocalImageGroups(newImageGroups);
+    onImageGroupsChange(newImageGroups); // Pass to parent
       }
       
       console.log('Upload process complete, setting isUploading to false');

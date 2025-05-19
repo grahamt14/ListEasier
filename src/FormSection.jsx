@@ -44,6 +44,8 @@ function FormSection({
   handleGenerateListing,
   handleClearAll,
   Spinner,
+  price, 
+  onPriceChange,
 }) {
   const [selectedCategory, setSelectedCategory] = useState("--");
   const [subcategories, setSubcategories] = useState(["--"]);
@@ -343,6 +345,8 @@ const uploadToS3 = async (file) => {
       setPrice(value);
       setIsDirty(true);
     }
+	
+    onPriceChange(e.target.value); // Send the new value up to the parent
   };
 
   const handleSkuChange = (e) => {

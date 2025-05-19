@@ -4,7 +4,7 @@ import { unmarshall } from '@aws-sdk/util-dynamodb';
 import { GetCommand, DynamoDBDocumentClient, ScanCommand } from '@aws-sdk/lib-dynamodb';
 import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
 import { fromCognitoIdentityPool } from "@aws-sdk/credential-provider-cognito-identity";
-import { createWorker } from 'tesseract.js'; // Add this import
+import Tesseract from 'tesseract.js'; // Import Tesseract directly
 
 export const getSelectedCategoryOptionsJSON = (fieldSelections, price, sku) => {
   const output = {};
@@ -374,33 +374,38 @@ const rotateImage = (base64Img, degrees) => {
     }
   };
   
-  const autoRotateWithTesseract = async (base64Img) => {
+  // Tesseract auto-rotation function using the simplified API
+const autoRotateWithTesseract = async (base64Img) => {
   try {
-    // Create a Tesseract worker
-    const worker = await createWorker();
+    console.log("Starting Tesseract auto-rotation...");
     
-    // Initialize the worker with English language
-    await worker.loadLanguage('eng');
-    await worker.initialize('eng');
+    // Create a progress tracking function
+    const progressTracker = message => {
+      if (message.status === 'recognizing text') {
+        console.log(`Tesseract progress: ${(message.progress * 100).toFixed(2)}%`);
+      }
+    };
     
-    // Set page segmentation mode to auto
-    await worker.setParameters({
-      tessedit_pageseg_mode: '3', // PSM_AUTO
-    });
+    // Use the simplified API with orientation detection
+    const result = await Tesseract.recognize(
+      base64Img,
+      'eng',
+      { 
+        logger: progressTracker,
+        rotateAuto: true // Enable auto rotation
+      }
+    );
     
-    // Recognize text to determine orientation
-    const { data } = await worker.recognize(base64Img, {
-      rotateAuto: true, // Enable auto-rotation detection
-    });
+    // Extract rotation information
+    let rotation = 0;
+    if (result && result.data && result.data.orientation) {
+      rotation = result.data.orientation.rotate;
+      console.log(`Tesseract detected rotation: ${rotation}°`);
+    } else {
+      console.log("No orientation data detected by Tesseract");
+    }
     
-    // Get the detected rotation angle
-    const rotation = data.orientation?.rotate || 0;
-    console.log(`Tesseract detected rotation: ${rotation}°`);
-    
-    // Terminate the worker to free resources
-    await worker.terminate();
-    
-    // If rotation is needed, apply it
+    // Apply rotation if needed
     if (rotation !== 0) {
       return await rotateImage(base64Img, rotation);
     }
@@ -409,14 +414,15 @@ const rotateImage = (base64Img, degrees) => {
     return base64Img;
   } catch (error) {
     console.error("Tesseract auto-rotation failed:", error);
+    console.error(error.stack); // Log the complete stack trace
     // Return original image if the process fails
     return base64Img;
   }
 };
 
 
-  // File input change handler
-  const handleFileChange = async (e) => {
+ // Modified file change handler with Tesseract auto-rotation
+const handleFileChange = async (e) => {
   const files = Array.from(e.target.files);
   if (files.length === 0) return;
 
@@ -433,8 +439,20 @@ const rotateImage = (base64Img, degrees) => {
       // First convert to base64
       let base64 = await convertToBase64(files[i]);
       
+      // Update progress to show conversion is complete
+      setProcessedFiles(i + 0.5);
+      setUploadProgress(Math.round(((i + 0.5) / files.length) * 100));
+      
       // Then attempt to auto-rotate using Tesseract
-      base64 = await autoRotateWithTesseract(base64);
+      // Only apply to images that appear to need rotation (optional optimization)
+      if (files[i].type.startsWith("image/")) {
+        try {
+          base64 = await autoRotateWithTesseract(base64);
+        } catch (tesseractError) {
+          console.error("Tesseract processing error:", tesseractError);
+          // Continue with original image if Tesseract fails
+        }
+      }
       
       base64List.push(base64);
       newRawFiles.push(files[i]);
@@ -453,8 +471,8 @@ const rotateImage = (base64Img, degrees) => {
   setTimeout(() => setIsUploading(false), 500);
 };
 
-  // File drop handler
-  const handleDrop = async (e) => {
+// Similarly update the drop handler
+const handleDrop = async (e) => {
   e.preventDefault();
   const imgs = Array.from(e.dataTransfer.files).filter(f => f.type.startsWith("image/"));
   if (imgs.length === 0) return;
@@ -472,8 +490,17 @@ const rotateImage = (base64Img, degrees) => {
       // First convert to base64
       let base64 = await convertToBase64(imgs[i]);
       
+      // Update progress to show conversion is complete
+      setProcessedFiles(i + 0.5);
+      setUploadProgress(Math.round(((i + 0.5) / imgs.length) * 100));
+      
       // Then attempt to auto-rotate using Tesseract
-      base64 = await autoRotateWithTesseract(base64);
+      try {
+        base64 = await autoRotateWithTesseract(base64);
+      } catch (tesseractError) {
+        console.error("Tesseract processing error:", tesseractError);
+        // Continue with original image if Tesseract fails
+      }
       
       base64List.push(base64);
       newRawFiles.push(imgs[i]);

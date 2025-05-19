@@ -381,27 +381,31 @@ const autoRotateWithTesseract = async (base64Img) => {
     console.log("Starting Tesseract auto-rotation analysis...");
     const TesseractModule = await import('tesseract.js');
     const Tesseract = TesseractModule.default || TesseractModule;
+
     Tesseract.setLogging(true);
+
     const worker = await Tesseract.createWorker();
-    await worker.load();
-    await worker.loadLanguage('eng');
-    await worker.initialize('eng');
+
     await worker.setParameters({
       tessedit_pageseg_mode: Tesseract.PSM.OSD_ONLY,
     });
 
-    const result = await worker.recognize(base64Img);
+    // Use `detect()` instead of `recognize()` for OSD_ONLY
+    const result = await worker.detect(base64Img);
+
     console.log("Tesseract detection complete");
     console.log("Full result:", result.data);
 
-    const rotation = result.data.osd?.angle || 0;
+    const rotation = result.data?.osd?.angle || 0;
     console.log(`Tesseract detected rotation angle: ${rotation}°`);
+
     await worker.terminate();
 
     if (rotation !== 0) {
       console.log(`Auto-rotating image by ${rotation}°`);
       return await rotateImageModified(base64Img, rotation);
     }
+
     return base64Img;
   } catch (error) {
     console.error("Error in autoRotateWithTesseract:", error);

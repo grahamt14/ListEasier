@@ -53,7 +53,6 @@ function FormSection({
   const [showTooltip, setShowTooltip] = useState(false);
   const [categories, setCategories] = useState({});
   const [categoriesLoading, setCategoriesLoading] = useState(true);
-  const [price, setPrice] = useState("");
   const [sku, setSku] = useState("");
 
   const [isUploading, setIsUploading] = useState(false);
@@ -340,12 +339,6 @@ const uploadToS3 = async (file) => {
   const triggerFileInput = () => fileInputRef.current.click();
 
   const handlePriceChange = (e) => {
-    const value = e.target.value;
-    if (/^$|^\d+\.?\d*$/.test(value)) {
-      setPrice(value);
-      setIsDirty(true);
-    }
-	
     onPriceChange(e.target.value); // Send the new value up to the parent
   };
 

@@ -404,7 +404,7 @@ Action(SiteID=US|Country=US|Currency=USD|Version=1193|CC=UTF-8),Custom label (SK
     const description = listing.description ? listing.description.replace(/\r?\n|\r/g, ' ').replace(/"/g, '""') : '';
     console.log(`Formatted description (first 50 chars): "${description.substring(0, 50)}${description.length > 50 ? '...' : ''}"`);
 
-    const line = `Draft,${sku},${categoryID},${title},,${price},1,${formattedUrls},3000,"${description}",FixedPrice`;
+    const line = `Draft,${sku},${categoryID},"${title}",,${price},1,${formattedUrls},3000,"${description}",FixedPrice`;
 
     csvContent += `${line}\n`;
   });

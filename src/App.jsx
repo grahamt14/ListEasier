@@ -215,11 +215,17 @@ const downloadListingsAsZip = () => {
     const photoUrls = newImageGroups[index];
 	const formattedUrls = photoUrls.join('||');
     const description = listing.description ? listing.description.replace(/\r?\n|\r/g, ' ').replace(/"/g, '""') : '';
+	 const header = `#INFO,Version=0.0.2,Template= eBay-draft-listings-template_US,,,,,,,,
+#INFO Action and Category ID are required fields. 1) Set Action to Draft 2) Please find the category ID for your listings here: https://pages.ebay.com/sellerinformation/news/categorychanges.html,,,,,,,,,,
+"#INFO After you've successfully uploaded your draft from the Seller Hub Reports tab, complete your drafts to active listings here: https://www.ebay.com/sh/lst/drafts",,,,,,,,,,
+#INFO,,,,,,,,,,
+Action(SiteID=US|Country=US|Currency=USD|Version=1193|CC=UTF-8),Custom label (SKU),Category ID,Title,UPC,Price,Quantity,Item photo URL,Condition ID,Description,Format
+`;
     const line = `Draft,${sku},${categoryID},${title},,${price},1,${formattedUrls},3000,"${description}",FixedPrice`;
 
     const fileName = `listing_${index + 1}${title ? '_' + title.replace(/[^a-z0-9]/gi, '_').toLowerCase().slice(0, 30) : ''}.csv`;
 
-    zip.file(fileName, line);
+    zip.file(fileName, `${header}${line}`);
   });
 
   // Generate the zip file and trigger download

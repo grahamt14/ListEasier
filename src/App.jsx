@@ -72,6 +72,10 @@ function App() {
           updated[groupIdx] = tgt;
         }
       }
+	  
+	  if (onImageGroupsChange) {
+  onImageGroupsChange(updated);
+}
       if (updated[updated.length - 1].length > 0) updated.push([]);
       return updated;
     });

@@ -64,6 +64,7 @@ function FormSection({
   const [rawImageGroups, setRawImageGroups] = useState([[]]);
   const [fieldSelections, setFieldSelections] = useState({});
   const [imageRotations, setImageRotations] = useState({}); // Track rotation degrees for each image
+  const [autoRotateEnabled, setAutoRotateEnabled] = useState(true);
   
   const fileInputRef = useRef(null);
 
@@ -79,6 +80,10 @@ function FormSection({
       secretAccessKey: 'w00ym2XMKKtgq8d0J7lCpNq8Mcu/p9fFzE22mtML',
     },
   });
+  
+  const handleAutoRotateToggle = (e) => {
+  setAutoRotateEnabled(e.target.checked);
+};
 
   const docClient = DynamoDBDocumentClient.from(client);
   
@@ -555,45 +560,52 @@ const processImage = async (file) => {
     const base64 = await convertToBase64(file);
     console.log("Base64 conversion complete");
     
-    // Step 2: Try enhanced heuristic approach first
-    console.log("Running heuristic orientation detection...");
-    let processedImage = await detectRotationWithHeuristics(base64);
-    let rotationApplied = processedImage !== base64;
-    console.log(`Heuristic detection ${rotationApplied ? 'applied rotation' : 'detected no rotation'}`);
-    
-    // Step 3: Determine if we should attempt Tesseract processing
-    const fileSize = file.size;
-    const fileName = file.name.toLowerCase();
-    
-    const isLikelyDocument = 
-      fileSize < 2000000 && // Smaller files are more likely to be document scans
-      (fileName.includes('doc') || 
-       fileName.includes('receipt') || 
-       fileName.includes('scan') || 
-       fileName.includes('text') || 
-       fileName.includes('page') ||
-       fileName.includes('statement') ||
-       fileName.includes('invoice'));
-    
-    // If it's likely a document and no rotation was applied yet, try Tesseract
-    if (isLikelyDocument && !rotationApplied) {
-      try {
-        console.log("File looks like it might contain text, attempting Tesseract...");
-        const tesseractResult = await autoRotateWithTesseract(processedImage);
-        
-        if (tesseractResult !== processedImage) {
-          console.log("Tesseract successfully applied rotation");
-          processedImage = tesseractResult;
-        } else {
-          console.log("Tesseract did not detect any needed rotation");
+    // Only perform auto-rotation if enabled by user
+    if (autoRotateEnabled) {
+      // Step 2: Try enhanced heuristic approach first
+      console.log("Running heuristic orientation detection...");
+      let processedImage = await detectRotationWithHeuristics(base64);
+      let rotationApplied = processedImage !== base64;
+      console.log(`Heuristic detection ${rotationApplied ? 'applied rotation' : 'detected no rotation'}`);
+      
+      // Step 3: Determine if we should attempt Tesseract processing
+      const fileSize = file.size;
+      const fileName = file.name.toLowerCase();
+      
+      const isLikelyDocument = 
+        fileSize < 2000000 && // Smaller files are more likely to be document scans
+        (fileName.includes('doc') || 
+         fileName.includes('receipt') || 
+         fileName.includes('scan') || 
+         fileName.includes('text') || 
+         fileName.includes('page') ||
+         fileName.includes('statement') ||
+         fileName.includes('invoice'));
+      
+      // If it's likely a document and no rotation was applied yet, try Tesseract
+      if (isLikelyDocument && !rotationApplied) {
+        try {
+          console.log("File looks like it might contain text, attempting Tesseract...");
+          const tesseractResult = await autoRotateWithTesseract(processedImage);
+          
+          if (tesseractResult !== processedImage) {
+            console.log("Tesseract successfully applied rotation");
+            processedImage = tesseractResult;
+          } else {
+            console.log("Tesseract did not detect any needed rotation");
+          }
+        } catch (tesseractError) {
+          console.error("Tesseract processing error:", tesseractError);
+          // Continue with our current image if Tesseract fails
         }
-      } catch (tesseractError) {
-        console.error("Tesseract processing error:", tesseractError);
-        // Continue with our current image if Tesseract fails
       }
+      
+      return processedImage;
+    } else {
+      // Skip auto-rotation if disabled
+      console.log("Auto-rotation is disabled, returning original image");
+      return base64;
     }
-    
-    return processedImage;
   } catch (error) {
     console.error(`Error processing file ${file.name}:`, error);
     // Convert to base64 as fallback if processing fails
@@ -677,12 +689,14 @@ const handleDrop = async (e) => {
       setProcessedFiles(i + 0.5);
       setUploadProgress(Math.round(((i + 0.5) / imgs.length) * 100));
       
-      // Then attempt to auto-rotate using Tesseract
-      try {
-        base64 = await autoRotateWithTesseract(base64);
-      } catch (tesseractError) {
-        console.error("Tesseract processing error:", tesseractError);
-        // Continue with original image if Tesseract fails
+      // Then attempt to auto-rotate using Tesseract if enabled
+      if (autoRotateEnabled) {
+        try {
+          base64 = await autoRotateWithTesseract(base64);
+        } catch (tesseractError) {
+          console.error("Tesseract processing error:", tesseractError);
+          // Continue with original image if Tesseract fails
+        }
       }
       
       base64List.push(base64);
@@ -1054,6 +1068,18 @@ const handleDrop = async (e) => {
         )}
         <input ref={fileInputRef} type="file" multiple accept="image/*" onChange={handleFileChange} hidden />
       </div>
+	  
+	  <div className="form-group auto-rotate-option">
+  <input 
+    type="checkbox" 
+    id="auto-rotate" 
+    checked={autoRotateEnabled} 
+    onChange={handleAutoRotateToggle} 
+  />
+  <label htmlFor="auto-rotate">
+    Auto-rotate images (uses Tesseract OCR to detect and correct image orientation)
+  </label>
+</div>
 
       <div className="form-group">
         <label>Images Per Item</label>

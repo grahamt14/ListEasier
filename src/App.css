@@ -16,6 +16,20 @@
   margin: 5px;
 }
 
+.auto-rotate-option {
+  display: flex;
+  align-items: center;
+  margin: 10px 0;
+}
+
+.auto-rotate-option input[type="checkbox"] {
+  margin-right: 8px;
+}
+
+.auto-rotate-option label {
+  cursor: pointer;
+  font-size: 14px;
+}
 /* Updated image controls to span full height */
 .image-controls {
   position: absolute;

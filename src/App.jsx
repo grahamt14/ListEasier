@@ -81,12 +81,42 @@ function App() {
   
    const [newImageGroups, setNewImageGroups] = useState([]);
 
-  const handleImageGroupsUpdate = (groups) => {
-    setNewImageGroups(groups);
-    console.log('Updated in parent:', groups);
-  };
+// Updated handleImageGroupsUpdate function for App.jsx
+// Add this function to your App.jsx component
 
- const handleGenerateListing = async () => {
+const handleImageGroupsUpdate = (groups) => {
+  console.log('Received updated image groups from child:', groups);
+  
+  // This function is called from FormSection when it uploads images to S3
+  // Replace the existing groups with the new S3 URL groups
+  // BUT preserve the empty group at the end
+  
+  // Check if the current imageGroups has an empty group at the end
+  const hasEmptyGroupAtEnd = imageGroups.length > 0 && 
+                             imageGroups[imageGroups.length - 1].length === 0;
+  
+  // Create the new image groups, ensuring we have an empty group at the end
+  let newGroups;
+  if (hasEmptyGroupAtEnd && groups[groups.length - 1].length > 0) {
+    // If the incoming groups don't have an empty group at the end but we need one
+    newGroups = [...groups, []];
+  } else if (!hasEmptyGroupAtEnd && groups[groups.length - 1].length === 0) {
+    // If the incoming groups have an empty group at the end but we don't need one
+    newGroups = groups.slice(0, -1);
+  } else {
+    // Otherwise, just use the incoming groups as-is
+    newGroups = [...groups];
+  }
+  
+  // Update the state with the new groups
+  setImageGroups(newGroups);
+  
+  // Also update newImageGroups state which is used for the CSV download
+  setNewImageGroups(groups);
+};
+
+ // Updated handleGenerateListing function for App.jsx
+const handleGenerateListing = async () => {
   // 1. Gather all non-empty groups
   const nonEmptyGroups = imageGroups.filter(g => g.length > 0);
 
@@ -98,6 +128,8 @@ function App() {
 
   // 2. If there are leftover pool images, batch them too
   console.log(`filesBase64.length ${filesBase64.length}`);
+  let allGroupsToProcess = [...nonEmptyGroups];
+  
   if (filesBase64.length > 0 && batchSize > 0) {
     // Create new groups from the pool images
     const poolGroups = [];
@@ -105,32 +137,34 @@ function App() {
       poolGroups.push(filesBase64.slice(i, i + batchSize));
     }
     
+    // Add pool groups to processing list
+    allGroupsToProcess = [...nonEmptyGroups, ...poolGroups];
+    
     // Update imageGroups to include these new groups from the pool
+    // BUT don't include the existing nonEmptyGroups again (this was causing duplication)
     setImageGroups(prev => {
-      const updatedGroups = [...nonEmptyGroups, ...poolGroups, []];
-      return updatedGroups;
+      // Start with a fresh array, only keeping the empty group at the end if it exists
+      const lastEmptyGroup = prev[prev.length - 1]?.length === 0 ? [prev[prev.length - 1]] : [[]];
+      return [...nonEmptyGroups, ...poolGroups, ...lastEmptyGroup];
     });
     
     // Clear the filesBase64 pool since we've moved all images to groups
     setFilesBase64([]);
-    
-    // Add these new groups to our processing list
-    nonEmptyGroups.push(...poolGroups);
   }
 
   // 3. Initialize UI state
-  setTotalChunks(nonEmptyGroups.length);
+  setTotalChunks(allGroupsToProcess.length);
   setCompletedChunks(0);
-  setResponseData(Array(nonEmptyGroups.length).fill(null));
+  setResponseData(Array(allGroupsToProcess.length).fill(null));
   setIsDirty(false);
   setIsLoading(true);
-  setProcessingGroups(Array(nonEmptyGroups.length).fill(true));
+  setProcessingGroups(Array(allGroupsToProcess.length).fill(true));
 
   // 4. Prepare selected category options JSON
   const selectedCategoryOptions = getSelectedCategoryOptionsJSON(fieldSelections);
 
   // 5. Fire off each fetch separately and update state upon completion
-  nonEmptyGroups.forEach((group, idx) => {
+  allGroupsToProcess.forEach((group, idx) => {
     console.log(`Starting API call for group ${idx}`);
 
     fetch(
@@ -188,8 +222,8 @@ function App() {
         setTimeout(() => {
           setCompletedChunks(c => {
             const done = c + 1;
-            console.log(`Completed ${done} of ${nonEmptyGroups.length} chunks`);
-            if (done === nonEmptyGroups.length) {
+            console.log(`Completed ${done} of ${allGroupsToProcess.length} chunks`);
+            if (done === allGroupsToProcess.length) {
               setIsLoading(false);
             }
             return done;

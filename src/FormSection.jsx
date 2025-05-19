@@ -440,7 +440,7 @@ const fetchEbayCategoryID = async (selectedCategory, subCategory) => {
   }
 };
 
-  // Replace the existing handleGenerateListingWithUpload function with this:
+ // Updated handleGenerateListingWithUpload function for FormSection.jsx
 const handleGenerateListingWithUpload = async () => {
   console.log('🚀 Starting handleGenerateListingWithUpload');
   
@@ -464,6 +464,7 @@ const handleGenerateListingWithUpload = async () => {
     if (allRawFiles.length === 0) {
       console.log('⚠️ No raw files to upload');
       setIsUploading(false);
+      // Call parent's handleGenerateListing without modifying state first
       handleGenerateListing();
       return;
     }
@@ -531,29 +532,31 @@ const handleGenerateListingWithUpload = async () => {
       newImageGroups.push([]);
     }
     
-    // Update local and parent state in the correct order
-    setLocalImageGroups(newImageGroups);
-    onImageGroupsChange(newImageGroups); // Pass to parent
+    // Pass the updated images to parent BEFORE calling handleGenerateListing
+    onImageGroupsChange(newImageGroups);
     
-    // Set the local and parent filesBase64 state
+    // Update parent state with URLs instead of base64 images
     setFilesBase64(newFilesBase64);
     
     // Fetch the eBay category ID
     const ebayCategoryID = await fetchEbayCategoryID(selectedCategory, subCategory);
     setLocalCategoryID(ebayCategoryID);
-    onCategoryChange(ebayCategoryID); // Send to parent
+    onCategoryChange(ebayCategoryID);
+    
+    // Update local state after parent state
+    setLocalImageGroups(newImageGroups);
     
     // Clear raw files state
     setRawFiles([]);
     setRawImageGroups([[]]);
     
-    // Now call handleGenerateListing at the very end
+    console.log('Upload process complete, setting isUploading to false');
+    setIsUploading(false);
+    
+    // Now call handleGenerateListing AFTER all state updates
     console.log('Calling handleGenerateListing');
     await handleGenerateListing();
     console.log('handleGenerateListing completed');
-    
-    console.log('Upload process complete, setting isUploading to false');
-    setIsUploading(false);
     
   } catch (error) {
     console.error('❌ Fatal error during upload process:', error);
@@ -562,7 +565,6 @@ const handleGenerateListingWithUpload = async () => {
   
   console.log('🏁 Exiting handleGenerateListingWithUpload');
 };
-
   const isValidSelection = selectedCategory !== "--" && subCategory !== "--";
 
   const ProgressBar = ({ progress }) => (

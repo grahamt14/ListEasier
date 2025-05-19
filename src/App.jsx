@@ -299,6 +299,15 @@ const downloadListingsAsZip = () => {
     return;
   }
   
+  // Filter out empty arrays from s3ImageGroups
+  if (s3ImageGroups && Array.isArray(s3ImageGroups)) {
+    console.log("Original s3ImageGroups length:", s3ImageGroups.length);
+    s3ImageGroups = s3ImageGroups.filter(imageGroup => 
+      Array.isArray(imageGroup) && imageGroup.length > 0
+    );
+    console.log("Filtered s3ImageGroups length:", s3ImageGroups.length);
+  }
+  
   console.log("Creating new JSZip instance");
   const zip = new JSZip();
   

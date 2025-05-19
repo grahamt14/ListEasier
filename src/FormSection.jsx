@@ -187,7 +187,7 @@ const s3Client = new S3Client({
     }
   };
 
-  const uploadToS3 = async (file) => {
+const uploadToS3 = async (file) => {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
 

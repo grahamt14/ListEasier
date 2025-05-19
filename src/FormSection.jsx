@@ -440,131 +440,128 @@ const fetchEbayCategoryID = async (selectedCategory, subCategory) => {
   }
 };
 
-  // Modified to upload all files (ungrouped and grouped)
-  const handleGenerateListingWithUpload = async () => {
-    console.log('🚀 Starting handleGenerateListingWithUpload');
-      console.log('Calling handleGenerateListing');
-    // Make sure handleGenerateListing returns a Promise
-    // If it's not already async, you need to modify it
-    await handleGenerateListing();
-    console.log('handleGenerateListing completed');
-    console.log(`Initial state - rawFiles: ${rawFiles.length}, filesBase64: ${filesBase64.length}`);
-    console.log(`Image groups: ${imageGroups.length}, Raw image groups: ${rawImageGroups.length}`);
+  // Replace the existing handleGenerateListingWithUpload function with this:
+const handleGenerateListingWithUpload = async () => {
+  console.log('🚀 Starting handleGenerateListingWithUpload');
+  
+  try {
+    console.log('Setting isUploading to true');
+    setIsUploading(true);
     
-    try {
-      console.log('Setting isUploading to true');
-      setIsUploading(true);
-      
-      // Collect ALL raw files that need uploading
-      let allRawFiles = [...rawFiles];
-      
-      // Add raw files from image groups
-      rawImageGroups.forEach(group => {
-        if (group && group.length) {
-          allRawFiles = [...allRawFiles, ...group];
-        }
-      });
-      
-      console.log(`Total files to upload: ${allRawFiles.length}`);
-      setTotalFiles(allRawFiles.length);
-      
-      if (allRawFiles.length === 0) {
-        console.log('⚠️ No raw files to upload');
-        setIsUploading(false);
-        handleGenerateListing();
-        return;
+    // Collect ALL raw files that need uploading
+    let allRawFiles = [...rawFiles];
+    
+    // Add raw files from image groups
+    rawImageGroups.forEach(group => {
+      if (group && group.length) {
+        allRawFiles = [...allRawFiles, ...group];
       }
-      
-      // Upload all raw files to S3
-      const s3UrlsList = [];
-      
-      console.log('Beginning file upload loop');
-      for (let i = 0; i < allRawFiles.length; i++) {
-        try {
-          if (!allRawFiles[i]) {
-            console.log(`Skipping undefined file at index ${i}`);
-            continue;
-          }
-          
-          console.log(`Processing file ${i + 1}/${allRawFiles.length}: ${allRawFiles[i].name || 'unnamed file'}`);
-          console.log(`File type: ${allRawFiles[i].type}, size: ${allRawFiles[i].size} bytes`);
-          
-          console.log(`Uploading file ${i + 1} to S3...`);
-          const s3Url = await uploadToS3(allRawFiles[i]);
-          console.log(`Upload successful, received S3 URL: ${s3Url}`);
-          
-          s3UrlsList.push(s3Url);
-          console.log(`Added S3 URL to list, current count: ${s3UrlsList.length}`);
-          
-          setProcessedFiles(i + 1);
-          const progressPercent = Math.round(((i + 1) / allRawFiles.length) * 100);
-          console.log(`Setting upload progress to ${progressPercent}%`);
-          setUploadProgress(progressPercent);
-        } catch (error) {
-          console.error(`❌ Error uploading file ${i + 1}:`, error);
-          console.error('Error details:', JSON.stringify(error, Object.getOwnPropertyNames(error)));
-        }
-      }
-      
-      console.log(`Upload complete. Total S3 URLs: ${s3UrlsList.length}`);
-      
-      // Replace base64 images with S3 URLs
-      // First determine how many URLs go to the main array vs. groups
-      let urlIndex = 0;
-      
-      // Replace main filesBase64 array
-        console.log(`filesBase64.length ${filesBase64.length}`);
-            // Replace main filesBase64 array
-      if (filesBase64.length > 0) {
-        const mainUrls = s3UrlsList.slice(urlIndex, urlIndex + filesBase64.length);
-        console.log(`Replacing ${filesBase64.length} main images with S3 URLs`);
-        setFilesBase64(mainUrls);
-        urlIndex += filesBase64.length;
-      }
-      
-        console.log(`imageGroups.length ${imageGroups.length}`);
-      // Replace image groups with S3 URLs
-      if (imageGroups.length > 0) {
-        const newImageGroups = [...imageGroups];
-        
-        for (let i = 0; i < newImageGroups.length; i++) {
-          const group = newImageGroups[i];
-		  
-          if (group && group.length > 0) {
-            const groupUrls = s3UrlsList.slice(urlIndex, urlIndex + group.length);
-            console.log(`Replacing group ${i} with ${groupUrls.length} S3 URLs`);
-            newImageGroups[i] = groupUrls;
-            urlIndex += group.length;
-          }
-        }
-        
-        setImageGroups(newImageGroups);
-		 setLocalImageGroups(newImageGroups);
-    onImageGroupsChange(newImageGroups); // Pass to parent
-	
-  const ebayCategoryID = await fetchEbayCategoryID(selectedCategory, subCategory);
-	
-            console.log(ebayCategoryID);
-	  setLocalCategoryID(ebayCategoryID);
-    onCategoryChange(ebayCategoryID); // Send to parent
-      }
-      
-      console.log('Upload process complete, setting isUploading to false');
+    });
+    
+    console.log(`Total files to upload: ${allRawFiles.length}`);
+    setTotalFiles(allRawFiles.length);
+    
+    if (allRawFiles.length === 0) {
+      console.log('⚠️ No raw files to upload');
       setIsUploading(false);
-      
-      // Explicitly clear the rawFiles state to prevent them from reappearing
-      setRawFiles([]);
-      
-    } catch (error) {
-      console.error('❌ Fatal error during upload process:', error);
-      console.error('Error stack:', error.stack);
-      console.error('Error details:', JSON.stringify(error, Object.getOwnPropertyNames(error)));
-      console.log('Setting isUploading to false due to error');
-      setIsUploading(false);
+      handleGenerateListing();
+      return;
     }
     
-    console.log('🏁 Exiting handleGenerateListingWithUpload');
-  };
+    // Upload all raw files to S3
+    const s3UrlsList = [];
+    
+    console.log('Beginning file upload loop');
+    for (let i = 0; i < allRawFiles.length; i++) {
+      try {
+        if (!allRawFiles[i]) {
+          console.log(`Skipping undefined file at index ${i}`);
+          continue;
+        }
+        
+        console.log(`Processing file ${i + 1}/${allRawFiles.length}: ${allRawFiles[i].name || 'unnamed file'}`);
+        
+        console.log(`Uploading file ${i + 1} to S3...`);
+        const s3Url = await uploadToS3(allRawFiles[i]);
+        console.log(`Upload successful, received S3 URL: ${s3Url}`);
+        
+        s3UrlsList.push(s3Url);
+        
+        setProcessedFiles(i + 1);
+        const progressPercent = Math.round(((i + 1) / allRawFiles.length) * 100);
+        setUploadProgress(progressPercent);
+      } catch (error) {
+        console.error(`❌ Error uploading file ${i + 1}:`, error);
+      }
+    }
+    
+    console.log(`Upload complete. Total S3 URLs: ${s3UrlsList.length}`);
+    
+    // Replace base64 images with S3 URLs
+    let urlIndex = 0;
+    
+    // Replace main filesBase64 array
+    const newFilesBase64 = [];
+    if (filesBase64.length > 0) {
+      const mainUrls = s3UrlsList.slice(urlIndex, urlIndex + filesBase64.length);
+      console.log(`Replacing ${filesBase64.length} main images with S3 URLs`);
+      newFilesBase64.push(...mainUrls);
+      urlIndex += filesBase64.length;
+    }
+    
+    // Replace image groups with S3 URLs
+    const newImageGroups = [];
+    if (imageGroups.length > 0) {
+      for (let i = 0; i < imageGroups.length; i++) {
+        const group = imageGroups[i];
+        if (group && group.length > 0) {
+          const groupUrls = s3UrlsList.slice(urlIndex, urlIndex + group.length);
+          console.log(`Replacing group ${i} with ${groupUrls.length} S3 URLs`);
+          newImageGroups.push(groupUrls);
+          urlIndex += group.length;
+        } else if (i === imageGroups.length - 1) {
+          // Keep the last empty group
+          newImageGroups.push([]);
+        }
+      }
+    }
+    
+    // Make sure we have an empty group at the end
+    if (newImageGroups.length === 0 || newImageGroups[newImageGroups.length - 1].length > 0) {
+      newImageGroups.push([]);
+    }
+    
+    // Update local and parent state in the correct order
+    setLocalImageGroups(newImageGroups);
+    onImageGroupsChange(newImageGroups); // Pass to parent
+    
+    // Set the local and parent filesBase64 state
+    setFilesBase64(newFilesBase64);
+    
+    // Fetch the eBay category ID
+    const ebayCategoryID = await fetchEbayCategoryID(selectedCategory, subCategory);
+    setLocalCategoryID(ebayCategoryID);
+    onCategoryChange(ebayCategoryID); // Send to parent
+    
+    // Clear raw files state
+    setRawFiles([]);
+    setRawImageGroups([[]]);
+    
+    // Now call handleGenerateListing at the very end
+    console.log('Calling handleGenerateListing');
+    await handleGenerateListing();
+    console.log('handleGenerateListing completed');
+    
+    console.log('Upload process complete, setting isUploading to false');
+    setIsUploading(false);
+    
+  } catch (error) {
+    console.error('❌ Fatal error during upload process:', error);
+    setIsUploading(false);
+  }
+  
+  console.log('🏁 Exiting handleGenerateListingWithUpload');
+};
 
   const isValidSelection = selectedCategory !== "--" && subCategory !== "--";
 

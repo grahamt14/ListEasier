@@ -86,31 +86,48 @@ function App() {
     console.log('Updated in parent:', groups);
   };
 
-  const handleGenerateListing = async () => {
+ const handleGenerateListing = async () => {
   // 1. Gather all non-empty groups
   const nonEmptyGroups = imageGroups.filter(g => g.length > 0);
 
+  // Skip processing if there are no groups to process
+  if (nonEmptyGroups.length === 0 && filesBase64.length === 0) {
+    console.log("No images to process");
+    return;
+  }
+
   // 2. If there are leftover pool images, batch them too
-  console.log('filesBase64.length ${filesBase64.length}')
+  console.log(`filesBase64.length ${filesBase64.length}`);
   if (filesBase64.length > 0 && batchSize > 0) {
+    // Create new groups from the pool images
+    const poolGroups = [];
     for (let i = 0; i < filesBase64.length; i += batchSize) {
-      nonEmptyGroups.push(filesBase64.slice(i, i + batchSize));
+      poolGroups.push(filesBase64.slice(i, i + batchSize));
     }
+    
+    // Update imageGroups to include these new groups from the pool
+    setImageGroups(prev => {
+      const updatedGroups = [...nonEmptyGroups, ...poolGroups, []];
+      return updatedGroups;
+    });
+    
+    // Clear the filesBase64 pool since we've moved all images to groups
+    setFilesBase64([]);
+    
+    // Add these new groups to our processing list
+    nonEmptyGroups.push(...poolGroups);
   }
 
   // 3. Initialize UI state
   setTotalChunks(nonEmptyGroups.length);
   setCompletedChunks(0);
   setResponseData(Array(nonEmptyGroups.length).fill(null));
-  setImageGroups([...nonEmptyGroups, []]);
-  setFilesBase64([]);
   setIsDirty(false);
   setIsLoading(true);
   setProcessingGroups(Array(nonEmptyGroups.length).fill(true));
 
-
-    // 4. Prepare selected category options JSON
-    const selectedCategoryOptions = getSelectedCategoryOptionsJSON(fieldSelections);
+  // 4. Prepare selected category options JSON
+  const selectedCategoryOptions = getSelectedCategoryOptionsJSON(fieldSelections);
 
   // 5. Fire off each fetch separately and update state upon completion
   nonEmptyGroups.forEach((group, idx) => {
@@ -180,6 +197,8 @@ function App() {
         }, 0);
       });
   });
+  
+  return Promise.resolve(); // Make sure this returns a Promise
 };
 
 

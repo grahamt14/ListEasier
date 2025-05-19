@@ -498,6 +498,7 @@ const fetchEbayCategoryID = async (selectedCategory, subCategory) => {
       let urlIndex = 0;
       
       // Replace main filesBase64 array
+        console.log(`filesBase64.length ${filesBase64.length}`);
       if (filesBase64.length > 0) {
         const mainUrls = s3UrlsList.slice(urlIndex, urlIndex + filesBase64.length);
         console.log(`Replacing ${filesBase64.length} main images with S3 URLs`);
@@ -526,6 +527,7 @@ const fetchEbayCategoryID = async (selectedCategory, subCategory) => {
     onCategoryChange(ebayCategoryID); // Send to parent
       }
       
+        console.log(`imageGroups.length ${imageGroups.length}`);
       // Replace image groups with S3 URLs
       if (imageGroups.length > 0) {
         const newImageGroups = [...imageGroups];

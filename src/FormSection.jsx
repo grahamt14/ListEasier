@@ -187,63 +187,65 @@ function FormSection({
   };
 
   const uploadToS3 = async (file) => {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
 
-      reader.onload = async (e) => {
-        try {
-          const dataUrl = e.target.result;
-          const img = new Image();
-          img.onload = async () => {
-            // All the existing resizing logic stays here, even if we don't use it for upload:
-            const maxWidth = 800; // adjustable
-            let width = img.width;
-            let height = img.height;
+    reader.onload = async (e) => {
+      try {
+        const dataUrl = e.target.result;
+        const img = new Image();
 
-            if (width > maxWidth) {
-              height = Math.floor(height * (maxWidth / width));
-              width = maxWidth;
-            }
+        img.onload = async () => {
+          // Resize logic — optional and currently unused for upload
+          const maxWidth = 800;
+          let width = img.width;
+          let height = img.height;
 
-            const canvas = document.createElement("canvas");
-            canvas.width = width;
-            canvas.height = height;
+          if (width > maxWidth) {
+            height = Math.floor(height * (maxWidth / width));
+            width = maxWidth;
+          }
 
-            const ctx = canvas.getContext("2d");
-            ctx.drawImage(img, 0, 0, width, height);
+          const canvas = document.createElement("canvas");
+          canvas.width = width;
+          canvas.height = height;
 
-            // Upload the original file directly:
-            const fileName = `${Date.now()}_${file.name}`;
-            const uploadParams = {
-              Bucket: BUCKET_NAME,
-              Key: fileName,
-              Body: file,  // <--- original file uploaded here
-              ContentType: file.type,
-              ACL: "public-read",
-            };
+          const ctx = canvas.getContext("2d");
+          ctx.drawImage(img, 0, 0, width, height);
 
-            try {
-              await s3Client.send(new PutObjectCommand(uploadParams));
-              const s3Url = `https://${BUCKET_NAME}.s3.${REGION}.amazonaws.com/${fileName}`;
-              console.log("Upload success:", s3Url);
-              resolve(s3Url);
-            } catch (uploadError) {
-              console.error("Upload error:", uploadError);
-              reject(uploadError);
-            }
+          // Upload the original file using .stream() to avoid getReader error
+          const fileName = `${Date.now()}_${file.name}`;
+          const uploadParams = {
+            Bucket: BUCKET_NAME,
+            Key: fileName,
+            Body: file.stream(), // ✅ FIXED: Use stream for compatibility
+            ContentType: file.type,
+            ACL: "public-read",
           };
 
-          img.onerror = (err) => reject(err);
-          img.src = dataUrl;
-        } catch (err) {
-          reject("Error reading EXIF data: " + err);
-        }
-      };
+          try {
+            await s3Client.send(new PutObjectCommand(uploadParams));
+            const s3Url = `https://${BUCKET_NAME}.s3.${REGION}.amazonaws.com/${fileName}`;
+            console.log("Upload success:", s3Url);
+            resolve(s3Url);
+          } catch (uploadError) {
+            console.error("Upload error:", uploadError);
+            reject(uploadError);
+          }
+        };
 
-      reader.onerror = (err) => reject(err);
-      reader.readAsDataURL(file);
-    });
-  };
+        img.onerror = (err) => reject(err);
+        img.src = dataUrl;
+      } catch (err) {
+        reject("Error reading image: " + err);
+      }
+    };
+
+    reader.onerror = (err) => reject(err);
+    reader.readAsDataURL(file);
+  });
+};
+
 
   const convertToBase64 = (file) => {
     return new Promise((resolve, reject) => {

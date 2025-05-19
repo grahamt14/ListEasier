@@ -200,8 +200,7 @@ const downloadListingsAsZip = () => {
   validResponses.forEach((listing, index) => {
     const categoryId = listing.categoryId || '';
     const title = listing.title ? listing.title.replace(/\r?\n|\r/g, ' ').replace(/"/g, '""') : '';
-	console.log(imageGroups);
-    const photoUrls = imageGroups[0];
+    const photoUrls = imageGroups[index];
     const description = listing.description ? listing.description.replace(/\r?\n|\r/g, ' ').replace(/"/g, '""') : '';
 
     const line = `Draft,${sku},${categoryId},"${title}",,${price},1,"${photoUrls}",3000,"${description}",FixedPrice`;

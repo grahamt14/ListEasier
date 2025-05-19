@@ -489,6 +489,7 @@ const uploadToS3 = async (file) => {
         }
         
         setImageGroups(newImageGroups);
+		console.log(imageGroups);
       }
       
       console.log('Upload process complete, setting isUploading to false');

@@ -120,12 +120,12 @@ const s3Client = new S3Client({
             categoryData[category] = [];
           }
           categoryData[category].push(subcategory);
+    setLocalCategoryID(categoryID);
+    onCategoryChange(categoryID); // Send to parent
         });
         categoryData['--'] = ['--'];
         setCategories(categoryData);
 		
-    setLocalCategoryID(categoryID);
-    onCategoryChange(categoryID); // Send to parent
       } catch (err) {
         console.error('Error fetching categories:', err);
       } finally {

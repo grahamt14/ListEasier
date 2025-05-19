@@ -374,126 +374,85 @@ const rotateImage = (base64Img, degrees) => {
       console.error("Error rotating image:", error);
     }
   };
-  
-  // Simplified image processing approach that doesn't rely solely on Tesseract
-const processImage = async (file) => {
-  try {
-    console.log(`Processing file: ${file.name}`);
-    
-    // Step 1: Convert to base64 first
-    const base64 = await convertToBase64(file);
-    
-    // Step 2: Try the heuristic approach first (faster, more reliable)
-    let processedImage = await detectRotationWithHeuristics(base64);
-    
-    // Step 3: Only try Tesseract if the image might contain text
-    // You could add a check here to only use Tesseract on text-likely images
-    // For example, if the file name contains "document", "receipt", etc.
-    const mightContainText = /doc|receipt|text|scan|statement|invoice/i.test(file.name);
-    
-    if (mightContainText) {
-      try {
-        // Use Tesseract with a timeout
-        const tesseractPromise = autoRotateWithTesseract(base64);
-        const timeoutPromise = new Promise((_, reject) => {
-          setTimeout(() => reject(new Error("Tesseract timeout")), 3000);
-        });
-        
-        // Race between Tesseract and timeout
-        processedImage = await Promise.race([tesseractPromise, timeoutPromise]);
-      } catch (tesseractError) {
-        console.log("Tesseract processing skipped or failed, using heuristic result");
-        // We already have the heuristic result, so just continue
-      }
-    }
-    
-    return processedImage;
-  } catch (error) {
-    console.error(`Error processing file ${file.name}:`, error);
-    return base64; // Return original image if all processing fails
-  }
-};
 
 // Enhanced Tesseract auto-rotation function with better error handling
 const autoRotateWithTesseract = async (base64Img) => {
+  // Skip Tesseract if the module is not available
+  let Tesseract;
   try {
-    console.log("Starting Tesseract auto-rotation analysis...");
     const TesseractModule = await import('tesseract.js');
-    const Tesseract = TesseractModule.default || TesseractModule;
+    Tesseract = TesseractModule.default || TesseractModule;
+    console.log("Tesseract module loaded successfully");
+  } catch (importError) {
+    console.error("Tesseract import failed:", importError);
+    return base64Img; // Return original image if import fails
+  }
+  
+  try {
+    console.log("Starting Tesseract orientation detection...");
     
     // Create worker with safer settings
     const worker = await Tesseract.createWorker({
-      logger: m => console.log(m), // Optional: for better debugging
+      logger: m => console.log(`Tesseract [${m.status}]: ${m.progress?.toFixed(2) || 0}`),
     });
     
-    // Configure worker for orientation detection only (OSD)
-    // Note: We don't need to load/initialize as these are deprecated
+    // Configure worker specifically for orientation detection only
     await worker.setParameters({
-      tessedit_ocr_engine_mode: Tesseract.OEM.LSTM_ONLY,
-      tessedit_pageseg_mode: Tesseract.PSM.OSD_ONLY,
-      tessjs_create_boxfile: "0",
-      tessjs_create_hocr: "0",
-      tessjs_create_tsv: "0",
-      tessjs_create_unlv: "0",
+      tessedit_ocr_engine_mode: 1, // LSTM only mode
+      tessedit_pageseg_mode: 0,    // OSD only
     });
     
-    // Use a more careful approach to recognize
-    // We're setting a timeout to prevent hanging
-    const recognizePromise = worker.recognize(base64Img, { 
-      rotateAuto: true // Let Tesseract handle rotation internally when possible
-    });
+    console.log("Tesseract worker initialized, detecting orientation...");
     
-    // Set a timeout to prevent hanging
+    // Use a longer timeout for Tesseract (10 seconds)
+    const recognizePromise = worker.recognize(base64Img);
     const timeoutPromise = new Promise((_, reject) => {
-      setTimeout(() => reject(new Error("Tesseract detection timed out")), 5000);
+      setTimeout(() => reject(new Error("Tesseract detection timed out")), 10000);
     });
     
     // Race between recognition and timeout
     const result = await Promise.race([recognizePromise, timeoutPromise]);
-    console.log("Tesseract detection complete");
     
-    // Extract rotation if available
+    // Attempt to extract rotation information
     let rotation = 0;
-    if (result.data && result.data.osd) {
-      rotation = result.data.osd.rotate;
+    if (result?.data?.orientation) {
+      rotation = result.data.orientation.degrees;
       console.log(`Tesseract detected rotation angle: ${rotation}°`);
+    } else if (result?.data?.rotate) {
+      rotation = result.data.rotate;
+      console.log(`Tesseract detected rotation angle (legacy): ${rotation}°`);
+    } else if (result?.data?.osd?.rotate) {
+      rotation = result.data.osd.rotate;
+      console.log(`Tesseract detected OSD rotation angle: ${rotation}°`);
     } else {
-      console.log("No OSD data detected, using default rotation");
+      console.log("No rotation data detected in Tesseract response");
     }
     
     // Always terminate the worker
     await worker.terminate();
     
-    // Only rotate if necessary
+    // Only rotate if necessary (non-zero rotation detected)
     if (rotation !== 0) {
-      console.log(`Auto-rotating image by ${rotation}°`);
-      return await rotateImageModified(base64Img, rotation);
+      console.log(`Applying Tesseract rotation of ${rotation}°`);
+      return await rotateImage(base64Img, rotation);
     }
+    
+    console.log("No rotation needed according to Tesseract");
     return base64Img;
   } catch (error) {
-    console.error("Error in autoRotateWithTesseract:", error);
-    try {
-      console.log("Falling back to heuristic rotation detection");
-      return await detectRotationWithHeuristics(base64Img);
-    } catch (backupError) {
-      console.error("Backup rotation detection failed:", backupError);
-      return base64Img; // Return original image if all rotation detection fails
-    }
+    console.error("Error in Tesseract processing:", error);
+    return base64Img; // Return original image if processing fails
   }
 };
 
-
-
-
-
-// Alternative heuristic-based rotation detection
-// Useful when Tesseract doesn't find enough text to determine orientation
+// Improved heuristic-based orientation detection
 const detectRotationWithHeuristics = async (base64Img) => {
   return new Promise((resolve, reject) => {
     const img = new Image();
     
     img.onload = () => {
       try {
+        console.log("Running heuristic orientation detection...");
         const canvas = document.createElement('canvas');
         const ctx = canvas.getContext('2d');
         
@@ -508,41 +467,49 @@ const detectRotationWithHeuristics = async (base64Img) => {
         const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
         const data = imageData.data;
         
-        // Use edge detection or simple brightness distribution analysis
-        // This is a simplified approach - detecting if image appears upside down
+        // Analyze quarters of the image for more robust detection
+        const topQuarter = analyzeImageSection(data, canvas.width, 0, Math.floor(canvas.height * 0.25), canvas.width);
+        const bottomQuarter = analyzeImageSection(data, canvas.width, Math.floor(canvas.height * 0.75), canvas.height, canvas.width);
+        const leftQuarter = analyzeImageSectionVertical(data, canvas.width, 0, Math.floor(canvas.width * 0.25), canvas.height);
+        const rightQuarter = analyzeImageSectionVertical(data, canvas.width, Math.floor(canvas.width * 0.75), canvas.width, canvas.height);
         
-        // Analyze top and bottom halves of the image
-        const topHalf = analyzeImageSection(data, canvas.width, 0, Math.floor(canvas.height / 2), canvas.width);
-        const bottomHalf = analyzeImageSection(data, canvas.width, Math.floor(canvas.height / 2), canvas.height, canvas.width);
+        console.log("Heuristic brightness analysis:", {
+          topQuarter,
+          bottomQuarter,
+          leftQuarter,
+          rightQuarter
+        });
         
-        console.log("Heuristic analysis - Top half brightness:", topHalf);
-        console.log("Heuristic analysis - Bottom half brightness:", bottomHalf);
-        
-        // Simple heuristic: if bottom is notably brighter than top, image might be upside down
-        // This works in many photos where sky is at top (normally brighter)
-        if (bottomHalf > topHalf * 1.3) {
-          console.log("Heuristic suggests image may be upside down, rotating 180°");
-          rotateImageModified(base64Img, 180).then(resolve).catch(reject);
+        // Check for possible rotations based on brightness distribution
+        if (bottomQuarter > topQuarter * 1.5) {
+          console.log("Heuristic suggests image is upside down, rotating 180°");
+          rotateImage(base64Img, 180).then(resolve).catch(() => resolve(base64Img));
+        } else if (leftQuarter > rightQuarter * 1.5) {
+          console.log("Heuristic suggests image is rotated 90° right, rotating left");
+          rotateImage(base64Img, 270).then(resolve).catch(() => resolve(base64Img));
+        } else if (rightQuarter > leftQuarter * 1.5) {
+          console.log("Heuristic suggests image is rotated 90° left, rotating right");
+          rotateImage(base64Img, 90).then(resolve).catch(() => resolve(base64Img));
         } else {
-          // No clear indication of being upside down
+          console.log("No clear rotation detected using heuristics");
           resolve(base64Img);
         }
       } catch (err) {
         console.error("Error in heuristic analysis:", err);
-        resolve(base64Img);
+        resolve(base64Img); // Return original image on error
       }
     };
     
     img.onerror = () => {
       console.error("Failed to load image for heuristic analysis");
-      resolve(base64Img);
+      resolve(base64Img); // Return original image on error
     };
     
     img.src = base64Img;
   });
 };
 
-// Helper function to analyze brightness in a section of the image
+// Enhanced image section analysis for horizontal sections
 const analyzeImageSection = (data, width, startY, endY, sectionWidth) => {
   let totalBrightness = 0;
   let pixelCount = 0;
@@ -550,7 +517,7 @@ const analyzeImageSection = (data, width, startY, endY, sectionWidth) => {
   for (let y = startY; y < endY; y++) {
     for (let x = 0; x < sectionWidth; x++) {
       const idx = (y * width + x) * 4;
-      // Calculate perceived brightness using standard formula
+      // Calculate perceived brightness using weighted formula
       const brightness = (0.299 * data[idx] + 0.587 * data[idx + 1] + 0.114 * data[idx + 2]);
       totalBrightness += brightness;
       pixelCount++;
@@ -560,65 +527,91 @@ const analyzeImageSection = (data, width, startY, endY, sectionWidth) => {
   return pixelCount > 0 ? totalBrightness / pixelCount : 0;
 };
 
-// Improved image rotation function with better quality preservation
-const rotateImageModified = (base64Img, degrees) => {
-  return new Promise((resolve, reject) => {
-    const img = new Image();
-    img.onload = () => {
-      // Create canvas
-      const canvas = document.createElement('canvas');
-      const ctx = canvas.getContext('2d');
-      
-      // Convert degrees to radians for calculations
-      const radians = (degrees * Math.PI) / 180;
-      
-      // Calculate new dimensions to prevent cropping
-      // For any rotation angle, we need to find the bounding box dimensions
-      const cos = Math.abs(Math.cos(radians));
-      const sin = Math.abs(Math.sin(radians));
-      
-      // New width and height to contain the entire image after rotation
-      const newWidth = Math.round(img.width * cos + img.height * sin);
-      const newHeight = Math.round(img.width * sin + img.height * cos);
-      
-      // Set canvas dimensions to new calculated size
-      canvas.width = newWidth;
-      canvas.height = newHeight;
-      
-      // Set high quality
-      ctx.imageSmoothingEnabled = true;
-      ctx.imageSmoothingQuality = 'high';
-      
-      // Clear the canvas (important for transparency)
-      ctx.fillStyle = "rgba(255, 255, 255, 1)"; // Use white background instead of transparent
-      ctx.fillRect(0, 0, newWidth, newHeight);
-      
-      // Move to center of canvas
-      ctx.translate(newWidth / 2, newHeight / 2);
-      
-      // Rotate the canvas
-      ctx.rotate(radians);
-      
-      // Draw the image at the correct position
-      ctx.drawImage(img, -img.width / 2, -img.height / 2, img.width, img.height);
-      
-      // Get image type from base64
-      const imageType = base64Img.split(';')[0].split(':')[1] || 'image/jpeg';
-      
-      // Preserve original image quality
-      resolve(canvas.toDataURL(imageType, 1.0));
-    };
-    
-    img.onerror = (err) => reject(err);
-    img.src = base64Img;
-  });
+// New function to analyze vertical sections
+const analyzeImageSectionVertical = (data, width, startX, endX, sectionHeight) => {
+  let totalBrightness = 0;
+  let pixelCount = 0;
+  
+  for (let x = startX; x < endX; x++) {
+    for (let y = 0; y < sectionHeight; y++) {
+      const idx = (y * width + x) * 4;
+      // Calculate perceived brightness using weighted formula
+      const brightness = (0.299 * data[idx] + 0.587 * data[idx + 1] + 0.114 * data[idx + 2]);
+      totalBrightness += brightness;
+      pixelCount++;
+    }
+  }
+  
+  return pixelCount > 0 ? totalBrightness / pixelCount : 0;
 };
 
-// Modified file change handler with more robust image processing
+// Combined image processing function with better error handling and diagnostic logging
+const processImage = async (file) => {
+  try {
+    console.log(`Processing file: ${file.name} (${file.size} bytes, type: ${file.type})`);
+    
+    // Step 1: Convert to base64
+    console.log("Converting to base64...");
+    const base64 = await convertToBase64(file);
+    console.log("Base64 conversion complete");
+    
+    // Step 2: Try enhanced heuristic approach first
+    console.log("Running heuristic orientation detection...");
+    let processedImage = await detectRotationWithHeuristics(base64);
+    let rotationApplied = processedImage !== base64;
+    console.log(`Heuristic detection ${rotationApplied ? 'applied rotation' : 'detected no rotation'}`);
+    
+    // Step 3: Determine if we should attempt Tesseract processing
+    const fileSize = file.size;
+    const fileName = file.name.toLowerCase();
+    
+    const isLikelyDocument = 
+      fileSize < 2000000 && // Smaller files are more likely to be document scans
+      (fileName.includes('doc') || 
+       fileName.includes('receipt') || 
+       fileName.includes('scan') || 
+       fileName.includes('text') || 
+       fileName.includes('page') ||
+       fileName.includes('statement') ||
+       fileName.includes('invoice'));
+    
+    // If it's likely a document and no rotation was applied yet, try Tesseract
+    if (isLikelyDocument && !rotationApplied) {
+      try {
+        console.log("File looks like it might contain text, attempting Tesseract...");
+        const tesseractResult = await autoRotateWithTesseract(processedImage);
+        
+        if (tesseractResult !== processedImage) {
+          console.log("Tesseract successfully applied rotation");
+          processedImage = tesseractResult;
+        } else {
+          console.log("Tesseract did not detect any needed rotation");
+        }
+      } catch (tesseractError) {
+        console.error("Tesseract processing error:", tesseractError);
+        // Continue with our current image if Tesseract fails
+      }
+    }
+    
+    return processedImage;
+  } catch (error) {
+    console.error(`Error processing file ${file.name}:`, error);
+    // Convert to base64 as fallback if processing fails
+    try {
+      return await convertToBase64(file);
+    } catch (fallbackError) {
+      console.error("Fallback conversion failed:", fallbackError);
+      throw new Error(`Unable to process image: ${fallbackError.message}`);
+    }
+  }
+};
+
+// Updated file change handler with diagnostic logging
 const handleFileChange = async (e) => {
   const files = Array.from(e.target.files);
   if (files.length === 0) return;
 
+  console.log(`Processing ${files.length} files...`);
   setIsUploading(true);
   setTotalFiles(files.length);
   setProcessedFiles(0);
@@ -626,47 +619,14 @@ const handleFileChange = async (e) => {
 
   const base64List = [];
   const newRawFiles = [];
+  const processingErrors = [];
 
   for (let i = 0; i < files.length; i++) {
     try {
       console.log(`Processing file ${i+1}/${files.length}: ${files[i].name}`);
       
       // First convert to base64
-      let base64 = await convertToBase64(files[i]);
-      
-      // Update progress to show conversion is complete
-      setProcessedFiles(i + 0.5);
-      setUploadProgress(Math.round(((i + 0.5) / files.length) * 100));
-      
-      // Process image orientation using our safer approach
-      if (files[i].type.startsWith("image/")) {
-        try {
-          // Use heuristics first as they're more reliable
-          base64 = await detectRotationWithHeuristics(base64);
-          
-          // Only try Tesseract for files that might contain text
-          // This is optional and can be adjusted based on your needs
-          const mightContainText = files[i].size < 1000000; // Small images more likely to be document scans
-          
-          if (mightContainText) {
-            try {
-              const tesseractPromise = autoRotateWithTesseract(base64);
-              const timeoutPromise = new Promise((resolve) => {
-                setTimeout(() => resolve(base64), 3000); // Use current image after timeout
-              });
-              
-              // Use whichever finishes first
-              base64 = await Promise.race([tesseractPromise, timeoutPromise]);
-            } catch (tesseractError) {
-              console.log("Using heuristic-based orientation only");
-              // Continue with heuristic result
-            }
-          }
-        } catch (orientationError) {
-          console.error(`Orientation detection error for ${files[i].name}:`, orientationError);
-          // Continue with original image if all orientation detection fails
-        }
-      }
+      const base64 = await processImage(files[i]);
       
       base64List.push(base64);
       newRawFiles.push(files[i]);
@@ -675,7 +635,14 @@ const handleFileChange = async (e) => {
       setUploadProgress(Math.round(((i + 1) / files.length) * 100));
     } catch (error) {
       console.error(`Error processing file ${files[i].name}:`, error);
+      processingErrors.push(`Failed to process ${files[i].name}: ${error.message}`);
     }
+  }
+
+  // If we have processing errors, alert the user
+  if (processingErrors.length > 0) {
+    console.warn(`${processingErrors.length} files failed to process:`, processingErrors);
+    // Optionally display these errors to the user
   }
 
   setFilesBase64(prev => [...prev, ...base64List]);
@@ -683,6 +650,8 @@ const handleFileChange = async (e) => {
   setErrorMessages(prev => prev.filter(msg => msg !== "Please upload at least one image."));
   setIsDirty(true);
   setTimeout(() => setIsUploading(false), 500);
+  
+  console.log(`Completed processing ${base64List.length} files successfully`);
 };
 
 // Similarly update the drop handler

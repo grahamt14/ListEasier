@@ -211,13 +211,12 @@ const downloadListingsAsZip = () => {
   const zip = new JSZip();
 
   validResponses.forEach((listing, index) => {
-    const categoryId = listing.categoryId || '';
     const title = listing.title ? listing.title.replace(/\r?\n|\r/g, ' ').replace(/"/g, '""') : '';
     const photoUrls = newImageGroups[index];
 	const formattedUrls = photoUrls.join('||');
     const description = listing.description ? listing.description.replace(/\r?\n|\r/g, ' ').replace(/"/g, '""') : '';
 
-    const line = `Draft,${sku},${categoryId},"${title}",,${price},1,${formattedUrls},3000,"${description}",FixedPrice`;
+    const line = `Draft,${sku},${categoryID},"${title}",,${price},1,${formattedUrls},3000,"${description}",FixedPrice`;
 
     const fileName = `listing_${index + 1}${title ? '_' + title.replace(/[^a-z0-9]/gi, '_').toLowerCase().slice(0, 30) : ''}.csv`;
 

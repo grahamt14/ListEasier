@@ -81,7 +81,7 @@ function FormSection({
   
   // AWS config
   const REGION = "us-east-2"; // Update your region
-  const BUCKET_NAME = "listeasierimages"; // Update your bucket name
+  const BUCKET_NAME = "listeasier"; // Update your bucket name
   const IDENTITY_POOL_ID = "us-east-2:f81d1240-32a8-4aff-87e8-940effdf5908"; // Update your Identity Pool ID
 
 const s3Client = new S3Client({

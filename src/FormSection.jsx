@@ -384,13 +384,15 @@ const autoRotateWithTesseract = async (base64Img) => {
 
     Tesseract.setLogging(true);
 
-    const worker = await Tesseract.createWorker();
+    const worker = await Tesseract.createWorker({
+      // 👇 Force legacy model to enable `detect()`
+      legacy: true,
+    });
 
     await worker.setParameters({
       tessedit_pageseg_mode: Tesseract.PSM.OSD_ONLY,
     });
 
-    // Use `detect()` instead of `recognize()` for OSD_ONLY
     const result = await worker.detect(base64Img);
 
     console.log("Tesseract detection complete");
@@ -417,6 +419,7 @@ const autoRotateWithTesseract = async (base64Img) => {
     }
   }
 };
+
 
 
 

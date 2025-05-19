@@ -292,39 +292,43 @@ function FormSection({
     });
   };
 
-// Improved image rotation function that preserves aspect ratio
+// Improved image rotation function that prevents black borders and maintains aspect ratio
 const rotateImage = (base64Img, degrees) => {
   return new Promise((resolve, reject) => {
     const img = new Image();
     img.onload = () => {
+      // Create canvas
       const canvas = document.createElement('canvas');
       const ctx = canvas.getContext('2d');
       
-      // Determine the canvas dimensions based on rotation angle
-      // For 90° or 270° rotations, swap width and height
-      if (degrees === 90 || degrees === 270) {
-        canvas.width = img.height;
-        canvas.height = img.width;
-      } else {
-        canvas.width = img.width;
-        canvas.height = img.height;
-      }
+      // Convert degrees to radians for calculations
+      const radians = (degrees * Math.PI) / 180;
       
-      // Clear previous content
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      // Calculate new dimensions to prevent cropping
+      // For any rotation angle, we need to find the bounding box dimensions
+      const cos = Math.abs(Math.cos(radians));
+      const sin = Math.abs(Math.sin(radians));
       
-      // Move to the center of canvas
-      ctx.translate(canvas.width / 2, canvas.height / 2);
+      // New width and height to contain the entire image after rotation
+      const newWidth = Math.round(img.width * cos + img.height * sin);
+      const newHeight = Math.round(img.width * sin + img.height * cos);
+      
+      // Set canvas dimensions to new calculated size
+      canvas.width = newWidth;
+      canvas.height = newHeight;
+      
+      // Clear the canvas (important for transparency)
+      ctx.fillStyle = "rgba(255, 255, 255, 0)";
+      ctx.fillRect(0, 0, newWidth, newHeight);
+      
+      // Move to center of canvas
+      ctx.translate(newWidth / 2, newHeight / 2);
       
       // Rotate the canvas
-      ctx.rotate((degrees * Math.PI) / 180);
+      ctx.rotate(radians);
       
-      // Draw the image at the correct position to maintain aspect ratio
-      if (degrees === 90 || degrees === 270) {
-        ctx.drawImage(img, -img.height / 2, -img.width / 2);
-      } else {
-        ctx.drawImage(img, -img.width / 2, -img.height / 2);
-      }
+      // Draw the image at the correct position
+      ctx.drawImage(img, -img.width / 2, -img.height / 2, img.width, img.height);
       
       // Get image type from base64
       const imageType = base64Img.split(';')[0].split(':')[1] || 'image/jpeg';

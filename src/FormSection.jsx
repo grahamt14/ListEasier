@@ -84,13 +84,16 @@ function FormSection({
   const BUCKET_NAME = "listeasierimages"; // Update your bucket name
   const IDENTITY_POOL_ID = "us-east-2:f81d1240-32a8-4aff-87e8-940effdf5908"; // Update your Identity Pool ID
 
-// Update your S3 client configuration
 const s3Client = new S3Client({
   region: REGION,
   credentials: fromCognitoIdentityPool({
     clientConfig: { region: REGION },
     identityPoolId: IDENTITY_POOL_ID,
   }),
+  // Set specific configurations needed for browser environments
+  requestHandler: new FetchHttpHandler({
+    requestTimeout: 300000 // 5 minutes timeout for larger files
+  })
 });
 
   useEffect(() => {
@@ -190,28 +193,27 @@ const s3Client = new S3Client({
 const uploadToS3 = async (file) => {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
-
-    reader.onload = async (e) => {
+    
+    reader.onload = async () => {
       try {
-        // Read the file as an ArrayBuffer which works in browsers
-        const arrayBuffer = e.target.result;
-        
-        // Create a Blob from the ArrayBuffer with the correct MIME type
-        const blob = new Blob([arrayBuffer], { type: file.type });
-        
-        // Upload file with Blob as the Body
+        // Generate a unique file name
         const fileName = `${Date.now()}_${file.name}`;
+        
+        // For modern browsers, we can directly use the File object
         const uploadParams = {
           Bucket: BUCKET_NAME,
           Key: fileName,
-          Body: blob,
+          Body: file,
           ContentType: file.type,
           ACL: "public-read",
         };
 
+        console.log("Preparing to upload:", fileName);
+        
         try {
-          console.log("Attempting to upload:", fileName);
-          await s3Client.send(new PutObjectCommand(uploadParams));
+          const command = new PutObjectCommand(uploadParams);
+          await s3Client.send(command);
+          
           const s3Url = `https://${BUCKET_NAME}.s3.${REGION}.amazonaws.com/${fileName}`;
           console.log("Upload success:", s3Url);
           resolve(s3Url);
@@ -221,14 +223,18 @@ const uploadToS3 = async (file) => {
           reject(uploadError);
         }
       } catch (err) {
-        console.error("Error processing file:", err);
-        reject("Error processing image: " + err);
+        console.error("Error in upload process:", err);
+        reject("Error uploading: " + err.message);
       }
     };
 
-    reader.onerror = (err) => reject(err);
-    // Read as ArrayBuffer instead of DataURL
-    reader.readAsArrayBuffer(file);
+    reader.onerror = (err) => {
+      console.error("FileReader error:", err);
+      reject(err);
+    };
+    
+    // We're not actually using the FileReader result, but keeping it to maintain the async pattern
+    reader.readAsText(file.slice(0, 1));  
   });
 };
 

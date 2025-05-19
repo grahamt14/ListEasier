@@ -191,7 +191,7 @@ const downloadListingsAsZip = () => {
     const sku = listing.sku || `SKU${index + 1}`;
     const categoryId = listing.categoryId || '';
     const title = listing.title ? listing.title.replace(/\r?\n|\r/g, ' ').replace(/"/g, '""') : '';
-    const price = selectedCategoryOptions[price];
+    const price = selectedCategoryOptions['price'];
     const photoUrls = Array.isArray(listing.photoUrls) ? listing.photoUrls.join('|') : '';
     const description = listing.description ? listing.description.replace(/\r?\n|\r/g, ' ').replace(/"/g, '""') : '';
 

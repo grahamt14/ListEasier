@@ -529,8 +529,9 @@ const fetchEbayCategoryID = async (selectedCategory, subCategory) => {
             urlIndex += group.length;
           }
         }
-        
-        setImageGroups(newImageGroups);
+      }
+	  
+	  setImageGroups(newImageGroups);
 		 setLocalImageGroups(newImageGroups);
     onImageGroupsChange(newImageGroups); // Pass to parent
 	
@@ -539,7 +540,6 @@ const fetchEbayCategoryID = async (selectedCategory, subCategory) => {
             console.log(ebayCategoryID);
 	  setLocalCategoryID(ebayCategoryID);
     onCategoryChange(ebayCategoryID); // Send to parent
-      }
       
       console.log('Upload process complete, setting isUploading to false');
       setIsUploading(false);

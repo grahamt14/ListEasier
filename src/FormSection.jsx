@@ -61,6 +61,7 @@ function FormSection({
   const [rawFiles, setRawFiles] = useState([]);
   const [rawImageGroups, setRawImageGroups] = useState([[]]);
   const [fieldSelections, setFieldSelections] = useState({});
+  const [imageRotations, setImageRotations] = useState({}); // Track rotation degrees for each image
   
   const fileInputRef = useRef(null);
 
@@ -100,6 +101,7 @@ function FormSection({
     setRawImageGroups([[]]);
     setSelectedImages([]);
     setLocalImageGroups([]);
+    setImageRotations({});
     
     // Reset parent state
     setFilesBase64([]);
@@ -192,6 +194,7 @@ function FormSection({
   useEffect(() => {
     if (rawFiles.length > 0 && filesBase64.length === 0) {
       setRawFiles([]);
+      setImageRotations({});
     }
   }, [filesBase64]);
 
@@ -289,6 +292,76 @@ function FormSection({
     });
   };
 
+  // Rotate image
+  const rotateImage = (base64Img, degrees) => {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        
+        // Set proper canvas dimensions for the rotated image
+        if (degrees === 90 || degrees === 270) {
+          canvas.width = img.height;
+          canvas.height = img.width;
+        } else {
+          canvas.width = img.width;
+          canvas.height = img.height;
+        }
+        
+        // Move to the center of canvas
+        ctx.translate(canvas.width / 2, canvas.height / 2);
+        
+        // Rotate the canvas
+        ctx.rotate((degrees * Math.PI) / 180);
+        
+        // Draw the image and adjust position based on rotation
+        if (degrees === 90 || degrees === 270) {
+          ctx.drawImage(img, -img.height / 2, -img.width / 2);
+        } else {
+          ctx.drawImage(img, -img.width / 2, -img.height / 2);
+        }
+        
+        // Get image type from base64
+        const imageType = base64Img.split(';')[0].split(':')[1];
+        resolve(canvas.toDataURL(imageType));
+      };
+      img.onerror = (err) => reject(err);
+      img.src = base64Img;
+    });
+  };
+
+  // Handle image rotation
+  const handleRotateImage = async (index, direction) => {
+    try {
+      // Get current rotation or default to 0
+      const currentRotation = imageRotations[index] || 0;
+      
+      // Calculate new rotation (90 clockwise or -90 counterclockwise)
+      const rotationChange = direction === 'right' ? 90 : -90;
+      const newRotation = (currentRotation + rotationChange + 360) % 360;
+      
+      // Rotate image
+      const rotatedImage = await rotateImage(filesBase64[index], rotationChange);
+      
+      // Update image in filesBase64 array
+      const updatedImages = [...filesBase64];
+      updatedImages[index] = rotatedImage;
+      
+      // Update rotation tracking
+      setImageRotations(prev => ({
+        ...prev,
+        [index]: newRotation
+      }));
+      
+      // Update state
+      setFilesBase64(updatedImages);
+      setIsDirty(true);
+    } catch (error) {
+      console.error("Error rotating image:", error);
+    }
+  };
+
   // File input change handler
   const handleFileChange = async (e) => {
     const files = Array.from(e.target.files);
@@ -374,6 +447,25 @@ function FormSection({
     
     const remainingBase64 = filesBase64.filter((_, i) => !selectedImages.includes(i));
     const remainingRawFiles = rawFiles.filter((_, i) => !selectedImages.includes(i));
+    
+    // Remove rotations for selected images
+    const newRotations = { ...imageRotations };
+    selectedImages.forEach(index => {
+      delete newRotations[index];
+    });
+    
+    // Reindex remaining rotations
+    const finalRotations = {};
+    let newIndex = 0;
+    filesBase64.forEach((_, oldIndex) => {
+      if (!selectedImages.includes(oldIndex)) {
+        if (newRotations[oldIndex] !== undefined) {
+          finalRotations[newIndex] = newRotations[oldIndex];
+        }
+        newIndex++;
+      }
+    });
+    setImageRotations(finalRotations);
     
     setImageGroups(prev => {
       let updated = [...prev];
@@ -600,6 +692,7 @@ function FormSection({
       // Clear raw files state
       setRawFiles([]);
       setRawImageGroups([[]]);
+      setImageRotations({});
       
       setIsUploading(false);
       

@@ -299,14 +299,15 @@ const downloadListingsAsZip = () => {
     return;
   }
   
-  // Filter out empty arrays from s3ImageGroups
-  if (s3ImageGroups && Array.isArray(s3ImageGroups)) {
-    console.log("Original s3ImageGroups length:", s3ImageGroups.length);
-    s3ImageGroups = s3ImageGroups.filter(imageGroup => 
-      Array.isArray(imageGroup) && imageGroup.length > 0
-    );
-    console.log("Filtered s3ImageGroups length:", s3ImageGroups.length);
-  }
+let filteredS3ImageGroups = s3ImageGroups;
+
+if (filteredS3ImageGroups && Array.isArray(filteredS3ImageGroups)) {
+  console.log("Original s3ImageGroups length:", filteredS3ImageGroups.length);
+  filteredS3ImageGroups = filteredS3ImageGroups.filter(imageGroup => 
+    Array.isArray(imageGroup) && imageGroup.length > 0
+  );
+  console.log("Filtered s3ImageGroups length:", filteredS3ImageGroups.length);
+}
   
   console.log("Creating new JSZip instance");
   const zip = new JSZip();
@@ -335,29 +336,29 @@ const downloadListingsAsZip = () => {
     console.log(`Attempting to find images for listing ${index}`);
     
     // First check if we have S3 URLs available for this group
-    if (s3ImageGroups && Array.isArray(s3ImageGroups) && index < s3ImageGroups.length) {
-      console.log(`s3ImageGroups[${index}] exists:`, s3ImageGroups[index]);
+    if (filteredS3ImageGroups && Array.isArray(filteredS3ImageGroups) && index < filteredS3ImageGroups.length) {
+      console.log(`filteredS3ImageGroups[${index}] exists:`, filteredS3ImageGroups[index]);
       
-      if (Array.isArray(s3ImageGroups[index])) {
-        const s3Urls = s3ImageGroups[index].filter(url => url && typeof url === 'string' && !url.startsWith('data:'));
+      if (Array.isArray(filteredS3ImageGroups[index])) {
+        const s3Urls = filteredS3ImageGroups[index].filter(url => url && typeof url === 'string' && !url.startsWith('data:'));
         photoUrls = s3Urls;
         
         console.log(`Found ${s3Urls.length} valid S3 URLs for index ${index}`);
         console.log(`S3 URLs for listing ${index}:`, s3Urls);
         
-        // If we found base64 images in s3ImageGroups (which shouldn't happen), log a warning
-        const base64ImagesCount = s3ImageGroups[index].filter(url => url && url.startsWith('data:')).length;
+        // If we found base64 images in filteredS3ImageGroups (which shouldn't happen), log a warning
+        const base64ImagesCount = filteredS3ImageGroups[index].filter(url => url && url.startsWith('data:')).length;
         if (base64ImagesCount > 0) {
-          console.warn(`Warning: Found ${base64ImagesCount} base64 images in s3ImageGroups for listing ${index}. These won't be included in the CSV.`);
+          console.warn(`Warning: Found ${base64ImagesCount} base64 images in filteredS3ImageGroups for listing ${index}. These won't be included in the CSV.`);
         }
       } else {
-        console.warn(`s3ImageGroups[${index}] is not an array:`, s3ImageGroups[index]);
+        console.warn(`filteredS3ImageGroups[${index}] is not an array:`, filteredS3ImageGroups[index]);
       }
     } else {
-      console.log(`No s3ImageGroups available for index ${index}`);
+      console.log(`No filteredS3ImageGroups available for index ${index}`);
     }
     
-    // If we didn't get valid URLs from s3ImageGroups, check imageGroups as a fallback
+    // If we didn't get valid URLs from filteredS3ImageGroups, check imageGroups as a fallback
     if (photoUrls.length === 0) {
       console.log(`No S3 URLs found, attempting to use imageGroups for listing ${index}`);
       
@@ -378,7 +379,7 @@ const downloadListingsAsZip = () => {
             if (base64ImagesCount > 0) {
               console.warn(`Warning: Only found ${base64ImagesCount} base64 images for listing ${index}. These won't work in eBay listings.`);
             } else {
-              console.warn(`No valid images found for listing ${index} in either s3ImageGroups or imageGroups`);
+              console.warn(`No valid images found for listing ${index} in either filteredS3ImageGroups or imageGroups`);
             }
           }
         } else {

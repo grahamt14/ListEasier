@@ -380,29 +380,21 @@ const autoRotateWithTesseract = async (base64Img) => {
   try {
     console.log("Starting Tesseract auto-rotation analysis...");
     const TesseractModule = await import('tesseract.js');
-    console.log("Imported Tesseract module:", TesseractModule);
-
     const Tesseract = TesseractModule.default || TesseractModule;
 
-    const worker = Tesseract.createWorker();
+    const worker = await Tesseract.createWorker();  // <-- await here!
     console.log("Worker instance:", worker);
     console.log("worker.load is function?", typeof worker.load === 'function');
 
     await worker.load();
-    console.log("Loaded");
-
     await worker.loadLanguage('eng');
-    console.log("Loaded language");
-
     await worker.initialize('eng');
-    console.log("Initialized");
 
     await worker.setParameters({
       tessedit_pageseg_mode: '0',
       tessedit_ocr_engine_mode: '2',
       tessjs_create_osd: '1',
     });
-    console.log("Set parameters");
 
     const result = await worker.recognize(base64Img, {
       logger: m => {

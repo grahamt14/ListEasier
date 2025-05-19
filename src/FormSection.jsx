@@ -120,8 +120,6 @@ const s3Client = new S3Client({
             categoryData[category] = [];
           }
           categoryData[category].push(subcategory);
-    setLocalCategoryID(categoryID);
-    onCategoryChange(categoryID); // Send to parent
         });
         categoryData['--'] = ['--'];
         setCategories(categoryData);
@@ -408,6 +406,30 @@ const uploadToS3 = async (file) => {
     setSelectedImages([]);
   };
 
+const fetchEbayCategoryID = async (selectedCategory, subCategory) => {
+  try {
+    const command = new GetCommand({
+      TableName: 'ListCategory',
+      Key: {
+        Category: selectedCategory,
+        SubCategory: subCategory,
+      },
+    });
+
+    const response = await docClient.send(command);
+
+    if (response.Item) {
+      return response.Item.EbayCategoryID;
+    } else {
+      console.warn('No matching category found in ListCategory table.');
+      return null;
+    }
+  } catch (err) {
+    console.error('Error fetching EbayCategoryID:', err);
+    return null;
+  }
+};
+
   // Modified to upload all files (ungrouped and grouped)
   const handleGenerateListingWithUpload = async () => {
     console.log('🚀 Starting handleGenerateListingWithUpload');
@@ -500,6 +522,11 @@ const uploadToS3 = async (file) => {
         setImageGroups(newImageGroups);
 		 setLocalImageGroups(newImageGroups);
     onImageGroupsChange(newImageGroups); // Pass to parent
+	
+  const ebayCategoryID = await fetchEbayCategoryID(selectedCategory, subCategory);
+	
+	  setLocalCategoryID(ebayCategoryID);
+    onCategoryChange(ebayCategoryID); // Send to parent
       }
       
       console.log('Upload process complete, setting isUploading to false');

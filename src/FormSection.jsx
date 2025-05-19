@@ -501,8 +501,19 @@ const fetchEbayCategoryID = async (selectedCategory, subCategory) => {
       if (filesBase64.length > 0) {
         const mainUrls = s3UrlsList.slice(urlIndex, urlIndex + filesBase64.length);
         console.log(`Replacing ${filesBase64.length} main images with S3 URLs`);
-        setFilesBase64(mainUrls);
-        urlIndex += filesBase64.length;
+       
+		
+		const newImageGroups = [...imageGroups];
+        
+        for (let i = 0; i < newImageGroups.length; i++) {
+          const group = newImageGroups[i];
+          if (group && group.length > 0) {
+            const groupUrls = s3UrlsList.slice(urlIndex, urlIndex + group.length);
+            console.log(`Replacing group ${i} with ${groupUrls.length} S3 URLs`);
+            newImageGroups[i] = groupUrls;
+            urlIndex += group.length;
+          }
+        }
       }
       
       // Replace image groups with S3 URLs

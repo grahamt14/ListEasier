@@ -285,102 +285,187 @@ const downloadListingsAsZip = () => {
   console.log("Starting downloadListingsAsZip function");
   console.log("Initial responseData:", responseData);
   
-  const validResponses = responseData.filter(response => response && !response.error);
+  // Filter out empty or null responses
+  const validResponses = responseData.filter(response =>
+    response && !response.error
+  );
+  
   console.log("Filtered validResponses:", validResponses);
   console.log(`Found ${validResponses.length} valid listings to process`);
-
+  
   if (validResponses.length === 0) {
     console.warn("No valid listings found, showing alert and stopping execution");
     alert("No valid listings to download!");
     return;
   }
+  
+let filteredS3ImageGroups = s3ImageGroups;
 
-  let filteredS3ImageGroups = s3ImageGroups;
-  if (filteredS3ImageGroups && Array.isArray(filteredS3ImageGroups)) {
-    console.log("Original s3ImageGroups length:", filteredS3ImageGroups.length);
-    filteredS3ImageGroups = filteredS3ImageGroups.filter(imageGroup => 
-      Array.isArray(imageGroup) && imageGroup.length > 0
-    );
-    console.log("Filtered s3ImageGroups length:", filteredS3ImageGroups.length);
-  }
-
+if (filteredS3ImageGroups && Array.isArray(filteredS3ImageGroups)) {
+  console.log("Original s3ImageGroups length:", filteredS3ImageGroups.length);
+  filteredS3ImageGroups = filteredS3ImageGroups.filter(imageGroup => 
+    Array.isArray(imageGroup) && imageGroup.length > 0
+  );
+  console.log("Filtered s3ImageGroups length:", filteredS3ImageGroups.length);
+}
+  
   console.log("Creating new JSZip instance");
   const zip = new JSZip();
-
+  
+  // Debug logs to help understand what data we're working with
+  console.log("Valid responses:", validResponses.length);
+  console.log("s3ImageGroups data structure:", s3ImageGroups);
+  console.log("imageGroups data structure:", imageGroups);
+  
+  // Log global variables being used
   console.log(`Using categoryID: ${categoryID}`);
   console.log(`Using SKU: ${sku}`);
   console.log(`Using price: ${price}`);
-  console.log("Beginning to process listings for single CSV file");
-
-  // CSV header
-  const header = `#INFO,Version=0.0.2,Template= eBay-draft-listings-template_US,,,,,,,,
+  
+  console.log("Beginning to process each listing");
+  validResponses.forEach((listing, index) => {
+    console.log(`---------- Processing listing ${index + 1} ----------`);
+    console.log(`Raw listing data for index ${index}:`, listing);
+    
+    const title = listing.title ? listing.title.replace(/\r?\n|\r/g, ' ').replace(/"/g, '""') : '';
+    console.log(`Formatted title: "${title}"`);
+    
+    // Use S3 URLs for the CSV when available
+    let photoUrls = [];
+    
+    console.log(`Attempting to find images for listing ${index}`);
+    
+    // First check if we have S3 URLs available for this group
+    if (filteredS3ImageGroups && Array.isArray(filteredS3ImageGroups) && index < filteredS3ImageGroups.length) {
+      console.log(`filteredS3ImageGroups[${index}] exists:`, filteredS3ImageGroups[index]);
+      
+      if (Array.isArray(filteredS3ImageGroups[index])) {
+        const s3Urls = filteredS3ImageGroups[index].filter(url => url && typeof url === 'string' && !url.startsWith('data:'));
+        photoUrls = s3Urls;
+        
+        console.log(`Found ${s3Urls.length} valid S3 URLs for index ${index}`);
+        console.log(`S3 URLs for listing ${index}:`, s3Urls);
+        
+        // If we found base64 images in filteredS3ImageGroups (which shouldn't happen), log a warning
+        const base64ImagesCount = filteredS3ImageGroups[index].filter(url => url && url.startsWith('data:')).length;
+        if (base64ImagesCount > 0) {
+          console.warn(`Warning: Found ${base64ImagesCount} base64 images in filteredS3ImageGroups for listing ${index}. These won't be included in the CSV.`);
+        }
+      } else {
+        console.warn(`filteredS3ImageGroups[${index}] is not an array:`, filteredS3ImageGroups[index]);
+      }
+    } else {
+      console.log(`No filteredS3ImageGroups available for index ${index}`);
+    }
+    
+    // If we didn't get valid URLs from filteredS3ImageGroups, check imageGroups as a fallback
+    if (photoUrls.length === 0) {
+      console.log(`No S3 URLs found, attempting to use imageGroups for listing ${index}`);
+      
+      if (imageGroups && Array.isArray(imageGroups) && index < imageGroups.length) {
+        console.log(`imageGroups[${index}] exists:`, imageGroups[index]);
+        
+        if (Array.isArray(imageGroups[index])) {
+          // Only use URLs that are not base64 data
+          const standardUrls = imageGroups[index].filter(url => url && typeof url === 'string' && !url.startsWith('data:'));
+          photoUrls = standardUrls;
+          
+          console.log(`Found ${standardUrls.length} valid standard URLs for index ${index}`);
+          
+          if (standardUrls.length > 0) {
+            console.log(`Using imageGroups URLs for index ${index}:`, standardUrls);
+          } else {
+            const base64ImagesCount = imageGroups[index].filter(url => url && url.startsWith('data:')).length;
+            if (base64ImagesCount > 0) {
+              console.warn(`Warning: Only found ${base64ImagesCount} base64 images for listing ${index}. These won't work in eBay listings.`);
+            } else {
+              console.warn(`No valid images found for listing ${index} in either filteredS3ImageGroups or imageGroups`);
+            }
+          }
+        } else {
+          console.warn(`imageGroups[${index}] is not an array:`, imageGroups[index]);
+        }
+      } else {
+        console.log(`No imageGroups available for index ${index}`);
+      }
+    }
+    
+    // Log summary of image findings
+    console.log(`Final photoUrls count for listing ${index}: ${photoUrls.length}`);
+    if (photoUrls.length === 0) {
+      console.warn(`Warning: No valid image URLs found for listing ${index}. CSV will have empty photo URLs.`);
+    }
+    
+    // Filter out any empty strings or undefined values and join with the delimiter
+    const formattedUrls = photoUrls.filter(url => url).join('||');
+    console.log(`Formatted image URLs string length: ${formattedUrls.length} characters`);
+    
+    const description = listing.description ? listing.description.replace(/\r?\n|\r/g, ' ').replace(/"/g, '""') : '';
+    console.log(`Formatted description (first 50 chars): "${description.substring(0, 50)}${description.length > 50 ? '...' : ''}"`);
+    
+    const header = `#INFO,Version=0.0.2,Template= eBay-draft-listings-template_US,,,,,,,,
 #INFO Action and Category ID are required fields. 1) Set Action to Draft 2) Please find the category ID for your listings here: https://pages.ebay.com/sellerinformation/news/categorychanges.html,,,,,,,,,,
 "#INFO After you've successfully uploaded your draft from the Seller Hub Reports tab, complete your drafts to active listings here: https://www.ebay.com/sh/lst/drafts",,,,,,,,,,
 #INFO,,,,,,,,,,
 Action(SiteID=US|Country=US|Currency=USD|Version=1193|CC=UTF-8),Custom label (SKU),Category ID,Title,UPC,Price,Quantity,Item photo URL,Condition ID,Description,Format
 `;
-
-  let csvBody = '';
-
-  validResponses.forEach((listing, index) => {
-    console.log(`---------- Processing listing ${index + 1} ----------`);
-    console.log(`Raw listing data for index ${index}:`, listing);
-
-    const title = listing.title ? listing.title.replace(/\r?\n|\r/g, ' ').replace(/"/g, '""') : '';
-    let photoUrls = [];
-
-    if (filteredS3ImageGroups && Array.isArray(filteredS3ImageGroups) && index < filteredS3ImageGroups.length) {
-      if (Array.isArray(filteredS3ImageGroups[index])) {
-        const s3Urls = filteredS3ImageGroups[index].filter(url => url && typeof url === 'string' && !url.startsWith('data:'));
-        photoUrls = s3Urls;
-
-        const base64ImagesCount = filteredS3ImageGroups[index].filter(url => url && url.startsWith('data:')).length;
-        if (base64ImagesCount > 0) {
-          console.warn(`Warning: Found ${base64ImagesCount} base64 images in filteredS3ImageGroups for listing ${index}.`);
-        }
-      }
-    }
-
-    if (photoUrls.length === 0 && imageGroups && Array.isArray(imageGroups) && index < imageGroups.length) {
-      if (Array.isArray(imageGroups[index])) {
-        const standardUrls = imageGroups[index].filter(url => url && typeof url === 'string' && !url.startsWith('data:'));
-        photoUrls = standardUrls;
-        const base64ImagesCount = imageGroups[index].filter(url => url && url.startsWith('data:')).length;
-        if (base64ImagesCount > 0) {
-          console.warn(`Warning: Only found ${base64ImagesCount} base64 images for listing ${index}.`);
-        }
-      }
-    }
-
-    const formattedUrls = photoUrls.filter(url => url).join('||');
-    const description = listing.description ? listing.description.replace(/\r?\n|\r/g, ' ').replace(/"/g, '""') : '';
-
     const line = `Draft,${sku},${categoryID},${title},,${price},1,${formattedUrls},3000,"${description}",FixedPrice`;
-    csvBody += `${line}\n`;
+    console.log(`CSV line generated (first 100 chars): "${line.substring(0, 100)}${line.length > 100 ? '...' : ''}"`);
+    
+    const fileName = `listing_${index + 1}${title ? '_' + title.replace(/[^a-z0-9]/gi, '_').toLowerCase().slice(0, 30) : ''}.csv`;
+    console.log(`Creating file in zip: ${fileName}`);
+    
+    zip.file(fileName, `${header}${line}`);
   });
-
-  const finalCsv = header + csvBody;
-  const zipFileName = `listings_${new Date().toISOString().split('T')[0]}.zip`;
-  const csvFileName = `all_listings.csv`;
-
-  console.log(`Adding ${csvFileName} to ZIP`);
-  zip.file(csvFileName, finalCsv);
-
-  console.log("Generating zip file");
+  
+  console.log("All listings processed, generating zip file");
+  
+  // Generate the zip file and trigger download
   zip.generateAsync({ type: "blob" })
     .then(content => {
       console.log(`Zip file created successfully. Size: ${Math.round(content.size / 1024)} KB`);
+      const zipFileName = `listings_${new Date().toISOString().split('T')[0]}.zip`;
+      console.log(`Triggering download with filename: ${zipFileName}`);
       saveAs(content, zipFileName);
       console.log("Download initiated");
     })
     .catch(err => {
       console.error("Error creating zip file:", err);
+      console.error("Stack trace:", err.stack);
       alert("Failed to create download. Please try again.");
     })
     .finally(() => {
       console.log("downloadListingsAsZip function completed");
     });
 };
+
+  const renderResponseData = (index) => {
+    const response = responseData[index];
+    if (!response) return null;
+    if (response.error) {
+      return (
+        <div className="response-error">
+          <p style={{ color: '#000' }}>Error: {response.error}</p>
+          {response.raw_content && <p style={{ color: '#000' }}>Raw content: {response.raw_content}</p>}
+        </div>
+      );
+    }
+    return (
+      <div className="response-data">
+        <h4 style={{ color: '#000' }}>Generated Listing</h4>
+        <div className="response-fields">
+          {Object.entries(response).map(([key, value]) => (
+            <div key={key} className="response-field">
+              <strong style={{ color: '#000' }}>
+                {key.replace(/_/g, ' ').replace(/^\w/, c => c.toUpperCase())}:
+              </strong>
+              <span style={{ color: '#000' }}>{value}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  };
 
   // Spinner component
   const Spinner = () => (

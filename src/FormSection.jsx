@@ -198,11 +198,13 @@ const uploadToS3 = async (file) => {
         // Generate a unique file name
         const fileName = `${Date.now()}_${file.name}`;
         
-        // For modern browsers, we can directly use the File object
+        // Convert the file to ArrayBuffer instead of using the File object directly
+        const arrayBuffer = reader.result;
+        
         const uploadParams = {
           Bucket: BUCKET_NAME,
           Key: fileName,
-          Body: file,
+          Body: new Uint8Array(arrayBuffer),  // Convert to Uint8Array which AWS SDK can handle
           ContentType: file.type,
           ACL: "public-read",
         };
@@ -232,8 +234,8 @@ const uploadToS3 = async (file) => {
       reject(err);
     };
     
-    // We're not actually using the FileReader result, but keeping it to maintain the async pattern
-    reader.readAsText(file.slice(0, 1));  
+    // Read the file as ArrayBuffer instead of just a small slice
+    reader.readAsArrayBuffer(file);
   });
 };
 

@@ -525,6 +525,7 @@ const fetchEbayCategoryID = async (selectedCategory, subCategory) => {
 	
   const ebayCategoryID = await fetchEbayCategoryID(selectedCategory, subCategory);
 	
+            console.log(ebayCategoryID);
 	  setLocalCategoryID(ebayCategoryID);
     onCategoryChange(ebayCategoryID); // Send to parent
       }

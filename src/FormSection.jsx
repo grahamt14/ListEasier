@@ -505,38 +505,16 @@ const fetchEbayCategoryID = async (selectedCategory, subCategory) => {
       // Replace main filesBase64 array
         console.log(`filesBase64.length ${filesBase64.length}`);
             // Replace main filesBase64 array
-     // if (filesBase64.length > 0) {
-     //   const mainUrls = s3UrlsList.slice(urlIndex, urlIndex + filesBase64.length);
-     //   console.log(`Replacing ${filesBase64.length} main images with S3 URLs`);
-     //   setFilesBase64(mainUrls);
-     //   urlIndex += filesBase64.length;
-    //  }
+      if (filesBase64.length > 0) {
+        const mainUrls = s3UrlsList.slice(urlIndex, urlIndex + filesBase64.length);
+        console.log(`Replacing ${filesBase64.length} main images with S3 URLs`);
+        setFilesBase64(mainUrls);
+        urlIndex += filesBase64.length;
+      }
       
         console.log(`imageGroups.length ${imageGroups.length}`);
       // Replace image groups with S3 URLs
-      if (imageGroups.length > 0) {
-        const newImageGroups = [...imageGroups];
-        
-        for (let i = 0; i < newImageGroups.length; i++) {
-          const group = newImageGroups[i];
-          if (group && group.length > 0) {
-            const groupUrls = s3UrlsList.slice(urlIndex, urlIndex + group.length);
-            console.log(`Replacing group ${i} with ${groupUrls.length} S3 URLs`);
-            newImageGroups[i] = groupUrls;
-            urlIndex += group.length;
-          }
-        }
-        
-        setImageGroups(newImageGroups);
-		 setLocalImageGroups(newImageGroups);
-    onImageGroupsChange(newImageGroups); // Pass to parent
-	
-  const ebayCategoryID = await fetchEbayCategoryID(selectedCategory, subCategory);
-	
-            console.log(ebayCategoryID);
-	  setLocalCategoryID(ebayCategoryID);
-    onCategoryChange(ebayCategoryID); // Send to parent
-      }
+
       
       console.log('Upload process complete, setting isUploading to false');
       setIsUploading(false);

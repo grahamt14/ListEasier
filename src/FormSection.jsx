@@ -292,44 +292,51 @@ function FormSection({
     });
   };
 
-  // Rotate image
-  const rotateImage = (base64Img, degrees) => {
-    return new Promise((resolve, reject) => {
-      const img = new Image();
-      img.onload = () => {
-        const canvas = document.createElement('canvas');
-        const ctx = canvas.getContext('2d');
-        
-        // Set proper canvas dimensions for the rotated image
-        if (degrees === 90 || degrees === 270) {
-          canvas.width = img.height;
-          canvas.height = img.width;
-        } else {
-          canvas.width = img.width;
-          canvas.height = img.height;
-        }
-        
-        // Move to the center of canvas
-        ctx.translate(canvas.width / 2, canvas.height / 2);
-        
-        // Rotate the canvas
-        ctx.rotate((degrees * Math.PI) / 180);
-        
-        // Draw the image and adjust position based on rotation
-        if (degrees === 90 || degrees === 270) {
-          ctx.drawImage(img, -img.height / 2, -img.width / 2);
-        } else {
-          ctx.drawImage(img, -img.width / 2, -img.height / 2);
-        }
-        
-        // Get image type from base64
-        const imageType = base64Img.split(';')[0].split(':')[1];
-        resolve(canvas.toDataURL(imageType));
-      };
-      img.onerror = (err) => reject(err);
-      img.src = base64Img;
-    });
-  };
+// Improved image rotation function that preserves aspect ratio
+const rotateImage = (base64Img, degrees) => {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
+      
+      // Determine the canvas dimensions based on rotation angle
+      // For 90° or 270° rotations, swap width and height
+      if (degrees === 90 || degrees === 270) {
+        canvas.width = img.height;
+        canvas.height = img.width;
+      } else {
+        canvas.width = img.width;
+        canvas.height = img.height;
+      }
+      
+      // Clear previous content
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      
+      // Move to the center of canvas
+      ctx.translate(canvas.width / 2, canvas.height / 2);
+      
+      // Rotate the canvas
+      ctx.rotate((degrees * Math.PI) / 180);
+      
+      // Draw the image at the correct position to maintain aspect ratio
+      if (degrees === 90 || degrees === 270) {
+        ctx.drawImage(img, -img.height / 2, -img.width / 2);
+      } else {
+        ctx.drawImage(img, -img.width / 2, -img.height / 2);
+      }
+      
+      // Get image type from base64
+      const imageType = base64Img.split(';')[0].split(':')[1] || 'image/jpeg';
+      
+      // Preserve original image quality
+      resolve(canvas.toDataURL(imageType, 1.0));
+    };
+    
+    img.onerror = (err) => reject(err);
+    img.src = base64Img;
+  });
+};
 
   // Handle image rotation
   const handleRotateImage = async (index, direction) => {

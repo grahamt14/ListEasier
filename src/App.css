@@ -16,14 +16,20 @@
   margin: 5px;
 }
 
+/* Updated image controls to span full height */
 .image-controls {
   position: absolute;
-  bottom: 5px;
-  right: 5px;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 100%;
   display: flex;
-  gap: 5px;
+  justify-content: space-between;
+  align-items: center;
+  pointer-events: none; /* This makes sure clicks pass through to the image for selection */
 }
 
+/* Updated rotation button styles */
 .rotate-button {
   background-color: rgba(0, 0, 0, 0.6);
   color: white;
@@ -37,6 +43,17 @@
   align-items: center;
   justify-content: center;
   transition: background-color 0.2s;
+  margin: 0 5px; /* Add some margin for spacing from the edge */
+  pointer-events: auto; /* Make sure buttons can be clicked */
+}
+
+/* Specific positioning for left and right buttons */
+.rotate-button.left {
+  margin-left: 5px;
+}
+
+.rotate-button.right {
+  margin-right: 5px;
 }
 
 .rotate-button:hover {

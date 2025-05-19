@@ -91,6 +91,7 @@ function App() {
   const nonEmptyGroups = imageGroups.filter(g => g.length > 0);
 
   // 2. If there are leftover pool images, batch them too
+  console.log('filesBase64.length ${filesBase64.length}')
   if (filesBase64.length > 0 && batchSize > 0) {
     for (let i = 0; i < filesBase64.length; i += batchSize) {
       nonEmptyGroups.push(filesBase64.slice(i, i + batchSize));

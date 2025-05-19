@@ -520,7 +520,6 @@ const fetchEbayCategoryID = async (selectedCategory, subCategory) => {
         for (let i = 0; i < newImageGroups.length; i++) {
           const group = newImageGroups[i];
 		  
-            console.log(`group ${group} group.length ${group.length}`);
           if (group && group.length > 0) {
             const groupUrls = s3UrlsList.slice(urlIndex, urlIndex + group.length);
             console.log(`Replacing group ${i} with ${groupUrls.length} S3 URLs`);

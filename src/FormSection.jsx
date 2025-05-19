@@ -378,60 +378,57 @@ const rotateImage = (base64Img, degrees) => {
 const autoRotateWithTesseract = async (base64Img) => {
   try {
     console.log("Starting Tesseract auto-rotation analysis...");
-    
-    // Create a worker for better control and detailed logging
-    const worker = await Tesseract.createWorker({
+
+    // Create a worker (without passing logger here)
+    const worker = await Tesseract.createWorker();
+
+    // Initialize the worker with language
+    await worker.loadLanguage('eng');
+    await worker.initialize('eng');
+
+    // Set page segmentation mode to improve orientation detection
+    await worker.setParameters({
+      tessedit_pageseg_mode: '0',  // Orientation and script detection only
+      tessedit_ocr_engine_mode: '2', // Legacy + LSTM mode
+      tessjs_create_osd: '1', // Enable orientation detection
+    });
+
+    // Run recognition and pass the logger here
+    const result = await worker.recognize(base64Img, {
       logger: m => {
         if (m.status === 'recognizing text') {
           console.log(`Tesseract progress: ${(m.progress * 100).toFixed(2)}%`);
         }
       }
     });
-    
-    // Initialize the worker with language
-    await worker.loadLanguage('eng');
-    await worker.initialize('eng');
-    
-    // Set page segmentation mode to improve orientation detection
-    // 3 = Fully automatic page segmentation, but no OSD (default)
-    // 0 = Orientation and script detection only
-    await worker.setParameters({
-      tessedit_pageseg_mode: '0',  // Focus on orientation detection
-      tessedit_ocr_engine_mode: '2', // Legacy + LSTM mode for better results
-      tessjs_create_osd: '1', // Enable orientation detection explicitly
-    });
-    
-    // Get detailed recognition data including orientation
-    const result = await worker.recognize(base64Img);
-    
+
     console.log("Tesseract detection complete");
     console.log("OSD info:", result.data?.osd || "No OSD data");
     console.log("Orientation data:", JSON.stringify(result.data?.orientation || "No orientation data"));
     console.log("Page rotation:", result.data?.orientation?.angle);
-    
+
     // Determine rotation needed
-    // Tesseract returns degrees clockwise that the page must be rotated
     const rotation = result.data?.orientation?.angle || 0;
     console.log(`Tesseract detected rotation angle: ${rotation}°`);
-    
-    // Terminate worker to free resources
+
+    // Terminate worker
     await worker.terminate();
-    
-    // Apply rotation if needed (any non-zero value)
+
+    // Apply rotation if needed
     if (rotation !== 0) {
       console.log(`Auto-rotating image by ${rotation}°`);
       return await rotateImageModified(base64Img, rotation);
     }
-    
+
     return base64Img;
   } catch (error) {
     console.error("Error in autoRotateWithTesseract:", error);
-    // Try alternative detection method if Tesseract fails
+    // Fallback
     try {
       return await detectRotationWithHeuristics(base64Img);
     } catch (backupError) {
       console.error("Backup rotation detection failed:", backupError);
-      return base64Img; // Return original if all methods fail
+      return base64Img;
     }
   }
 };

@@ -4,7 +4,8 @@ import { unmarshall } from '@aws-sdk/util-dynamodb';
 import { GetCommand, DynamoDBDocumentClient, ScanCommand } from '@aws-sdk/lib-dynamodb';
 import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
 import { fromCognitoIdentityPool } from "@aws-sdk/credential-provider-cognito-identity";
-import Tesseract from 'tesseract.js'; // Import Tesseract directly
+//import Tesseract from 'tesseract.js'; // Import Tesseract directly
+import { createWorker } from 'tesseract.js';
 
 export const getSelectedCategoryOptionsJSON = (fieldSelections, price, sku) => {
   const output = {};
@@ -379,21 +380,18 @@ const autoRotateWithTesseract = async (base64Img) => {
   try {
     console.log("Starting Tesseract auto-rotation analysis...");
 
-    // Create a worker (without passing logger here)
-    const worker = await Tesseract.createWorker();
+    const worker = createWorker(); // not awaited here
 
-    // Initialize the worker with language
-    await worker.loadLanguage('eng');
-    await worker.initialize('eng');
+    await worker.load();                    // Load core engine
+    await worker.loadLanguage('eng');       // Load language
+    await worker.initialize('eng');         // Init engine with language
 
-    // Set page segmentation mode to improve orientation detection
     await worker.setParameters({
       tessedit_pageseg_mode: '0',  // Orientation and script detection only
-      tessedit_ocr_engine_mode: '2', // Legacy + LSTM mode
-      tessjs_create_osd: '1', // Enable orientation detection
+      tessedit_ocr_engine_mode: '2',
+      tessjs_create_osd: '1',
     });
 
-    // Run recognition and pass the logger here
     const result = await worker.recognize(base64Img, {
       logger: m => {
         if (m.status === 'recognizing text') {
@@ -403,18 +401,13 @@ const autoRotateWithTesseract = async (base64Img) => {
     });
 
     console.log("Tesseract detection complete");
-    console.log("OSD info:", result.data?.osd || "No OSD data");
-    console.log("Orientation data:", JSON.stringify(result.data?.orientation || "No orientation data"));
-    console.log("Page rotation:", result.data?.orientation?.angle);
+    console.log("Orientation info:", result.data?.orientation);
 
-    // Determine rotation needed
     const rotation = result.data?.orientation?.angle || 0;
     console.log(`Tesseract detected rotation angle: ${rotation}°`);
 
-    // Terminate worker
     await worker.terminate();
 
-    // Apply rotation if needed
     if (rotation !== 0) {
       console.log(`Auto-rotating image by ${rotation}°`);
       return await rotateImageModified(base64Img, rotation);
@@ -423,7 +416,6 @@ const autoRotateWithTesseract = async (base64Img) => {
     return base64Img;
   } catch (error) {
     console.error("Error in autoRotateWithTesseract:", error);
-    // Fallback
     try {
       return await detectRotationWithHeuristics(base64Img);
     } catch (backupError) {

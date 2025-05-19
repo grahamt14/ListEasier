@@ -514,7 +514,31 @@ const fetchEbayCategoryID = async (selectedCategory, subCategory) => {
       
         console.log(`imageGroups.length ${imageGroups.length}`);
       // Replace image groups with S3 URLs
-
+      if (imageGroups.length > 0) {
+        const newImageGroups = [...imageGroups];
+        
+        for (let i = 0; i < newImageGroups.length; i++) {
+          const group = newImageGroups[i];
+		  
+            console.log(`group ${group} group.length ${group.length}`);
+          if (group && group.length > 0) {
+            const groupUrls = s3UrlsList.slice(urlIndex, urlIndex + group.length);
+            console.log(`Replacing group ${i} with ${groupUrls.length} S3 URLs`);
+            newImageGroups[i] = groupUrls;
+            urlIndex += group.length;
+          }
+        }
+        
+        setImageGroups(newImageGroups);
+		 setLocalImageGroups(newImageGroups);
+    onImageGroupsChange(newImageGroups); // Pass to parent
+	
+  const ebayCategoryID = await fetchEbayCategoryID(selectedCategory, subCategory);
+	
+            console.log(ebayCategoryID);
+	  setLocalCategoryID(ebayCategoryID);
+    onCategoryChange(ebayCategoryID); // Send to parent
+      }
       
       console.log('Upload process complete, setting isUploading to false');
       setIsUploading(false);

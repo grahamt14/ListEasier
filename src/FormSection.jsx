@@ -382,27 +382,23 @@ const autoRotateWithTesseract = async (base64Img) => {
     const TesseractModule = await import('tesseract.js');
     const Tesseract = TesseractModule.default || TesseractModule;
 
-    const worker = await Tesseract.createWorker();  // <-- await here!
-    console.log("Worker instance:", worker);
-    console.log("worker.load is function?", typeof worker.load === 'function');
+    const worker = await Tesseract.createWorker();
 
-    await worker.load();
-    await worker.loadLanguage('eng');
-    await worker.initialize('eng');
+    // No more load(), loadLanguage(), initialize()
 
     await worker.setParameters({
       tessedit_pageseg_mode: '0',
-      tessedit_ocr_engine_mode: '2',
+      // Remove tessedit_ocr_engine_mode, it's deprecated at runtime
       tessjs_create_osd: '1',
     });
 
-    const result = await worker.recognize(base64Img, {
-      logger: m => {
-        if (m.status === 'recognizing text') {
-          console.log(`Tesseract progress: ${(m.progress * 100).toFixed(2)}%`);
-        }
+    function logger(m) {
+      if (m.status === 'recognizing text') {
+        console.log(`Tesseract progress: ${(m.progress * 100).toFixed(2)}%`);
       }
-    });
+    }
+
+    const result = await worker.recognize(base64Img, { logger });
 
     console.log("Tesseract detection complete");
     console.log("Orientation info:", result.data?.orientation);
@@ -428,6 +424,7 @@ const autoRotateWithTesseract = async (base64Img) => {
     }
   }
 };
+
 
 // Alternative heuristic-based rotation detection
 // Useful when Tesseract doesn't find enough text to determine orientation

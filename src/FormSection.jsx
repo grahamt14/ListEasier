@@ -819,27 +819,50 @@ function FormSection({
         </div>
       )}
 
-      {filesBase64.length > 0 && (
-        <div className="uploaded-images">
-          {filesBase64.map((src, i) => {
-            const isSelected = selectedImages.includes(i);
-            return (
-              <img
-                key={i}
-                src={src}
-                alt={`upload-${i}`}
-                draggable
-                onDragStart={e => {
-                  e.dataTransfer.setData("from", "pool");
-                  e.dataTransfer.setData("index", i.toString());
-                }}
-                onClick={() => toggleImageSelection(i)}
-                style={{ outline: isSelected ? '3px solid #007bff' : 'none' }}
-              />
-            );
-          })}
+{filesBase64.length > 0 && (
+  <div className="uploaded-images">
+    {filesBase64.map((src, i) => {
+      const isSelected = selectedImages.includes(i);
+      return (
+        <div key={i} className="image-container">
+          <img
+            src={src}
+            alt={`upload-${i}`}
+            draggable
+            onDragStart={e => {
+              e.dataTransfer.setData("from", "pool");
+              e.dataTransfer.setData("index", i.toString());
+            }}
+            onClick={() => toggleImageSelection(i)}
+            style={{ outline: isSelected ? '3px solid #007bff' : 'none' }}
+          />
+          <div className="image-controls">
+            <button 
+              className="rotate-button left" 
+              onClick={(e) => {
+                e.stopPropagation(); // Prevent selection toggle
+                handleRotateImage(i, 'left');
+              }}
+              title="Rotate Left"
+            >
+              ↺
+            </button>
+            <button 
+              className="rotate-button right" 
+              onClick={(e) => {
+                e.stopPropagation(); // Prevent selection toggle
+                handleRotateImage(i, 'right');
+              }}
+              title="Rotate Right"
+            >
+              ↻
+            </button>
+          </div>
         </div>
-      )}
+      );
+    })}
+  </div>
+)}
     </section>
   );
 }

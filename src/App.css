@@ -10,6 +10,39 @@
   background-color: #f9f9f9;
 }
 
+.image-container {
+  position: relative;
+  display: inline-block;
+  margin: 5px;
+}
+
+.image-controls {
+  position: absolute;
+  bottom: 5px;
+  right: 5px;
+  display: flex;
+  gap: 5px;
+}
+
+.rotate-button {
+  background-color: rgba(0, 0, 0, 0.6);
+  color: white;
+  border: none;
+  border-radius: 50%;
+  width: 30px;
+  height: 30px;
+  font-size: 18px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background-color 0.2s;
+}
+
+.rotate-button:hover {
+  background-color: rgba(0, 0, 0, 0.8);
+}
+
 /* Header styling */
 .header {
   display: flex;

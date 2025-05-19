@@ -21,9 +21,14 @@ function App() {
   const [completedChunks, setCompletedChunks] = useState(0);
   const [processingGroups, setProcessingGroups] = useState([]);
     const [price, setPrice] = useState('');
+    const [SKU, setSKU] = useState('');
 
   const handlePriceUpdate = (newPrice) => {
     setPrice(newPrice);
+  };
+  
+    const handleSKUUpdate = (newSKU) => {
+    setSKU(newSKU);
   };
   
 
@@ -193,7 +198,6 @@ const downloadListingsAsZip = () => {
   const zip = new JSZip();
 
   validResponses.forEach((listing, index) => {
-    const sku = listing.sku || `SKU${index + 1}`;
     const categoryId = listing.categoryId || '';
     const title = listing.title ? listing.title.replace(/\r?\n|\r/g, ' ').replace(/"/g, '""') : '';
     const photoUrls = Array.isArray(listing.photoUrls) ? listing.photoUrls.join('|') : '';
@@ -299,6 +303,8 @@ const downloadListingsAsZip = () => {
           setFieldSelections={setFieldSelections}  // Pass setter down
 		  price={price} 
 		  onPriceChange={handlePriceUpdate}
+		  SKU={SKU} 
+		  onSKUChange={handleSKUUpdate}
         />
 
         <section className="preview-section">

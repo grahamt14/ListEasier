@@ -46,6 +46,8 @@ function FormSection({
   Spinner,
   price, 
   onPriceChange,
+  SKU, 
+  onSKUChange,
 }) {
   const [selectedCategory, setSelectedCategory] = useState("--");
   const [subcategories, setSubcategories] = useState(["--"]);
@@ -343,8 +345,7 @@ const uploadToS3 = async (file) => {
   };
 
   const handleSkuChange = (e) => {
-    setSku(e.target.value);
-    setIsDirty(true);
+    onSKUChange(e.target.value); // Send the new value up to the parent
   };
 
   const toggleImageSelection = (idx) => {

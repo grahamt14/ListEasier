@@ -14,7 +14,7 @@ export const getSelectedCategoryOptionsJSON = (fieldSelections, price, sku) => {
       output[label] = value;
     }
   });
-  if (price) output["Price"] = price;
+  if (price) output["price"] = price;
   if (sku) output["SKU"] = sku;
 
   console.log(output);

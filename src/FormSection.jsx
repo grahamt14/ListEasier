@@ -374,30 +374,97 @@ const rotateImage = (base64Img, degrees) => {
       console.error("Error rotating image:", error);
     }
   };
+  
+  // Simplified image processing approach that doesn't rely solely on Tesseract
+const processImage = async (file) => {
+  try {
+    console.log(`Processing file: ${file.name}`);
+    
+    // Step 1: Convert to base64 first
+    const base64 = await convertToBase64(file);
+    
+    // Step 2: Try the heuristic approach first (faster, more reliable)
+    let processedImage = await detectRotationWithHeuristics(base64);
+    
+    // Step 3: Only try Tesseract if the image might contain text
+    // You could add a check here to only use Tesseract on text-likely images
+    // For example, if the file name contains "document", "receipt", etc.
+    const mightContainText = /doc|receipt|text|scan|statement|invoice/i.test(file.name);
+    
+    if (mightContainText) {
+      try {
+        // Use Tesseract with a timeout
+        const tesseractPromise = autoRotateWithTesseract(base64);
+        const timeoutPromise = new Promise((_, reject) => {
+          setTimeout(() => reject(new Error("Tesseract timeout")), 3000);
+        });
+        
+        // Race between Tesseract and timeout
+        processedImage = await Promise.race([tesseractPromise, timeoutPromise]);
+      } catch (tesseractError) {
+        console.log("Tesseract processing skipped or failed, using heuristic result");
+        // We already have the heuristic result, so just continue
+      }
+    }
+    
+    return processedImage;
+  } catch (error) {
+    console.error(`Error processing file ${file.name}:`, error);
+    return base64; // Return original image if all processing fails
+  }
+};
 
-// Enhanced Tesseract auto-rotation function
+// Enhanced Tesseract auto-rotation function with better error handling
 const autoRotateWithTesseract = async (base64Img) => {
   try {
     console.log("Starting Tesseract auto-rotation analysis...");
     const TesseractModule = await import('tesseract.js');
     const Tesseract = TesseractModule.default || TesseractModule;
-    Tesseract.setLogging(true);
-    const worker = await Tesseract.createWorker();
-    await worker.load();
-    await worker.loadLanguage('eng');
-    await worker.initialize('eng');
-    await worker.setParameters({
-      tessedit_pageseg_mode: Tesseract.PSM.OSD_ONLY,
+    
+    // Create worker with safer settings
+    const worker = await Tesseract.createWorker({
+      logger: m => console.log(m), // Optional: for better debugging
     });
-
-    const result = await worker.recognize(base64Img);
+    
+    // Configure worker for orientation detection only (OSD)
+    // Note: We don't need to load/initialize as these are deprecated
+    await worker.setParameters({
+      tessedit_ocr_engine_mode: Tesseract.OEM.LSTM_ONLY,
+      tessedit_pageseg_mode: Tesseract.PSM.OSD_ONLY,
+      tessjs_create_boxfile: "0",
+      tessjs_create_hocr: "0",
+      tessjs_create_tsv: "0",
+      tessjs_create_unlv: "0",
+    });
+    
+    // Use a more careful approach to recognize
+    // We're setting a timeout to prevent hanging
+    const recognizePromise = worker.recognize(base64Img, { 
+      rotateAuto: true // Let Tesseract handle rotation internally when possible
+    });
+    
+    // Set a timeout to prevent hanging
+    const timeoutPromise = new Promise((_, reject) => {
+      setTimeout(() => reject(new Error("Tesseract detection timed out")), 5000);
+    });
+    
+    // Race between recognition and timeout
+    const result = await Promise.race([recognizePromise, timeoutPromise]);
     console.log("Tesseract detection complete");
-    console.log("Full result:", result.data);
-
-    const rotation = result.data.osd?.angle || 0;
-    console.log(`Tesseract detected rotation angle: ${rotation}°`);
+    
+    // Extract rotation if available
+    let rotation = 0;
+    if (result.data && result.data.osd) {
+      rotation = result.data.osd.rotate;
+      console.log(`Tesseract detected rotation angle: ${rotation}°`);
+    } else {
+      console.log("No OSD data detected, using default rotation");
+    }
+    
+    // Always terminate the worker
     await worker.terminate();
-
+    
+    // Only rotate if necessary
     if (rotation !== 0) {
       console.log(`Auto-rotating image by ${rotation}°`);
       return await rotateImageModified(base64Img, rotation);
@@ -406,10 +473,11 @@ const autoRotateWithTesseract = async (base64Img) => {
   } catch (error) {
     console.error("Error in autoRotateWithTesseract:", error);
     try {
+      console.log("Falling back to heuristic rotation detection");
       return await detectRotationWithHeuristics(base64Img);
     } catch (backupError) {
       console.error("Backup rotation detection failed:", backupError);
-      return base64Img;
+      return base64Img; // Return original image if all rotation detection fails
     }
   }
 };
@@ -546,7 +614,7 @@ const rotateImageModified = (base64Img, degrees) => {
   });
 };
 
-// Modified file change handler with improved Tesseract auto-rotation
+// Modified file change handler with more robust image processing
 const handleFileChange = async (e) => {
   const files = Array.from(e.target.files);
   if (files.length === 0) return;
@@ -570,15 +638,33 @@ const handleFileChange = async (e) => {
       setProcessedFiles(i + 0.5);
       setUploadProgress(Math.round(((i + 0.5) / files.length) * 100));
       
-      // Then attempt to auto-rotate using Tesseract for images only
+      // Process image orientation using our safer approach
       if (files[i].type.startsWith("image/")) {
         try {
-          console.log(`Starting orientation analysis for ${files[i].name}`);
-          base64 = await autoRotateWithTesseract(base64);
-          console.log(`Completed orientation analysis for ${files[i].name}`);
-        } catch (tesseractError) {
-          console.error(`Tesseract processing error for ${files[i].name}:`, tesseractError);
-          // Continue with original image if Tesseract fails
+          // Use heuristics first as they're more reliable
+          base64 = await detectRotationWithHeuristics(base64);
+          
+          // Only try Tesseract for files that might contain text
+          // This is optional and can be adjusted based on your needs
+          const mightContainText = files[i].size < 1000000; // Small images more likely to be document scans
+          
+          if (mightContainText) {
+            try {
+              const tesseractPromise = autoRotateWithTesseract(base64);
+              const timeoutPromise = new Promise((resolve) => {
+                setTimeout(() => resolve(base64), 3000); // Use current image after timeout
+              });
+              
+              // Use whichever finishes first
+              base64 = await Promise.race([tesseractPromise, timeoutPromise]);
+            } catch (tesseractError) {
+              console.log("Using heuristic-based orientation only");
+              // Continue with heuristic result
+            }
+          }
+        } catch (orientationError) {
+          console.error(`Orientation detection error for ${files[i].name}:`, orientationError);
+          // Continue with original image if all orientation detection fails
         }
       }
       

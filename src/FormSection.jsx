@@ -380,7 +380,7 @@ const autoRotateWithTesseract = async (base64Img) => {
   try {
     console.log("Starting Tesseract auto-rotation analysis...");
 
-    const worker = createWorker(); // not awaited here
+    const worker = createWorker(); // this should return a valid worker object
 
     await worker.load();                    // Load core engine
     await worker.loadLanguage('eng');       // Load language

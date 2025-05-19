@@ -23,7 +23,7 @@
     "piexifjs": "^1.0.6",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
-    "tesseract.js": "^6.0.1"
+    "tesseract.js": "^5.1.1"
   },
   "devDependencies": {
     "@aws-amplify/backend": "^1.14.3",

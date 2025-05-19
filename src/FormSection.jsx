@@ -375,47 +375,58 @@ const rotateImage = (base64Img, degrees) => {
   };
   
   // Tesseract auto-rotation function using the simplified API
+const rotateImage2 = async (base64Img, degrees) => {
+  return new Promise((resolve, reject) => {
+    const image = new Image();
+    image.src = base64Img;
+
+    image.onload = () => {
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
+
+      // Set canvas size depending on rotation
+      if (degrees === 90 || degrees === 270) {
+        canvas.width = image.height;
+        canvas.height = image.width;
+      } else {
+        canvas.width = image.width;
+        canvas.height = image.height;
+      }
+
+      // Translate and rotate
+      ctx.translate(canvas.width / 2, canvas.height / 2);
+      ctx.rotate((degrees * Math.PI) / 180);
+      ctx.drawImage(image, -image.width / 2, -image.height / 2);
+
+      resolve(canvas.toDataURL());
+    };
+
+    image.onerror = reject;
+  });
+};
+
 const autoRotateWithTesseract = async (base64Img) => {
   try {
     console.log("Starting Tesseract auto-rotation...");
-    
-    // Create a progress tracking function
-    const progressTracker = message => {
-      if (message.status === 'recognizing text') {
-        console.log(`Tesseract progress: ${(message.progress * 100).toFixed(2)}%`);
+
+    const result = await Tesseract.recognize(base64Img, 'eng', {
+      logger: m => {
+        if (m.status === 'recognizing text') {
+          console.log(`Progress: ${(m.progress * 100).toFixed(2)}%`);
+        }
       }
-    };
-    
-    // Use the simplified API with orientation detection
-    const result = await Tesseract.recognize(
-      base64Img,
-      'eng',
-      { 
-        logger: progressTracker,
-        rotateAuto: true // Enable auto rotation
-      }
-    );
-    
-    // Extract rotation information
-    let rotation = 0;
-    if (result && result.data && result.data.orientation) {
-      rotation = result.data.orientation.rotate;
-      console.log(`Tesseract detected rotation: ${rotation}°`);
-    } else {
-      console.log("No orientation data detected by Tesseract");
-    }
-    
-    // Apply rotation if needed
+    });
+
+    const rotation = result?.data?.orientation?.rotate || 0;
+    console.log(`Tesseract detected rotation: ${rotation}°`);
+
     if (rotation !== 0) {
-      return await rotateImage(base64Img, rotation);
+      return await rotateImage2(base64Img, rotation);
     }
-    
-    // Return original image if no rotation needed
+
     return base64Img;
   } catch (error) {
-    console.error("Tesseract auto-rotation failed:", error);
-    console.error(error.stack); // Log the complete stack trace
-    // Return original image if the process fails
+    console.error("Error in autoRotateWithTesseract:", error);
     return base64Img;
   }
 };

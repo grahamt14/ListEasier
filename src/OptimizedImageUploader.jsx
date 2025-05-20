@@ -1,6 +1,7 @@
-// OptimizedImageUploader.jsx
+// OptimizedImageUploader.jsx (Updated with Context)
 import React, { useState, useRef, useEffect } from 'react';
 import { processImagesInBatch } from './OptimizedImageHandler';
+import { useAppState } from './StateContext';
 
 /**
  * Efficient image uploader component for handling large batches
@@ -11,6 +12,7 @@ const OptimizedImageUploader = ({
   setIsUploading,
   autoRotateEnabled = false
 }) => {
+  const { state, dispatch } = useAppState();
   const [dragActive, setDragActive] = useState(false);
   const [totalFiles, setTotalFiles] = useState(0);
   const [processedFiles, setProcessedFiles] = useState(0);

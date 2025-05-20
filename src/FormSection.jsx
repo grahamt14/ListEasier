@@ -1,10 +1,11 @@
-// FormSection.jsx (Optimized)
+// FormSection.jsx (Updated with Context)
 import { useState, useRef, useEffect } from 'react';
 import { DynamoDBClient, QueryCommand } from '@aws-sdk/client-dynamodb';
 import { unmarshall } from '@aws-sdk/util-dynamodb';
 import { GetCommand, DynamoDBDocumentClient, ScanCommand } from '@aws-sdk/lib-dynamodb';
 import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
 import { fromCognitoIdentityPool } from "@aws-sdk/credential-provider-cognito-identity";
+import { useAppState } from './StateContext';
 
 // Import the optimized image handlers and uploader
 import OptimizedImageUploader from './OptimizedImageUploader';
@@ -21,41 +22,32 @@ export const getSelectedCategoryOptionsJSON = (fieldSelections, price, sku) => {
   return output;
 };
 
-function FormSection({
-  filesBase64,
-  setFilesBase64,
-  category,
-  setCategory,
-  subCategory,
-  setsubCategory,
-  errorMessages,
-  setErrorMessages,
-  batchSize,
-  setBatchSize,
-  selectedImages,
-  setSelectedImages,
-  imageGroups,
-  setImageGroups,
-  isLoading,
-  isDirty,
-  setIsDirty,
-  totalChunks,
-  completedChunks,
-  handleGenerateListing,
-  handleClearAll,
-  Spinner,
-  price, 
-  onPriceChange,
-  sku, 
-  onSKUChange,
-  onImageGroupsChange,
-  onCategoryChange,
-}) {
-  // State declarations
+function FormSection({ onGenerateListing }) {
+  // Get state from context
+  const { state, dispatch } = useAppState();
+  const {
+    filesBase64,
+    category,
+    subCategory,
+    errorMessages,
+    batchSize,
+    selectedImages,
+    imageGroups,
+    isLoading,
+    isDirty,
+    totalChunks,
+    completedChunks,
+    price,
+    sku,
+    fieldSelections,
+    imageRotations,
+    rawFiles
+  } = state;
+  
+  // Local state for UI
   const [selectedCategory, setSelectedCategory] = useState("--");
   const [subcategories, setSubcategories] = useState(["--"]);
   const [categoryFields, setCategoryFields] = useState([]);
-  const [localCategoryID, setLocalCategoryID] = useState('');
   const [showTooltip, setShowTooltip] = useState(false);
   const [categories, setCategories] = useState({});
   const [categoriesLoading, setCategoriesLoading] = useState(true);
@@ -63,11 +55,6 @@ function FormSection({
   const [uploadProgress, setUploadProgress] = useState(0);
   const [totalFiles, setTotalFiles] = useState(0);
   const [processedFiles, setProcessedFiles] = useState(0);
-  const [localImageGroups, setLocalImageGroups] = useState([]);
-  const [rawFiles, setRawFiles] = useState([]);
-  const [rawImageGroups, setRawImageGroups] = useState([[]]);
-  const [fieldSelections, setFieldSelections] = useState({});
-  const [imageRotations, setImageRotations] = useState({}); // Track rotation degrees for each image
   const [autoRotateEnabled, setAutoRotateEnabled] = useState(false);
   
   // AWS Configuration
@@ -103,28 +90,11 @@ function FormSection({
   const handleClearAllLocal = () => {
     setSelectedCategory("--");
     setSubcategories(categories["--"] || ["--"]);
-    setFieldSelections({});
     setCategoryFields([]);
-    setLocalCategoryID('');
-    setRawFiles([]);
-    setRawImageGroups([[]]);
-    setSelectedImages([]);
-    setLocalImageGroups([]);
-    setImageRotations({});
+    setAutoRotateEnabled(false);
     
-    // Reset parent state
-    setFilesBase64([]);
-    setCategory("--");
-    setsubCategory("--");
-    setErrorMessages([]);
-    setImageGroups([[]]);
-    setBatchSize(0);
-    onPriceChange("");
-    onSKUChange("");
-    onImageGroupsChange([[]], [[]]);
-    onCategoryChange("");
-    
-    setIsDirty(false);
+    // Reset global state
+    dispatch({ type: 'CLEAR_ALL' });
   };
 
   // Fetch categories on component mount
@@ -162,7 +132,7 @@ function FormSection({
   useEffect(() => {
     if (!subCategory || subCategory === "--") {
       setCategoryFields([]);
-      setFieldSelections({});
+      dispatch({ type: 'SET_FIELD_SELECTIONS', payload: {} });
       return;
     }
 
@@ -184,24 +154,33 @@ function FormSection({
         items.forEach(item => {
           initialSelections[item.FieldLabel] = "";
         });
-        setFieldSelections(initialSelections);
+        dispatch({ type: 'SET_FIELD_SELECTIONS', payload: initialSelections });
       } catch (error) {
         console.error('Error fetching category fields:', error);
         setCategoryFields([]);
-        setFieldSelections({});
+        dispatch({ type: 'SET_FIELD_SELECTIONS', payload: {} });
       }
     };
 
     fetchCategoryFields();
-  }, [subCategory]);
+  }, [subCategory, dispatch]);
+
+  // Synchronize selected category with global state
+  useEffect(() => {
+    if (category !== selectedCategory) {
+      setSelectedCategory(category);
+      if (categories[category]) {
+        setSubcategories(categories[category]);
+      }
+    }
+  }, [category, categories, selectedCategory]);
 
   // Synchronize with parent component
   useEffect(() => {
     if (rawFiles.length > 0 && filesBase64.length === 0) {
-      setRawFiles([]);
-      setImageRotations({});
+      dispatch({ type: 'SET_RAW_FILES', payload: [] });
     }
-  }, [filesBase64]);
+  }, [filesBase64, rawFiles.length, dispatch]);
 
   // Category change handler
   const handleCategoryChange = (e) => {
@@ -209,17 +188,17 @@ function FormSection({
     setSelectedCategory(cat);
     setSubcategories(categories[cat] || ['--']);
     const defaultSub = categories[cat]?.[0] || '--';
-    setsubCategory(defaultSub);
-    setCategory(cat);
-    setIsDirty(true);
+    
+    dispatch({ type: 'SET_CATEGORY', payload: cat });
+    dispatch({ type: 'SET_SUBCATEGORY', payload: defaultSub });
+    
     validateSelection(cat, defaultSub);
   };
 
   // Subcategory change handler
   const handleSubCategoryChange = (e) => {
     const sub = e.target.value;
-    setsubCategory(sub);
-    setIsDirty(true);
+    dispatch({ type: 'SET_SUBCATEGORY', payload: sub });
     validateSelection(selectedCategory, sub);
   };
 
@@ -228,16 +207,18 @@ function FormSection({
     const errorMsg = "Please select a valid category and subcategory.";
     if (cat === "--" || sub === "--") {
       if (!errorMessages.includes(errorMsg)) {
-        setErrorMessages(prev => [...prev, errorMsg]);
+        dispatch({ type: 'ADD_ERROR_MESSAGE', payload: errorMsg });
       }
     } else {
-      setErrorMessages(prev => prev.filter(msg => msg !== errorMsg));
+      dispatch({ type: 'REMOVE_ERROR_MESSAGE', payload: errorMsg });
     }
   };
 
-  // Handle image rotation - optimized version
+  // Handle image rotation
   const handleRotateImage = async (index, direction) => {
     try {
+      dispatch({ type: 'ROTATE_IMAGE', payload: { index, direction } });
+      
       // Get current rotation or default to 0
       const currentRotation = imageRotations[index] || 0;
       
@@ -282,18 +263,10 @@ function FormSection({
       
       if (results && results.length > 0) {
         // Update image in filesBase64 array
-        const updatedImages = [...filesBase64];
-        updatedImages[index] = results[0];
-        
-        // Update rotation tracking
-        setImageRotations(prev => ({
-          ...prev,
-          [index]: newRotation
-        }));
-        
-        // Update state
-        setFilesBase64(updatedImages);
-        setIsDirty(true);
+        dispatch({ 
+          type: 'UPDATE_FILES_BASE64_AT_INDEX', 
+          payload: { index, value: results[0] } 
+        });
       }
     } catch (error) {
       console.error("Error rotating image:", error);
@@ -302,80 +275,22 @@ function FormSection({
 
   // Use the optimized image uploader instead of direct handlers
   const handleImageUploaderProcess = (processedImages, processedRawFiles) => {
-    setFilesBase64(prev => [...prev, ...processedImages]);
-    setRawFiles(prev => [...prev, ...processedRawFiles]);
-    setErrorMessages(prev => prev.filter(msg => msg !== "Please upload at least one image."));
-    setIsDirty(true);
+    dispatch({ type: 'ADD_FILES_BASE64', payload: processedImages });
+    dispatch({ type: 'ADD_RAW_FILES', payload: processedRawFiles });
+    dispatch({ type: 'REMOVE_ERROR_MESSAGE', payload: "Please upload at least one image." });
   };
 
-  const handlePriceChange = (e) => onPriceChange(e.target.value);
-  const handleSkuChange = (e) => onSKUChange(e.target.value);
+  const handlePriceChange = (e) => dispatch({ type: 'SET_PRICE', payload: e.target.value });
+  const handleSkuChange = (e) => dispatch({ type: 'SET_SKU', payload: e.target.value });
 
   // Toggle image selection
   const toggleImageSelection = (idx) => {
-    setSelectedImages(prev =>
-      prev.includes(idx) ? prev.filter(i => i !== idx) : [...prev, idx]
-    );
+    dispatch({ type: 'TOGGLE_IMAGE_SELECTION', payload: idx });
   };
 
   // Group selected images
   const handleGroupSelected = () => {
-    const groupImgs = selectedImages.map(i => filesBase64[i]);
-    const groupRawFiles = selectedImages.map(i => rawFiles[i]);
-    
-    const remainingBase64 = filesBase64.filter((_, i) => !selectedImages.includes(i));
-    const remainingRawFiles = rawFiles.filter((_, i) => !selectedImages.includes(i));
-    
-    // Remove rotations for selected images
-    const newRotations = { ...imageRotations };
-    selectedImages.forEach(index => {
-      delete newRotations[index];
-    });
-    
-    // Reindex remaining rotations
-    const finalRotations = {};
-    let newIndex = 0;
-    filesBase64.forEach((_, oldIndex) => {
-      if (!selectedImages.includes(oldIndex)) {
-        if (newRotations[oldIndex] !== undefined) {
-          finalRotations[newIndex] = newRotations[oldIndex];
-        }
-        newIndex++;
-      }
-    });
-    setImageRotations(finalRotations);
-    
-    setImageGroups(prev => {
-      let updated = [...prev];
-      const firstEmptyIndex = updated.findIndex(g => g.length === 0);
-      if (firstEmptyIndex !== -1) {
-        updated[firstEmptyIndex] = [...updated[firstEmptyIndex], ...groupImgs];
-      } else {
-        updated.push(groupImgs);
-      }
-      if (updated[updated.length - 1].length > 0) {
-        updated.push([]);
-      }
-      return updated;
-    });
-    
-    setRawImageGroups(prev => {
-      let updated = [...prev];
-      const firstEmptyIndex = updated.findIndex(g => !g || g.length === 0);
-      if (firstEmptyIndex !== -1) {
-        updated[firstEmptyIndex] = [...(updated[firstEmptyIndex] || []), ...groupRawFiles];
-      } else {
-        updated.push(groupRawFiles);
-      }
-      if (updated[updated.length - 1] && updated[updated.length - 1].length > 0) {
-        updated.push([]);
-      }
-      return updated;
-    });
-    
-    setFilesBase64(remainingBase64);
-    setRawFiles(remainingRawFiles);
-    setSelectedImages([]);
+    dispatch({ type: 'GROUP_SELECTED_IMAGES' });
   };
 
   // Fetch eBay category ID
@@ -397,7 +312,7 @@ function FormSection({
     }
   };
   
- // Handle generate listing with upload - optimized version
+  // Handle generate listing with upload
   const handleGenerateListingWithUpload = async () => {
     try {
       setIsUploading(true);
@@ -405,11 +320,7 @@ function FormSection({
       // Collect all raw files that need uploading
       let allRawFiles = [...rawFiles];
       
-      rawImageGroups.forEach(group => {
-        if (group && group.length) {
-          allRawFiles = [...allRawFiles, ...group];
-        }
-      });
+      const rawImageGroups = state.imageGroups.map(() => []); // Placeholder for raw files in groups
       
       setTotalFiles(allRawFiles.length);
       
@@ -454,12 +365,12 @@ function FormSection({
             setTotalFiles(validFiles.length);
           } else {
             setIsUploading(false);
-            handleGenerateListing();
+            await onGenerateListing();
             return;
           }
         } else {
           setIsUploading(false);
-          handleGenerateListing();
+          await onGenerateListing();
           return;
         }
       }
@@ -561,29 +472,23 @@ function FormSection({
         finalS3ImageGroups.push([]);
       }
       
-      // Pass the updated images to parent
-      onImageGroupsChange(finalImageGroups, finalS3ImageGroups);
-      
-      // Update parent state with URLs instead of base64 images
-      setFilesBase64([]);
+      // Update state with the new image groups and S3 URLs
+      dispatch({ type: 'SET_IMAGE_GROUPS', payload: finalImageGroups });
+      dispatch({ type: 'SET_S3_IMAGE_GROUPS', payload: finalS3ImageGroups });
+      dispatch({ type: 'SET_FILES_BASE64', payload: [] });
       
       // Fetch the eBay category ID
       const ebayCategoryID = await fetchEbayCategoryID(selectedCategory, subCategory);
-      setLocalCategoryID(ebayCategoryID);
-      onCategoryChange(ebayCategoryID);
-      
-      // Update local state after parent state
-      setLocalImageGroups(finalImageGroups);
+      dispatch({ type: 'SET_CATEGORY_ID', payload: ebayCategoryID });
       
       // Clear raw files state
-      setRawFiles([]);
-      setRawImageGroups([[]]);
-      setImageRotations({});
+      dispatch({ type: 'SET_RAW_FILES', payload: [] });
+      dispatch({ type: 'SET_IMAGE_ROTATIONS', payload: {} });
       
       setIsUploading(false);
       
       // Now call handleGenerateListing
-      await handleGenerateListing();
+      await onGenerateListing();
       
     } catch (error) {
       console.error('Error during upload process:', error);
@@ -591,7 +496,7 @@ function FormSection({
     }
   };
   
-// Upload file to S3 - optimized version
+  // Upload file to S3
   const uploadToS3 = async (file) => {
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
@@ -630,6 +535,14 @@ function FormSection({
 
   const isValidSelection = selectedCategory !== "--" && subCategory !== "--";
 
+  // Spinner component
+  const Spinner = () => (
+    <div className="spinner">
+      <div className="spinner-circle"></div>
+    </div>
+  );
+
+  // Progress bar component
   const ProgressBar = ({ progress }) => (
     <div className="progress-container">
       <div className="progress-bar" style={{ width: `${progress}%` }}></div>
@@ -678,8 +591,14 @@ function FormSection({
                 <select
                   className="uniform-select"
                   value={fieldSelections[field.FieldLabel] || ""}
-                  onChange={(e) =>
-                    setFieldSelections(prev => ({ ...prev, [field.FieldLabel]: e.target.value }))
+                  onChange={(e) => 
+                    dispatch({ 
+                      type: 'UPDATE_FIELD_SELECTION', 
+                      payload: { 
+                        field: field.FieldLabel,
+                        value: e.target.value 
+                      } 
+                    })
                   }
                 >
                   <option value="">-- Select --</option>
@@ -715,7 +634,11 @@ function FormSection({
 
       <div className="form-group">
         <label>Images Per Item</label>
-        <select disabled={!filesBase64.length} value={batchSize} onChange={e => setBatchSize(Number(e.target.value))}>
+        <select 
+          disabled={!filesBase64.length}
+          value={batchSize} 
+          onChange={e => dispatch({ type: 'SET_BATCH_SIZE', payload: Number(e.target.value) })}
+        >
           {!filesBase64.length
             ? <option>0</option>
             : Array.from({ length: filesBase64.length }, (_, i) => i + 1)
@@ -726,15 +649,31 @@ function FormSection({
       </div>
 
       <div className="button-group">
-        <button className="primary" disabled={!selectedImages.length} onClick={handleGroupSelected}>Group Selected</button>
-        <button className="danger" onClick={() => {
-          handleClearAllLocal();
-          if (handleClearAll) handleClearAll();
-        }}>Clear All</button>
+        <button 
+          className="primary" 
+          disabled={!selectedImages.length} 
+          onClick={handleGroupSelected}
+        >
+          Group Selected
+        </button>
+        <button 
+          className="danger" 
+          onClick={handleClearAllLocal}
+        >
+          Clear All
+        </button>
       </div>
 
-      <div className="generate-area" onMouseEnter={() => !isValidSelection && setShowTooltip(true)} onMouseLeave={() => setShowTooltip(false)}>
-        <button className="primary large" disabled={!isValidSelection || isLoading || !isDirty} onClick={handleGenerateListingWithUpload}>
+      <div 
+        className="generate-area" 
+        onMouseEnter={() => !isValidSelection && setShowTooltip(true)} 
+        onMouseLeave={() => setShowTooltip(false)}
+      >
+        <button 
+          className="primary large" 
+          disabled={!isValidSelection || isLoading || !isDirty} 
+          onClick={handleGenerateListingWithUpload}
+        >
           {isLoading || isUploading ? (
             <span className="loading-button">
               <Spinner /> {isUploading ? `Uploading... (${processedFiles}/${totalFiles})` : `Generating... (${completedChunks}/${totalChunks})`}
@@ -750,50 +689,50 @@ function FormSection({
         </div>
       )}
 
-{filesBase64.length > 0 && (
-  <div className="uploaded-images">
-    {filesBase64.map((src, i) => {
-      const isSelected = selectedImages.includes(i);
-      return (
-        <div key={i} className="image-container">
-          <img
-            src={src}
-            alt={`upload-${i}`}
-            draggable
-            onDragStart={e => {
-              e.dataTransfer.setData("from", "pool");
-              e.dataTransfer.setData("index", i.toString());
-            }}
-            onClick={() => toggleImageSelection(i)}
-            style={{ outline: isSelected ? '3px solid #007bff' : 'none' }}
-          />
-          <div className="image-controls">
-            <button 
-              className="rotate-button left" 
-              onClick={(e) => {
-                e.stopPropagation(); // Prevent selection toggle
-                handleRotateImage(i, 'left');
-              }}
-              title="Rotate Left"
-            >
-              ↺
-            </button>
-            <button 
-              className="rotate-button right" 
-              onClick={(e) => {
-                e.stopPropagation(); // Prevent selection toggle
-                handleRotateImage(i, 'right');
-              }}
-              title="Rotate Right"
-            >
-              ↻
-            </button>
-          </div>
+      {filesBase64.length > 0 && (
+        <div className="uploaded-images">
+          {filesBase64.map((src, i) => {
+            const isSelected = selectedImages.includes(i);
+            return (
+              <div key={i} className="image-container">
+                <img
+                  src={src}
+                  alt={`upload-${i}`}
+                  draggable
+                  onDragStart={e => {
+                    e.dataTransfer.setData("from", "pool");
+                    e.dataTransfer.setData("index", i.toString());
+                  }}
+                  onClick={() => toggleImageSelection(i)}
+                  style={{ outline: isSelected ? '3px solid #007bff' : 'none' }}
+                />
+                <div className="image-controls">
+                  <button 
+                    className="rotate-button left" 
+                    onClick={(e) => {
+                      e.stopPropagation(); // Prevent selection toggle
+                      handleRotateImage(i, 'left');
+                    }}
+                    title="Rotate Left"
+                  >
+                    ↺
+                  </button>
+                  <button 
+                    className="rotate-button right" 
+                    onClick={(e) => {
+                      e.stopPropagation(); // Prevent selection toggle
+                      handleRotateImage(i, 'right');
+                    }}
+                    title="Rotate Right"
+                  >
+                    ↻
+                  </button>
+                </div>
+              </div>
+            );
+          })}
         </div>
-      );
-    })}
-  </div>
-)}
+      )}
     </section>
   );
 }

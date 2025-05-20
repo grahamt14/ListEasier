@@ -5,239 +5,48 @@ import JSZip from 'jszip';
 import { saveAs } from 'file-saver';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { fromCognitoIdentityPool } from "@aws-sdk/credential-provider-cognito-identity";
+import { AppStateProvider, useAppState } from './StateContext';
 
-function App() {
-  const [fieldSelections, setFieldSelections] = useState({});
-  const [filesBase64, setFilesBase64] = useState([]);
-  const [category, setCategory] = useState();
-  const [subCategory, setsubCategory] = useState();
-  const [errorMessages, setErrorMessages] = useState([]);
-  const [batchSize, setBatchSize] = useState(0);
-  const [selectedImages, setSelectedImages] = useState([]);
-  const [imageGroups, setImageGroups] = useState([[]]);
-  const [responseData, setResponseData] = useState([]);
+// PreviewSection component
+function PreviewSection() {
+  const { state, dispatch } = useAppState();
+  const { 
+    imageGroups, 
+    s3ImageGroups,
+    responseData, 
+    processingGroups, 
+    isLoading,
+    completedChunks,
+    totalChunks,
+    categoryID,
+    price,
+    sku
+  } = state;
+
+  // Handle hover for drop target
   const [hoveredGroup, setHoveredGroup] = useState(null);
-  const [isLoading, setIsLoading] = useState(false);
-  const [isDirty, setIsDirty] = useState(false);
-  const [totalChunks, setTotalChunks] = useState(0);
-  const [completedChunks, setCompletedChunks] = useState(0);
-  const [processingGroups, setProcessingGroups] = useState([]);
-  const [price, setPrice] = useState('');
-  const [sku, setSKU] = useState('');
-  const [categoryID, setCategoryID] = useState('');
-  const [s3ImageGroups, setS3ImageGroups] = useState([[]]);
-  
-   // AWS Configuration
+
+  // AWS Configuration
   const REGION = "us-east-2";
   const BUCKET_NAME = "listeasier";
   const IDENTITY_POOL_ID = "us-east-2:f81d1240-32a8-4aff-87e8-940effdf5908";
 
-  const client = new DynamoDBClient({
-   region: REGION,
-    credentials: fromCognitoIdentityPool({
-      clientConfig: { region: REGION },
-      identityPoolId: IDENTITY_POOL_ID,
-    }),
-  });
-  
-  const handleCategoryChange = (newCategoryID) => {
-    setCategoryID(newCategoryID);
-  };
-
-  const handlePriceUpdate = (newPrice) => {
-    setPrice(newPrice);
-  };
-  
-  const handleSKUUpdate = (newSKU) => {
-    setSKU(newSKU);
-  };
-
-  useEffect(() => {
-    if (responseData.some(item => item !== null)) {
-      console.log("Response data updated:", responseData);
-    }
-  }, [responseData]);
-
+  // Handle group drop
   const handleGroupDrop = (e, groupIdx, imgIdx = null) => {
     e.preventDefault();
     const from = e.dataTransfer.getData("from");
     const index = e.dataTransfer.getData("index");
     setHoveredGroup(null);
 
-    setImageGroups(prev => {
-      let updated = [...prev];
-      if (from === "pool") {
-        const i = parseInt(index, 10);
-        const img = filesBase64[i];
-        setFilesBase64(prevFiles => prevFiles.filter((_, j) => j !== i));
-        const tgt = [...updated[groupIdx]];
-        imgIdx === null ? tgt.push(img) : tgt.splice(imgIdx, 0, img);
-        updated[groupIdx] = tgt;
-      } else {
-        const [srcG, srcI] = index.split("-").map(Number);
-        if (!(srcG === groupIdx && srcI === imgIdx)) {
-          const img = updated[srcG][srcI];
-          updated[srcG] = updated[srcG].filter((_, j) => j !== srcI);
-          const tgt = [...updated[groupIdx]];
-          imgIdx === null ? tgt.push(img) : tgt.splice(imgIdx, 0, img);
-          updated[groupIdx] = tgt;
-        }
+    dispatch({
+      type: 'HANDLE_GROUP_DROP',
+      payload: {
+        dropGroupIdx: groupIdx,
+        imgIdx,
+        from,
+        fromIndex: index
       }
-      
-      if (updated[updated.length - 1].length > 0) updated.push([]);
-      return updated;
     });
-
-    setSelectedImages([]);
-    setIsDirty(true);
-  };
-  
-  const handleImageGroupsUpdate = (groups, s3Groups = null) => {
-    const hasEmptyGroupAtEnd = imageGroups.length > 0 && 
-                               imageGroups[imageGroups.length - 1].length === 0;
-    
-    let newGroups;
-    if (hasEmptyGroupAtEnd && groups[groups.length - 1].length > 0) {
-      newGroups = [...groups, []];
-    } else if (!hasEmptyGroupAtEnd && groups[groups.length - 1].length === 0) {
-      newGroups = groups.slice(0, -1);
-    } else {
-      newGroups = [...groups];
-    }
-    
-    setImageGroups(newGroups);
-    
-    if (s3Groups) {
-      setS3ImageGroups(s3Groups);
-    } else {
-      const s3UrlGroups = groups.map(group => {
-        return group.map(url => {
-          return typeof url === 'string' && !url.startsWith('data:') ? url : null;
-        }).filter(url => url !== null);
-      });
-      
-      setS3ImageGroups(s3UrlGroups);
-    }
-  };
-
-  const handleGenerateListing = async () => {
-    const nonEmptyGroups = imageGroups.filter(g => g.length > 0);
-
-    if (nonEmptyGroups.length === 0 && filesBase64.length === 0) {
-      return;
-    }
-
-    let allGroupsToProcess = [...nonEmptyGroups];
-    let newGroups = [];
-    
-    const s3GroupsForDownload = s3ImageGroups.filter(group => 
-      group.length > 0 && group.some(url => url && !url.startsWith('data:'))
-    );
-    
-    if (filesBase64.length > 0 && batchSize > 0) {
-      const poolGroups = [];
-      for (let i = 0; i < filesBase64.length; i += batchSize) {
-        poolGroups.push(filesBase64.slice(i, i + batchSize));
-      }
-      
-      allGroupsToProcess = [...nonEmptyGroups, ...poolGroups];
-      
-      setImageGroups(prev => {
-        const lastEmptyGroup = prev[prev.length - 1]?.length === 0 ? [prev[prev.length - 1]] : [[]];
-        return [...nonEmptyGroups, ...poolGroups, ...lastEmptyGroup];
-      });
-      
-      newGroups = [...nonEmptyGroups, ...poolGroups];
-    } else {
-      newGroups = [...nonEmptyGroups];
-    }
-
-    setTotalChunks(allGroupsToProcess.length);
-    setCompletedChunks(0);
-    setResponseData(Array(allGroupsToProcess.length).fill(null));
-    setIsDirty(false);
-    setIsLoading(true);
-    setProcessingGroups(Array(allGroupsToProcess.length).fill(true));
-
-    const selectedCategoryOptions = getSelectedCategoryOptionsJSON(fieldSelections, price, sku);
-
-    allGroupsToProcess.forEach((group, idx) => {
-      fetch(
-        "https://7f26uyyjs5.execute-api.us-east-2.amazonaws.com/ListEasily/ListEasilyAPI",
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            category,
-            subCategory,
-            Base64Key: [group],
-            SelectedCategoryOptions: selectedCategoryOptions
-          })
-        }
-      )
-        .then(res => res.json())
-        .then(data => {
-          let parsed = data.body;
-          if (typeof parsed === "string") parsed = JSON.parse(parsed);
-
-          setTimeout(() => {
-            setResponseData(prev => {
-              const next = [...prev];
-              next[idx] = Array.isArray(parsed) ? parsed[0] : parsed;
-              return next;
-            });
-
-            setProcessingGroups(prev => {
-              const next = [...prev];
-              next[idx] = false;
-              return next;
-            });
-          }, 0);
-        })
-        .catch(err => {
-          setTimeout(() => {
-            setResponseData(prev => {
-              const next = [...prev];
-              next[idx] = { error: "Failed to fetch listing data", raw_content: err.message };
-              return next;
-            });
-
-            setProcessingGroups(prev => {
-              const next = [...prev];
-              next[idx] = false;
-              return next;
-            });
-          }, 0);
-        })
-        .finally(() => {
-          setTimeout(() => {
-            setCompletedChunks(c => {
-              const done = c + 1;
-              if (done === allGroupsToProcess.length) {
-                setIsLoading(false);
-              }
-              return done;
-            });
-          }, 0);
-        });
-    });
-    
-    return Promise.resolve();
-  };
-
-  const handleClearAll = () => {
-    setFilesBase64([]);
-    setCategory(undefined);
-    setsubCategory(undefined);
-    setErrorMessages([]);
-    setBatchSize(0);
-    setSelectedImages([]);
-    setImageGroups([[]]);
-    setS3ImageGroups([[]]);
-    setResponseData([]);
-    setIsLoading(false);
-    setIsDirty(true);
-    setProcessingGroups([]);
   };
 
   const generateCSVContent = () => {
@@ -377,6 +186,205 @@ Action(SiteID=US|Country=US|Currency=USD|Version=1193|CC=UTF-8),Custom label (SK
   const hasValidListings = responseData.some(item => item && !item.error);
 
   return (
+    <section className="preview-section">
+      <div className="section-header">
+        <h2>Image Groups & Listings</h2>
+        {hasValidListings && (
+          <button 
+            className="download-button"
+            onClick={downloadListingsAsCsv}
+            disabled={isLoading}
+          >
+            Download All Listings
+          </button>
+        )}
+      </div>
+      
+      {isLoading && (
+        <div className="loading-progress">
+          <div className="loading-bar-container">
+            <div className="loading-bar" style={{ width: `${(completedChunks / totalChunks) * 100}%` }}></div>
+          </div>
+          <p>Processing {completedChunks} of {totalChunks} listings...</p>
+        </div>
+      )}
+      <div className="groups-container">
+        {imageGroups.map((group, gi) => (
+          <div
+            key={gi}
+            className="group-card"
+            onDrop={e => handleGroupDrop(e, gi)}
+            onDragOver={e => e.preventDefault()}
+          >
+            <div className="thumbs">
+              {group.map((src, xi) => (
+                <img key={xi} src={src} alt={`group-${gi}-img-${xi}`} draggable onDragStart={e => {
+                  e.dataTransfer.setData("from", "group");
+                  e.dataTransfer.setData("index", `${gi}-${xi}`);
+                }} />
+              ))}
+            </div>
+            <div className="listing">
+              {processingGroups[gi] ? (
+                <div className="listing-loading">
+                  <Spinner />
+                  <p>Generating listing for group {gi+1}...</p>
+                </div>
+              ) : (
+                <div>
+                  {renderResponseData(gi) || <p>No data. Click "Generate Listing".</p>}
+                  {responseData[gi] && !responseData[gi].error}
+                </div>
+              )}
+            </div>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+// Main App Component
+function AppContent() {
+  const { state, dispatch } = useAppState();
+  const { category, subCategory, fieldSelections, price, sku } = state;
+
+  // AWS Configuration
+  const REGION = "us-east-2";
+  const IDENTITY_POOL_ID = "us-east-2:f81d1240-32a8-4aff-87e8-940effdf5908";
+
+  const client = new DynamoDBClient({
+    region: REGION,
+    credentials: fromCognitoIdentityPool({
+      clientConfig: { region: REGION },
+      identityPoolId: IDENTITY_POOL_ID,
+    }),
+  });
+
+  const handleGenerateListing = async () => {
+    const { imageGroups, filesBase64, batchSize } = state;
+    const nonEmptyGroups = imageGroups.filter(g => g.length > 0);
+
+    if (nonEmptyGroups.length === 0 && filesBase64.length === 0) {
+      return;
+    }
+
+    let allGroupsToProcess = [...nonEmptyGroups];
+    let newGroups = [];
+    
+    // Get S3 groups for download
+    const s3GroupsForDownload = state.s3ImageGroups.filter(group => 
+      group.length > 0 && group.some(url => url && !url.startsWith('data:'))
+    );
+    
+    // If there are unprocessed images in the pool, use them based on batchSize
+    if (filesBase64.length > 0 && batchSize > 0) {
+      const poolGroups = [];
+      for (let i = 0; i < filesBase64.length; i += batchSize) {
+        poolGroups.push(filesBase64.slice(i, i + batchSize));
+      }
+      
+      allGroupsToProcess = [...nonEmptyGroups, ...poolGroups];
+      
+      // Update image groups in state
+      let updatedGroups = [...nonEmptyGroups, ...poolGroups];
+      if (updatedGroups[updatedGroups.length - 1]?.length !== 0) {
+        updatedGroups.push([]);
+      }
+      
+      dispatch({ type: 'SET_IMAGE_GROUPS', payload: updatedGroups });
+      
+      newGroups = [...nonEmptyGroups, ...poolGroups];
+    } else {
+      newGroups = [...nonEmptyGroups];
+    }
+
+    // Update state for processing
+    dispatch({ type: 'SET_TOTAL_CHUNKS', payload: allGroupsToProcess.length });
+    dispatch({ type: 'SET_COMPLETED_CHUNKS', payload: 0 });
+    dispatch({ type: 'SET_RESPONSE_DATA', payload: Array(allGroupsToProcess.length).fill(null) });
+    dispatch({ type: 'SET_IS_DIRTY', payload: false });
+    dispatch({ type: 'SET_IS_LOADING', payload: true });
+    dispatch({ type: 'SET_PROCESSING_GROUPS', payload: Array(allGroupsToProcess.length).fill(true) });
+
+    const selectedCategoryOptions = getSelectedCategoryOptionsJSON(fieldSelections, price, sku);
+
+    // Process each group
+    allGroupsToProcess.forEach((group, idx) => {
+      fetch(
+        "https://7f26uyyjs5.execute-api.us-east-2.amazonaws.com/ListEasily/ListEasilyAPI",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            category,
+            subCategory,
+            Base64Key: [group],
+            SelectedCategoryOptions: selectedCategoryOptions
+          })
+        }
+      )
+        .then(res => res.json())
+        .then(data => {
+          let parsed = data.body;
+          if (typeof parsed === "string") parsed = JSON.parse(parsed);
+
+          setTimeout(() => {
+            dispatch({
+              type: 'UPDATE_RESPONSE_DATA',
+              payload: {
+                index: idx,
+                value: Array.isArray(parsed) ? parsed[0] : parsed
+              }
+            });
+
+            dispatch({
+              type: 'UPDATE_PROCESSING_GROUP',
+              payload: {
+                index: idx,
+                value: false
+              }
+            });
+          }, 0);
+        })
+        .catch(err => {
+          setTimeout(() => {
+            dispatch({
+              type: 'UPDATE_RESPONSE_DATA',
+              payload: {
+                index: idx,
+                value: { error: "Failed to fetch listing data", raw_content: err.message }
+              }
+            });
+
+            dispatch({
+              type: 'UPDATE_PROCESSING_GROUP',
+              payload: {
+                index: idx,
+                value: false
+              }
+            });
+          }, 0);
+        })
+        .finally(() => {
+          setTimeout(() => {
+            dispatch(prevState => {
+              const currentCompleted = state.completedChunks + 1;
+              
+              if (currentCompleted === allGroupsToProcess.length) {
+                dispatch({ type: 'SET_IS_LOADING', payload: false });
+              }
+              
+              dispatch({ type: 'SET_COMPLETED_CHUNKS', payload: currentCompleted });
+            });
+          }, 0);
+        });
+    });
+    
+    return Promise.resolve();
+  };
+
+  return (
     <div className="app-container">
       <header className="header">
         <img src="/images/ListEasier.jpg" alt="ListEasier" className="logo" />
@@ -384,100 +392,23 @@ Action(SiteID=US|Country=US|Currency=USD|Version=1193|CC=UTF-8),Custom label (SK
       </header>
 
       <main className="main-card">
-        <FormSection 
-          filesBase64={filesBase64}
-          setFilesBase64={setFilesBase64}
-          category={category}
-          setCategory={setCategory}
-          subCategory={subCategory}
-          setsubCategory={setsubCategory}
-          errorMessages={errorMessages}
-          setErrorMessages={setErrorMessages}
-          batchSize={batchSize}
-          setBatchSize={setBatchSize}
-          selectedImages={selectedImages}
-          setSelectedImages={setSelectedImages}
-          imageGroups={imageGroups}
-          setImageGroups={setImageGroups}
-          isLoading={isLoading}
-          isDirty={isDirty}
-          setIsDirty={setIsDirty}
-          totalChunks={totalChunks}
-          completedChunks={completedChunks}
-          handleGenerateListing={handleGenerateListing}
-          handleClearAll={handleClearAll}
-          Spinner={Spinner}
-          fieldSelections={fieldSelections}
-          setFieldSelections={setFieldSelections}
-          price={price} 
-          onPriceChange={handlePriceUpdate}
-          sku={sku} 
-          onSKUChange={handleSKUUpdate}
-          onImageGroupsChange={handleImageGroupsUpdate}
-          onCategoryChange={handleCategoryChange}
-        />
-
-        <section className="preview-section">
-          <div className="section-header">
-            <h2>Image Groups & Listings</h2>
-            {hasValidListings && (
-              <button 
-                className="download-button"
-                onClick={downloadListingsAsCsv}
-                disabled={isLoading}
-              >
-                Download All Listings
-              </button>
-            )}
-          </div>
-          
-          {isLoading && (
-            <div className="loading-progress">
-              <div className="loading-bar-container">
-                <div className="loading-bar" style={{ width: `${(completedChunks / totalChunks) * 100}%` }}></div>
-              </div>
-              <p>Processing {completedChunks} of {totalChunks} listings...</p>
-            </div>
-          )}
-          <div className="groups-container">
-            {imageGroups.map((group, gi) => (
-              <div
-                key={gi}
-                className="group-card"
-                onDrop={e => handleGroupDrop(e, gi)}
-                onDragOver={e => e.preventDefault()}
-              >
-                <div className="thumbs">
-                  {group.map((src, xi) => (
-                    <img key={xi} src={src} alt={`group-${gi}-img-${xi}`} draggable onDragStart={e => {
-                      e.dataTransfer.setData("from", "group");
-                      e.dataTransfer.setData("index", `${gi}-${xi}`);
-                    }} />
-                  ))}
-                </div>
-                <div className="listing">
-                  {processingGroups[gi] ? (
-                    <div className="listing-loading">
-                      <Spinner />
-                      <p>Generating listing for group {gi+1}...</p>
-                    </div>
-                  ) : (
-                    <div>
-                      {renderResponseData(gi) || <p>No data. Click "Generate Listing".</p>}
-                      {responseData[gi] && !responseData[gi].error}
-                    </div>
-                  )}
-                </div>
-              </div>
-            ))}
-          </div>
-        </section>
+        <FormSection onGenerateListing={handleGenerateListing} />
+        <PreviewSection />
       </main>
 
       <footer className="footer">
         <p>© 2025 ListEasier</p>
       </footer>
     </div>
+  );
+}
+
+// Main App with Provider
+function App() {
+  return (
+    <AppStateProvider>
+      <AppContent />
+    </AppStateProvider>
   );
 }
 

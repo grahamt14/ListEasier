@@ -634,6 +634,45 @@ function FormSection({
       setIsUploading(false);
     }
   };
+  
+  here is the uploadtos3 function if that helps optimize further
+
+  // Upload file to S3
+  const uploadToS3 = async (file) => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+
+      reader.onload = async () => {
+        try {
+          const fileName = ${Date.now()}_${file.name};
+          const arrayBuffer = reader.result;
+
+          const uploadParams = {
+            Bucket: BUCKET_NAME,
+            Key: fileName,
+            Body: new Uint8Array(arrayBuffer),
+            ContentType: file.type,
+            ACL: "public-read",
+          };
+
+          try {
+            const command = new PutObjectCommand(uploadParams);
+            await s3Client.send(command);
+
+            const s3Url = https://${BUCKET_NAME}.s3.${REGION}.amazonaws.com/${fileName};
+            resolve(s3Url);
+          } catch (uploadError) {
+            console.error("Upload error:", uploadError);
+            reject(uploadError);
+          }
+        } catch (err) {
+          reject("Error uploading: " + err.message);
+        }
+      };
+      reader.onerror = (err) => reject(err);
+      reader.readAsArrayBuffer(file);
+    });
+  };
 
   const isValidSelection = selectedCategory !== "--" && subCategory !== "--";
 

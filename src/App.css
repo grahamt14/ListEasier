@@ -447,8 +447,9 @@
   padding: 0.5rem;
   border-radius: 4px;
   border: 1px solid #ccc;
+  background-color: #3b3b3b;
   font-size: 1rem;
-  color: black; /* Explicitly setting text color for light backgrounds */
+  color: white; /* Explicitly setting text color for light backgrounds */
 }
 
 /* Optional: If you want all selects to have the same styling */
@@ -458,8 +459,8 @@ select {
   border-radius: 4px;
   border: 1px solid #ccc;
   font-size: 1rem;
-  background-color: white;
-  color: black;
+  background-color: #3b3b3b;
+  color: white;
   height: 38px;
   appearance: auto;
 }
@@ -473,7 +474,7 @@ select {
   border: 1px solid #ccc;
   font-size: 1rem;
   height: 38px;
-  background-color: white;
-  color: black; /* Explicitly setting text color */
+  background-color: #3b3b3b;
+  color: white; /* Explicitly setting text color */
   appearance: auto;
 }

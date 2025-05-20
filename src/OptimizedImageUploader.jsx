@@ -8,16 +8,13 @@ import { useAppState } from './StateContext';
  */
 const OptimizedImageUploader = ({ 
   onImagesProcessed, 
-  isUploading,
-  setIsUploading,
   autoRotateEnabled = false
 }) => {
   const { state, dispatch } = useAppState();
+  const { uploadStatus } = state;
+  const { isUploading, uploadProgress, uploadTotal, uploadCompleted, uploadStage } = uploadStatus;
+  
   const [dragActive, setDragActive] = useState(false);
-  const [totalFiles, setTotalFiles] = useState(0);
-  const [processedFiles, setProcessedFiles] = useState(0);
-  const [progress, setProgress] = useState(0);
-  const [processingStage, setProcessingStage] = useState('');
   const fileInputRef = useRef(null);
   
   // Use a ref to track and potentially cancel ongoing processing
@@ -38,14 +35,20 @@ const OptimizedImageUploader = ({
   const processImages = async (files) => {
     if (!files || files.length === 0) return;
     
-    setIsUploading(true);
-    setTotalFiles(files.length);
-    setProcessedFiles(0);
-    setProgress(0);
+    // Update global state for upload status
+    dispatch({ 
+      type: 'SET_UPLOAD_STATUS', 
+      payload: { 
+        isUploading: true, 
+        uploadProgress: 0, 
+        uploadTotal: files.length,
+        uploadCompleted: 0,
+        uploadStage: 'Processing images...'
+      } 
+    });
     
     try {
       // Step 1: Quick validation pass
-      setProcessingStage('Validating files...');
       const validFiles = Array.from(files).filter(file => {
         // Only process image files
         const isImage = file.type.startsWith('image/');
@@ -60,10 +63,16 @@ const OptimizedImageUploader = ({
         throw new Error('No valid image files found.');
       }
       
-      setTotalFiles(validFiles.length);
+      // Update total count with valid files
+      dispatch({ 
+        type: 'SET_UPLOAD_STATUS', 
+        payload: { 
+          uploadTotal: validFiles.length,
+          uploadStage: 'Optimizing images...'
+        } 
+      });
       
       // Step 2: Process images in batches with efficient memory usage
-      setProcessingStage('Processing images...');
       
       // Store the processing operation in a ref for potential cancellation
       const processingOperation = {}; 
@@ -76,8 +85,13 @@ const OptimizedImageUploader = ({
         autoRotate: autoRotateEnabled,
         toBase64: true,
         progressCallback: (progress) => {
-          setProgress(Math.round(progress * 100));
-          setProcessedFiles(Math.round(progress * validFiles.length));
+          dispatch({ 
+            type: 'SET_UPLOAD_STATUS', 
+            payload: { 
+              uploadProgress: Math.round(progress * 100),
+              uploadCompleted: Math.round(progress * validFiles.length)
+            } 
+          });
         }
       });
       
@@ -87,21 +101,46 @@ const OptimizedImageUploader = ({
       // Display summary of processing
       if (errors.length > 0) {
         console.warn(`${errors.length} of ${validFiles.length} files failed to process:`, errors);
-        // Could show a more user-friendly error message here
       }
       
-      // Wait a moment before hiding the progress indicator
+      // Show completed status for a moment
+      dispatch({ 
+        type: 'SET_UPLOAD_STATUS', 
+        payload: { 
+          uploadProgress: 100,
+          uploadCompleted: validFiles.length,
+          uploadStage: 'Upload complete!'
+        } 
+      });
+      
+      // Reset upload status after a delay
       setTimeout(() => {
-        setProcessingStage('');
-        setIsUploading(false);
-      }, 500);
+        dispatch({ 
+          type: 'SET_UPLOAD_STATUS', 
+          payload: { 
+            isUploading: false,
+            uploadProgress: 0,
+            uploadStage: ''
+          } 
+        });
+      }, 1000);
       
     } catch (error) {
       console.error("Error processing images:", error);
-      setProcessingStage('Error: ' + error.message);
+      dispatch({ 
+        type: 'SET_UPLOAD_STATUS', 
+        payload: { 
+          uploadStage: `Error: ${error.message}`,
+          uploadProgress: 0
+        } 
+      });
+      
+      // Reset status after showing error
       setTimeout(() => {
-        setProcessingStage('');
-        setIsUploading(false);
+        dispatch({ 
+          type: 'SET_UPLOAD_STATUS', 
+          payload: { isUploading: false, uploadStage: '' } 
+        });
       }, 3000);
     }
   };
@@ -157,10 +196,17 @@ const OptimizedImageUploader = ({
   const cancelProcessing = () => {
     if (processingRef.current && processingRef.current.cancel) {
       processingRef.current.cancel();
-      setProcessingStage('Cancelled');
+      
+      dispatch({ 
+        type: 'SET_UPLOAD_STATUS', 
+        payload: { 
+          uploadStage: 'Cancelled',
+          isUploading: false
+        } 
+      });
+      
       setTimeout(() => {
-        setProcessingStage('');
-        setIsUploading(false);
+        dispatch({ type: 'RESET_STATUS' });
       }, 1000);
     }
   };
@@ -177,10 +223,10 @@ const OptimizedImageUploader = ({
       {isUploading ? (
         <div className="upload-progress">
           <div className="upload-status">
-            <p>{processingStage} ({processedFiles}/{totalFiles})</p>
+            <p>{uploadStage} ({uploadCompleted}/{uploadTotal})</p>
             <div className="progress-container">
-              <div className="progress-bar" style={{ width: `${progress}%` }}></div>
-              <div className="progress-text">{progress}%</div>
+              <div className="progress-bar" style={{ width: `${uploadProgress}%` }}></div>
+              <div className="progress-text">{uploadProgress}%</div>
             </div>
             <button 
               className="cancel-button" 

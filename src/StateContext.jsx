@@ -33,6 +33,20 @@ const initialState = {
   // Status/Error
   errorMessages: [],
   responseData: [],
+  
+  // Enhanced loading state tracking
+  uploadStatus: {
+    isUploading: false,
+    uploadProgress: 0,
+    uploadTotal: 0,
+    uploadCompleted: 0,
+    uploadStage: ''
+  },
+  processingStatus: {
+    isProcessing: false,
+    processTotal: 0,
+    processCompleted: 0
+  }
 };
 
 // Create reducer to handle all state updates
@@ -169,6 +183,41 @@ function appReducer(state, action) {
         responseData: state.responseData.map((item, i) => 
           i === action.payload.index ? action.payload.value : item
         )
+      };
+      
+    case 'SET_UPLOAD_STATUS':
+      return {
+        ...state,
+        uploadStatus: {
+          ...state.uploadStatus,
+          ...action.payload
+        }
+      };
+      
+    case 'SET_PROCESSING_STATUS':
+      return {
+        ...state,
+        processingStatus: {
+          ...state.processingStatus,
+          ...action.payload
+        }
+      };
+      
+    case 'RESET_STATUS':
+      return {
+        ...state,
+        uploadStatus: {
+          isUploading: false,
+          uploadProgress: 0,
+          uploadTotal: 0,
+          uploadCompleted: 0,
+          uploadStage: ''
+        },
+        processingStatus: {
+          isProcessing: false,
+          processTotal: 0,
+          processCompleted: 0
+        }
       };
       
     case 'GROUP_SELECTED_IMAGES':

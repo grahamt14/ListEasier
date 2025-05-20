@@ -41,7 +41,8 @@ function FormSection({ onGenerateListing }) {
     sku,
     fieldSelections,
     imageRotations,
-    rawFiles
+    rawFiles,
+    uploadStatus
   } = state;
   
   // Local state for UI
@@ -51,10 +52,6 @@ function FormSection({ onGenerateListing }) {
   const [showTooltip, setShowTooltip] = useState(false);
   const [categories, setCategories] = useState({});
   const [categoriesLoading, setCategoriesLoading] = useState(true);
-  const [isUploading, setIsUploading] = useState(false);
-  const [uploadProgress, setUploadProgress] = useState(0);
-  const [totalFiles, setTotalFiles] = useState(0);
-  const [processedFiles, setProcessedFiles] = useState(0);
   const [autoRotateEnabled, setAutoRotateEnabled] = useState(false);
   
   // AWS Configuration
@@ -315,16 +312,15 @@ function FormSection({ onGenerateListing }) {
   // Handle generate listing with upload
   const handleGenerateListingWithUpload = async () => {
     try {
-      setIsUploading(true);
+      // Reset status indicators
+      dispatch({ type: 'RESET_STATUS' });
       
       // Collect all raw files that need uploading
       let allRawFiles = [...rawFiles];
       
       const rawImageGroups = state.imageGroups.map(() => []); // Placeholder for raw files in groups
       
-      setTotalFiles(allRawFiles.length);
-      
-      // Handle case with no raw files but base64 images
+      // If no files to upload, just generate listings
       if (allRawFiles.length === 0) {
         if (filesBase64.length > 0) {
           // Convert base64 images to files if needed
@@ -362,18 +358,27 @@ function FormSection({ onGenerateListing }) {
           
           if (validFiles.length > 0) {
             allRawFiles = validFiles;
-            setTotalFiles(validFiles.length);
           } else {
-            setIsUploading(false);
             await onGenerateListing();
             return;
           }
         } else {
-          setIsUploading(false);
           await onGenerateListing();
           return;
         }
       }
+      
+      // Start uploading - update global state
+      dispatch({ 
+        type: 'SET_UPLOAD_STATUS', 
+        payload: { 
+          isUploading: true, 
+          uploadTotal: allRawFiles.length,
+          uploadCompleted: 0,
+          uploadProgress: 0,
+          uploadStage: 'Uploading images to S3...'
+        } 
+      });
       
       // Create a batching system for uploads to improve performance
       const BATCH_SIZE = 5; // Upload 5 files in parallel
@@ -395,10 +400,28 @@ function FormSection({ onGenerateListing }) {
         const validUrls = batchResults.filter(url => url !== null);
         s3UrlsList.push(...validUrls);
         
-        // Update progress
-        setProcessedFiles(Math.min(i + BATCH_SIZE, allRawFiles.length));
-        setUploadProgress(Math.round((Math.min(i + BATCH_SIZE, allRawFiles.length) / allRawFiles.length) * 100));
+        // Update progress through global state
+        const currentProcessed = Math.min(i + BATCH_SIZE, allRawFiles.length);
+        const progress = Math.round((currentProcessed / allRawFiles.length) * 100);
+        
+        dispatch({ 
+          type: 'SET_UPLOAD_STATUS', 
+          payload: { 
+            uploadCompleted: currentProcessed,
+            uploadProgress: progress
+          } 
+        });
       }
+      
+      // Complete S3 upload process
+      dispatch({ 
+        type: 'SET_UPLOAD_STATUS', 
+        payload: { 
+          uploadProgress: 100,
+          uploadCompleted: allRawFiles.length,
+          uploadStage: 'Upload complete! Processing images...'
+        } 
+      });
       
       // Replace base64 images with S3 URLs
       let urlIndex = 0;
@@ -485,14 +508,34 @@ function FormSection({ onGenerateListing }) {
       dispatch({ type: 'SET_RAW_FILES', payload: [] });
       dispatch({ type: 'SET_IMAGE_ROTATIONS', payload: {} });
       
-      setIsUploading(false);
+      // Update status before calling the listing generator
+      dispatch({ 
+        type: 'SET_UPLOAD_STATUS', 
+        payload: { 
+          uploadStage: 'Preparing to generate listings...',
+          isUploading: false
+        } 
+      });
       
       // Now call handleGenerateListing
       await onGenerateListing();
       
     } catch (error) {
       console.error('Error during upload process:', error);
-      setIsUploading(false);
+      
+      // Show error in upload status
+      dispatch({ 
+        type: 'SET_UPLOAD_STATUS', 
+        payload: { 
+          uploadStage: `Error: ${error.message}`,
+          isUploading: false
+        } 
+      });
+      
+      // Reset status after a delay
+      setTimeout(() => {
+        dispatch({ type: 'RESET_STATUS' });
+      }, 3000);
     }
   };
   
@@ -539,14 +582,6 @@ function FormSection({ onGenerateListing }) {
   const Spinner = () => (
     <div className="spinner">
       <div className="spinner-circle"></div>
-    </div>
-  );
-
-  // Progress bar component
-  const ProgressBar = ({ progress }) => (
-    <div className="progress-container">
-      <div className="progress-bar" style={{ width: `${progress}%` }}></div>
-      <div className="progress-text">{progress}%</div>
     </div>
   );
 
@@ -615,8 +650,6 @@ function FormSection({ onGenerateListing }) {
       {/* Optimized Image Uploader Component */}
       <OptimizedImageUploader
         onImagesProcessed={handleImageUploaderProcess}
-        isUploading={isUploading}
-        setIsUploading={setIsUploading}
         autoRotateEnabled={autoRotateEnabled}
       />
       
@@ -671,12 +704,16 @@ function FormSection({ onGenerateListing }) {
       >
         <button 
           className="primary large" 
-          disabled={!isValidSelection || isLoading || !isDirty} 
+          disabled={!isValidSelection || isLoading || uploadStatus.isUploading || !isDirty} 
           onClick={handleGenerateListingWithUpload}
         >
-          {isLoading || isUploading ? (
+          {isLoading ? (
             <span className="loading-button">
-              <Spinner /> {isUploading ? `Uploading... (${processedFiles}/${totalFiles})` : `Generating... (${completedChunks}/${totalChunks})`}
+              <Spinner /> Generating... ({completedChunks}/{totalChunks})
+            </span>
+          ) : uploadStatus.isUploading ? (
+            <span className="loading-button">
+              <Spinner /> {uploadStatus.uploadStage} ({uploadStatus.uploadCompleted}/{uploadStatus.uploadTotal})
             </span>
           ) : 'Generate Listing'}
         </button>

@@ -20,8 +20,16 @@ function PreviewSection() {
     totalChunks,
     categoryID,
     price,
-    sku
+    sku,
+    processingStatus
   } = state;
+  
+  // Use new processing status for consistent display
+  const { isProcessing, processTotal, processCompleted } = processingStatus || { isProcessing: false, processTotal: 0, processCompleted: 0 };
+  const displayIsLoading = isLoading || isProcessing;
+  const displayTotalChunks = processTotal || totalChunks;
+  const displayCompletedChunks = processCompleted || completedChunks;
+  const processProgress = displayTotalChunks > 0 ? Math.round((displayCompletedChunks / displayTotalChunks) * 100) : 0;
 
   // Handle hover for drop target
   const [hoveredGroup, setHoveredGroup] = useState(null);
@@ -174,14 +182,6 @@ Action(SiteID=US|Country=US|Currency=USD|Version=1193|CC=UTF-8),Custom label (SK
     </div>
   );
 
-  // Progress bar component
-  const ProgressBar = ({ progress }) => (
-    <div className="progress-container">
-      <div className="progress-bar" style={{ width: `${progress}%` }}></div>
-      <div className="progress-text">{progress}%</div>
-    </div>
-  );
-
   // Check if there are valid listings to download
   const hasValidListings = responseData.some(item => item && !item.error);
 
@@ -193,19 +193,19 @@ Action(SiteID=US|Country=US|Currency=USD|Version=1193|CC=UTF-8),Custom label (SK
           <button 
             className="download-button"
             onClick={downloadListingsAsCsv}
-            disabled={isLoading}
+            disabled={displayIsLoading}
           >
             Download All Listings
           </button>
         )}
       </div>
       
-      {isLoading && (
+      {displayIsLoading && (
         <div className="loading-progress">
           <div className="loading-bar-container">
-            <div className="loading-bar" style={{ width: `${(completedChunks / totalChunks) * 100}%` }}></div>
+            <div className="loading-bar" style={{ width: `${processProgress}%` }}></div>
           </div>
-          <p>Processing {completedChunks} of {totalChunks} listings...</p>
+          <p>Processing {displayCompletedChunks} of {displayTotalChunks} listings... ({processProgress}%)</p>
         </div>
       )}
       <div className="groups-container">
@@ -299,7 +299,17 @@ function AppContent() {
     newGroups = [...nonEmptyGroups];
   }
 
-  // Update state for processing
+  // Update both new and legacy processing states
+  dispatch({ 
+    type: 'SET_PROCESSING_STATUS', 
+    payload: { 
+      isProcessing: true,
+      processTotal: allGroupsToProcess.length,
+      processCompleted: 0
+    } 
+  });
+  
+  // Also update legacy state for backward compatibility
   dispatch({ type: 'SET_TOTAL_CHUNKS', payload: allGroupsToProcess.length });
   dispatch({ type: 'SET_COMPLETED_CHUNKS', payload: 0 });
   dispatch({ type: 'SET_RESPONSE_DATA', payload: Array(allGroupsToProcess.length).fill(null) });
@@ -309,30 +319,28 @@ function AppContent() {
 
   const selectedCategoryOptions = getSelectedCategoryOptionsJSON(fieldSelections, price, sku);
 
-  // Create a counter to track completed items
-  let completedCount = 0;
+  // Process each group with the API using promises for better tracking
+  const processingPromises = allGroupsToProcess.map((group, idx) => {
+    return new Promise((resolve) => {
+      fetch(
+        "https://7f26uyyjs5.execute-api.us-east-2.amazonaws.com/ListEasily/ListEasilyAPI",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            category,
+            subCategory,
+            Base64Key: [group],
+            SelectedCategoryOptions: selectedCategoryOptions
+          })
+        }
+      )
+        .then(res => res.json())
+        .then(data => {
+          let parsed = data.body;
+          if (typeof parsed === "string") parsed = JSON.parse(parsed);
 
-  // Process each group
-  allGroupsToProcess.forEach((group, idx) => {
-    fetch(
-      "https://7f26uyyjs5.execute-api.us-east-2.amazonaws.com/ListEasily/ListEasilyAPI",
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          category,
-          subCategory,
-          Base64Key: [group],
-          SelectedCategoryOptions: selectedCategoryOptions
-        })
-      }
-    )
-      .then(res => res.json())
-      .then(data => {
-        let parsed = data.body;
-        if (typeof parsed === "string") parsed = JSON.parse(parsed);
-
-        setTimeout(() => {
+          // Update response data
           dispatch({
             type: 'UPDATE_RESPONSE_DATA',
             payload: {
@@ -341,6 +349,7 @@ function AppContent() {
             }
           });
 
+          // Update processing group
           dispatch({
             type: 'UPDATE_PROCESSING_GROUP',
             payload: {
@@ -348,10 +357,9 @@ function AppContent() {
               value: false
             }
           });
-        }, 0);
-      })
-      .catch(err => {
-        setTimeout(() => {
+        })
+        .catch(err => {
+          // Handle error
           dispatch({
             type: 'UPDATE_RESPONSE_DATA',
             payload: {
@@ -367,25 +375,29 @@ function AppContent() {
               value: false
             }
           });
-        }, 0);
-      })
-      .finally(() => {
-        setTimeout(() => {
-          // Increment completed count locally
-          completedCount++;
+        })
+        .finally(() => {
+          // Increment both new and legacy progress counters
+          dispatch({ 
+            type: 'SET_PROCESSING_STATUS', 
+            payload: { 
+              processCompleted: state.processingStatus.processCompleted + 1
+            } 
+          });
           
-          // Update the completed chunks in state
-          dispatch({ type: 'SET_COMPLETED_CHUNKS', payload: completedCount });
+          dispatch({ type: 'SET_COMPLETED_CHUNKS', payload: state.completedChunks + 1 });
           
-          // Check if all processing is complete
-          if (completedCount >= allGroupsToProcess.length) {
-            dispatch({ type: 'SET_IS_LOADING', payload: false });
-          }
-        }, 0);
-      });
+          resolve();
+        });
+    });
   });
   
-  return Promise.resolve();
+  // Wait for all processing to complete
+  await Promise.all(processingPromises);
+  
+  // Reset status indicators
+  dispatch({ type: 'RESET_STATUS' });
+  dispatch({ type: 'SET_IS_LOADING', payload: false });
 };
 
   return (

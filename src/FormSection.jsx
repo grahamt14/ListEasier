@@ -20,6 +20,7 @@ export const getSelectedCategoryOptionsJSON = (fieldSelections, price, sku) => {
   if (price) output["price"] = price;
   if (sku) output["sku"] = sku;
   return output;
+  
 };
 
 function FormSection({ onGenerateListing }) {

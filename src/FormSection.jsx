@@ -83,8 +83,8 @@ function FormSection({
   const client = new DynamoDBClient({
     region: REGION,
     credentials: {
-      accessKeyId: 'REDACTED', // Credentials should be handled securely, not hardcoded
-      secretAccessKey: 'REDACTED',
+      accessKeyId: 'AKIA5QMLZNPJMZIFQFFS',
+      secretAccessKey: 'w00ym2XMKKtgq8d0J7lCpNq8Mcu/p9fFzE22mtML',
     },
   });
   

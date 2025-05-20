@@ -1077,7 +1077,7 @@ const handleDrop = async (e) => {
     onChange={handleAutoRotateToggle} 
   />
   <label htmlFor="auto-rotate">
-    Auto-rotate images
+    Auto-rotate images on upload
   </label>
 </div>
 

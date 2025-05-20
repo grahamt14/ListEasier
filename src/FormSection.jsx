@@ -1,18 +1,15 @@
-// FormSection.jsx
+// FormSection.jsx (Optimized)
 import { useState, useRef, useEffect } from 'react';
 import { DynamoDBClient, QueryCommand } from '@aws-sdk/client-dynamodb';
 import { unmarshall } from '@aws-sdk/util-dynamodb';
 import { GetCommand, DynamoDBDocumentClient, ScanCommand } from '@aws-sdk/lib-dynamodb';
 import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
 import { fromCognitoIdentityPool } from "@aws-sdk/credential-provider-cognito-identity";
-// Import the image processing functions from TesseractRotate
-import {
-  rotateImage,
-  autoRotateWithTesseract,
-  detectRotationWithHeuristics,
-  processImage,
-  convertToBase64
-} from './TesseractRotate';
+
+// Import the optimized image handlers and uploader
+import OptimizedImageUploader from './OptimizedImageUploader';
+import { processImagesInBatch } from './OptimizedImageHandler';
+import './OptimizedUploaderStyles.css';
 
 export const getSelectedCategoryOptionsJSON = (fieldSelections, price, sku) => {
   const output = {};
@@ -73,8 +70,6 @@ function FormSection({
   const [imageRotations, setImageRotations] = useState({}); // Track rotation degrees for each image
   const [autoRotateEnabled, setAutoRotateEnabled] = useState(false);
   
-  const fileInputRef = useRef(null);
-
   // AWS Configuration
   const REGION = "us-east-2";
   const BUCKET_NAME = "listeasier";
@@ -128,10 +123,6 @@ function FormSection({
     onSKUChange("");
     onImageGroupsChange([[]], [[]]);
     onCategoryChange("");
-    
-    if (fileInputRef.current) {
-      fileInputRef.current.value = "";
-    }
     
     setIsDirty(false);
   };
@@ -244,7 +235,7 @@ function FormSection({
     }
   };
 
-  // Handle image rotation
+  // Handle image rotation - optimized version
   const handleRotateImage = async (index, direction) => {
     try {
       // Get current rotation or default to 0
@@ -254,112 +245,69 @@ function FormSection({
       const rotationChange = direction === 'right' ? 90 : -90;
       const newRotation = (currentRotation + rotationChange + 360) % 360;
       
-      // Rotate image using the imported rotateImage function
-      const rotatedImage = await rotateImage(filesBase64[index], rotationChange);
+      // Create a file from the base64 string for more efficient processing
+      const base64 = filesBase64[index];
+      const matches = base64.match(/^data:([A-Za-z-+\/]+);base64,(.+)$/);
       
-      // Update image in filesBase64 array
-      const updatedImages = [...filesBase64];
-      updatedImages[index] = rotatedImage;
+      if (!matches || matches.length !== 3) {
+        throw new Error('Invalid base64 format');
+      }
       
-      // Update rotation tracking
-      setImageRotations(prev => ({
-        ...prev,
-        [index]: newRotation
-      }));
+      const contentType = matches[1];
+      const base64Data = matches[2];
+      const byteCharacters = atob(base64Data);
+      const byteArrays = [];
       
-      // Update state
-      setFilesBase64(updatedImages);
-      setIsDirty(true);
+      for (let offset = 0; offset < byteCharacters.length; offset += 512) {
+        const slice = byteCharacters.slice(offset, offset + 512);
+        const byteNumbers = new Array(slice.length);
+        for (let i = 0; i < slice.length; i++) {
+          byteNumbers[i] = slice.charCodeAt(i);
+        }
+        const byteArray = new Uint8Array(byteNumbers);
+        byteArrays.push(byteArray);
+      }
+      
+      const blob = new Blob(byteArrays, {type: contentType});
+      const file = new File([blob], `image_${Date.now()}.${contentType.split('/')[1] || 'jpg'}`, {type: contentType});
+      
+      // Process the image using optimized batch processor (just one image)
+      const { results } = await processImagesInBatch([file], {
+        maxWidth: 800,
+        maxHeight: 800,
+        quality: 0.9, // Higher quality for rotations
+        toBase64: true,
+        manualRotation: rotationChange // Pass the rotation angle
+      });
+      
+      if (results && results.length > 0) {
+        // Update image in filesBase64 array
+        const updatedImages = [...filesBase64];
+        updatedImages[index] = results[0];
+        
+        // Update rotation tracking
+        setImageRotations(prev => ({
+          ...prev,
+          [index]: newRotation
+        }));
+        
+        // Update state
+        setFilesBase64(updatedImages);
+        setIsDirty(true);
+      }
     } catch (error) {
       console.error("Error rotating image:", error);
     }
   };
 
-  // Updated file change handler with diagnostic logging
-  const handleFileChange = async (e) => {
-    const files = Array.from(e.target.files);
-    if (files.length === 0) return;
-
-    console.log(`Processing ${files.length} files...`);
-    setIsUploading(true);
-    setTotalFiles(files.length);
-    setProcessedFiles(0);
-    setUploadProgress(0);
-
-    const base64List = [];
-    const newRawFiles = [];
-    const processingErrors = [];
-
-    for (let i = 0; i < files.length; i++) {
-      try {
-        console.log(`Processing file ${i+1}/${files.length}: ${files[i].name}`);
-        
-        // Use the imported processImage function with auto-rotation flag
-        const base64 = await processImage(files[i], autoRotateEnabled);
-        
-        base64List.push(base64);
-        newRawFiles.push(files[i]);
-        
-        setProcessedFiles(i + 1);
-        setUploadProgress(Math.round(((i + 1) / files.length) * 100));
-      } catch (error) {
-        console.error(`Error processing file ${files[i].name}:`, error);
-        processingErrors.push(`Failed to process ${files[i].name}: ${error.message}`);
-      }
-    }
-
-    // If we have processing errors, alert the user
-    if (processingErrors.length > 0) {
-      console.warn(`${processingErrors.length} files failed to process:`, processingErrors);
-      // Optionally display these errors to the user
-    }
-
-    setFilesBase64(prev => [...prev, ...base64List]);
-    setRawFiles(prev => [...prev, ...newRawFiles]);
+  // Use the optimized image uploader instead of direct handlers
+  const handleImageUploaderProcess = (processedImages, processedRawFiles) => {
+    setFilesBase64(prev => [...prev, ...processedImages]);
+    setRawFiles(prev => [...prev, ...processedRawFiles]);
     setErrorMessages(prev => prev.filter(msg => msg !== "Please upload at least one image."));
     setIsDirty(true);
-    setTimeout(() => setIsUploading(false), 500);
-    
-    console.log(`Completed processing ${base64List.length} files successfully`);
   };
 
-  // Similarly update the drop handler
-  const handleDrop = async (e) => {
-    e.preventDefault();
-    const imgs = Array.from(e.dataTransfer.files).filter(f => f.type.startsWith("image/"));
-    if (imgs.length === 0) return;
-
-    setIsUploading(true);
-    setTotalFiles(imgs.length);
-    setProcessedFiles(0);
-    setUploadProgress(0);
-
-    const base64List = [];
-    const newRawFiles = [];
-
-    for (let i = 0; i < imgs.length; i++) {
-      try {
-        // Use the imported processImage function with auto-rotation flag
-        const base64 = await processImage(imgs[i], autoRotateEnabled);
-        
-        base64List.push(base64);
-        newRawFiles.push(imgs[i]);
-        
-        setProcessedFiles(i + 1);
-        setUploadProgress(Math.round(((i + 1) / imgs.length) * 100));
-      } catch (error) {
-        console.error("Error processing file:", error);
-      }
-    }
-
-    setFilesBase64(prev => [...prev, ...base64List]);
-    setRawFiles(prev => [...prev, ...newRawFiles]);
-    setIsDirty(true);
-    setTimeout(() => setIsUploading(false), 500);
-  };
-
-  const handleDragOver = (e) => e.preventDefault();
-  const triggerFileInput = () => fileInputRef.current.click();
   const handlePriceChange = (e) => onPriceChange(e.target.value);
   const handleSkuChange = (e) => onSKUChange(e.target.value);
 
@@ -449,7 +397,7 @@ function FormSection({
     }
   };
   
- // Handle generate listing with upload
+ // Handle generate listing with upload - optimized version
   const handleGenerateListingWithUpload = async () => {
     try {
       setIsUploading(true);
@@ -468,13 +416,12 @@ function FormSection({
       // Handle case with no raw files but base64 images
       if (allRawFiles.length === 0) {
         if (filesBase64.length > 0) {
-          const convertedFiles = [];
-          for (let i = 0; i < filesBase64.length; i++) {
+          // Convert base64 images to files if needed
+          const convertedFiles = await Promise.all(filesBase64.map(async (base64, i) => {
             try {
-              const base64 = filesBase64[i];
               const matches = base64.match(/^data:([A-Za-z-+\/]+);base64,(.+)$/);
               
-              if (!matches || matches.length !== 3) continue;
+              if (!matches || matches.length !== 3) return null;
               
               const contentType = matches[1];
               const base64Data = matches[2];
@@ -493,17 +440,18 @@ function FormSection({
               
               const blob = new Blob(byteArrays, {type: contentType});
               const fileName = `image_${Date.now()}_${i}.${contentType.split('/')[1] || 'jpg'}`;
-              const file = new File([blob], fileName, {type: contentType});
-              
-              convertedFiles.push(file);
+              return new File([blob], fileName, {type: contentType});
             } catch (error) {
               console.error(`Error converting base64 to file:`, error);
+              return null;
             }
-          }
+          }));
           
-          if (convertedFiles.length > 0) {
-            allRawFiles = convertedFiles;
-            setTotalFiles(convertedFiles.length);
+          const validFiles = convertedFiles.filter(file => file !== null);
+          
+          if (validFiles.length > 0) {
+            allRawFiles = validFiles;
+            setTotalFiles(validFiles.length);
           } else {
             setIsUploading(false);
             handleGenerateListing();
@@ -516,21 +464,29 @@ function FormSection({
         }
       }
       
-      // Upload all raw files to S3
+      // Create a batching system for uploads to improve performance
+      const BATCH_SIZE = 5; // Upload 5 files in parallel
       const s3UrlsList = [];
       
-      for (let i = 0; i < allRawFiles.length; i++) {
-        try {
-          if (!allRawFiles[i]) continue;
-          
-          const s3Url = await uploadToS3(allRawFiles[i]);
-          s3UrlsList.push(s3Url);
-          
-          setProcessedFiles(i + 1);
-          setUploadProgress(Math.round(((i + 1) / allRawFiles.length) * 100));
-        } catch (error) {
-          console.error(`Error uploading file:`, error);
-        }
+      // Process files in batches
+      for (let i = 0; i < allRawFiles.length; i += BATCH_SIZE) {
+        const batch = allRawFiles.slice(i, i + BATCH_SIZE);
+        
+        // Upload batch in parallel
+        const batchResults = await Promise.all(
+          batch.map(file => uploadToS3(file).catch(error => {
+            console.error(`Error uploading file:`, error);
+            return null; // Return null for failed uploads
+          }))
+        );
+        
+        // Filter out failed uploads and add to results
+        const validUrls = batchResults.filter(url => url !== null);
+        s3UrlsList.push(...validUrls);
+        
+        // Update progress
+        setProcessedFiles(Math.min(i + BATCH_SIZE, allRawFiles.length));
+        setUploadProgress(Math.round((Math.min(i + BATCH_SIZE, allRawFiles.length) / allRawFiles.length) * 100));
       }
       
       // Replace base64 images with S3 URLs
@@ -635,7 +591,7 @@ function FormSection({
     }
   };
   
-// Upload file to S3
+// Upload file to S3 - optimized version
   const uploadToS3 = async (file) => {
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
@@ -657,7 +613,7 @@ function FormSection({
             const command = new PutObjectCommand(uploadParams);
             await s3Client.send(command);
 
-		const s3Url = `https://${BUCKET_NAME}.s3.${REGION}.amazonaws.com/${fileName}`;
+            const s3Url = `https://${BUCKET_NAME}.s3.${REGION}.amazonaws.com/${fileName}`;
             resolve(s3Url);
           } catch (uploadError) {
             console.error("Upload error:", uploadError);
@@ -737,17 +693,13 @@ function FormSection({
         </div>
       </div>
 
-      <div className="upload-area" onDrop={handleDrop} onDragOver={handleDragOver} onClick={triggerFileInput}>
-        {isUploading ? (
-          <div className="upload-loading">
-            <p>Processing images... ({processedFiles}/{totalFiles})</p>
-            <ProgressBar progress={uploadProgress} />
-          </div>
-        ) : (
-          <p>Click or drag images to upload</p>
-        )}
-        <input ref={fileInputRef} type="file" multiple accept="image/*" onChange={handleFileChange} hidden />
-      </div>
+      {/* Optimized Image Uploader Component */}
+      <OptimizedImageUploader
+        onImagesProcessed={handleImageUploaderProcess}
+        isUploading={isUploading}
+        setIsUploading={setIsUploading}
+        autoRotateEnabled={autoRotateEnabled}
+      />
       
       <div className="form-group auto-rotate-option">
         <input 

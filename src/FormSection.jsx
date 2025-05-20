@@ -635,9 +635,7 @@ function FormSection({
     }
   };
   
-  here is the uploadtos3 function if that helps optimize further
-
-  // Upload file to S3
+ 
   const uploadToS3 = async (file) => {
     return new Promise((resolve, reject) => {
       const reader = new FileReader();

@@ -261,128 +261,132 @@ function AppContent() {
     }),
   });
 
-  const handleGenerateListing = async () => {
-    const { imageGroups, filesBase64, batchSize } = state;
-    const nonEmptyGroups = imageGroups.filter(g => g.length > 0);
+ const handleGenerateListing = async () => {
+  const { imageGroups, filesBase64, batchSize } = state;
+  const nonEmptyGroups = imageGroups.filter(g => g.length > 0);
 
-    if (nonEmptyGroups.length === 0 && filesBase64.length === 0) {
-      return;
+  if (nonEmptyGroups.length === 0 && filesBase64.length === 0) {
+    return;
+  }
+
+  let allGroupsToProcess = [...nonEmptyGroups];
+  let newGroups = [];
+  
+  // Get S3 groups for download
+  const s3GroupsForDownload = state.s3ImageGroups.filter(group => 
+    group.length > 0 && group.some(url => url && !url.startsWith('data:'))
+  );
+  
+  // If there are unprocessed images in the pool, use them based on batchSize
+  if (filesBase64.length > 0 && batchSize > 0) {
+    const poolGroups = [];
+    for (let i = 0; i < filesBase64.length; i += batchSize) {
+      poolGroups.push(filesBase64.slice(i, i + batchSize));
     }
-
-    let allGroupsToProcess = [...nonEmptyGroups];
-    let newGroups = [];
     
-    // Get S3 groups for download
-    const s3GroupsForDownload = state.s3ImageGroups.filter(group => 
-      group.length > 0 && group.some(url => url && !url.startsWith('data:'))
-    );
+    allGroupsToProcess = [...nonEmptyGroups, ...poolGroups];
     
-    // If there are unprocessed images in the pool, use them based on batchSize
-    if (filesBase64.length > 0 && batchSize > 0) {
-      const poolGroups = [];
-      for (let i = 0; i < filesBase64.length; i += batchSize) {
-        poolGroups.push(filesBase64.slice(i, i + batchSize));
-      }
-      
-      allGroupsToProcess = [...nonEmptyGroups, ...poolGroups];
-      
-      // Update image groups in state
-      let updatedGroups = [...nonEmptyGroups, ...poolGroups];
-      if (updatedGroups[updatedGroups.length - 1]?.length !== 0) {
-        updatedGroups.push([]);
-      }
-      
-      dispatch({ type: 'SET_IMAGE_GROUPS', payload: updatedGroups });
-      
-      newGroups = [...nonEmptyGroups, ...poolGroups];
-    } else {
-      newGroups = [...nonEmptyGroups];
+    // Update image groups in state
+    let updatedGroups = [...nonEmptyGroups, ...poolGroups];
+    if (updatedGroups[updatedGroups.length - 1]?.length !== 0) {
+      updatedGroups.push([]);
     }
-
-    // Update state for processing
-    dispatch({ type: 'SET_TOTAL_CHUNKS', payload: allGroupsToProcess.length });
-    dispatch({ type: 'SET_COMPLETED_CHUNKS', payload: 0 });
-    dispatch({ type: 'SET_RESPONSE_DATA', payload: Array(allGroupsToProcess.length).fill(null) });
-    dispatch({ type: 'SET_IS_DIRTY', payload: false });
-    dispatch({ type: 'SET_IS_LOADING', payload: true });
-    dispatch({ type: 'SET_PROCESSING_GROUPS', payload: Array(allGroupsToProcess.length).fill(true) });
-
-    const selectedCategoryOptions = getSelectedCategoryOptionsJSON(fieldSelections, price, sku);
-
-    // Process each group
-    allGroupsToProcess.forEach((group, idx) => {
-      fetch(
-        "https://7f26uyyjs5.execute-api.us-east-2.amazonaws.com/ListEasily/ListEasilyAPI",
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            category,
-            subCategory,
-            Base64Key: [group],
-            SelectedCategoryOptions: selectedCategoryOptions
-          })
-        }
-      )
-        .then(res => res.json())
-        .then(data => {
-          let parsed = data.body;
-          if (typeof parsed === "string") parsed = JSON.parse(parsed);
-
-          setTimeout(() => {
-            dispatch({
-              type: 'UPDATE_RESPONSE_DATA',
-              payload: {
-                index: idx,
-                value: Array.isArray(parsed) ? parsed[0] : parsed
-              }
-            });
-
-            dispatch({
-              type: 'UPDATE_PROCESSING_GROUP',
-              payload: {
-                index: idx,
-                value: false
-              }
-            });
-          }, 0);
-        })
-        .catch(err => {
-          setTimeout(() => {
-            dispatch({
-              type: 'UPDATE_RESPONSE_DATA',
-              payload: {
-                index: idx,
-                value: { error: "Failed to fetch listing data", raw_content: err.message }
-              }
-            });
-
-            dispatch({
-              type: 'UPDATE_PROCESSING_GROUP',
-              payload: {
-                index: idx,
-                value: false
-              }
-            });
-          }, 0);
-        })
-        .finally(() => {
-          setTimeout(() => {
-            dispatch(prevState => {
-              const currentCompleted = state.completedChunks + 1;
-              
-              if (currentCompleted === allGroupsToProcess.length) {
-                dispatch({ type: 'SET_IS_LOADING', payload: false });
-              }
-              
-              dispatch({ type: 'SET_COMPLETED_CHUNKS', payload: currentCompleted });
-            });
-          }, 0);
-        });
-    });
     
-    return Promise.resolve();
-  };
+    dispatch({ type: 'SET_IMAGE_GROUPS', payload: updatedGroups });
+    
+    newGroups = [...nonEmptyGroups, ...poolGroups];
+  } else {
+    newGroups = [...nonEmptyGroups];
+  }
+
+  // Update state for processing
+  dispatch({ type: 'SET_TOTAL_CHUNKS', payload: allGroupsToProcess.length });
+  dispatch({ type: 'SET_COMPLETED_CHUNKS', payload: 0 });
+  dispatch({ type: 'SET_RESPONSE_DATA', payload: Array(allGroupsToProcess.length).fill(null) });
+  dispatch({ type: 'SET_IS_DIRTY', payload: false });
+  dispatch({ type: 'SET_IS_LOADING', payload: true });
+  dispatch({ type: 'SET_PROCESSING_GROUPS', payload: Array(allGroupsToProcess.length).fill(true) });
+
+  const selectedCategoryOptions = getSelectedCategoryOptionsJSON(fieldSelections, price, sku);
+
+  // Create a counter to track completed items
+  let completedCount = 0;
+
+  // Process each group
+  allGroupsToProcess.forEach((group, idx) => {
+    fetch(
+      "https://7f26uyyjs5.execute-api.us-east-2.amazonaws.com/ListEasily/ListEasilyAPI",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          category,
+          subCategory,
+          Base64Key: [group],
+          SelectedCategoryOptions: selectedCategoryOptions
+        })
+      }
+    )
+      .then(res => res.json())
+      .then(data => {
+        let parsed = data.body;
+        if (typeof parsed === "string") parsed = JSON.parse(parsed);
+
+        setTimeout(() => {
+          dispatch({
+            type: 'UPDATE_RESPONSE_DATA',
+            payload: {
+              index: idx,
+              value: Array.isArray(parsed) ? parsed[0] : parsed
+            }
+          });
+
+          dispatch({
+            type: 'UPDATE_PROCESSING_GROUP',
+            payload: {
+              index: idx,
+              value: false
+            }
+          });
+        }, 0);
+      })
+      .catch(err => {
+        setTimeout(() => {
+          dispatch({
+            type: 'UPDATE_RESPONSE_DATA',
+            payload: {
+              index: idx,
+              value: { error: "Failed to fetch listing data", raw_content: err.message }
+            }
+          });
+
+          dispatch({
+            type: 'UPDATE_PROCESSING_GROUP',
+            payload: {
+              index: idx,
+              value: false
+            }
+          });
+        }, 0);
+      })
+      .finally(() => {
+        setTimeout(() => {
+          // Increment completed count locally
+          completedCount++;
+          
+          // Update the completed chunks in state
+          dispatch({ type: 'SET_COMPLETED_CHUNKS', payload: completedCount });
+          
+          // Check if all processing is complete
+          if (completedCount >= allGroupsToProcess.length) {
+            dispatch({ type: 'SET_IS_LOADING', payload: false });
+          }
+        }, 0);
+      });
+  });
+  
+  return Promise.resolve();
+};
 
   return (
     <div className="app-container">

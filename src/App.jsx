@@ -4,6 +4,7 @@ import FormSection, { getSelectedCategoryOptionsJSON } from './FormSection';
 import JSZip from 'jszip';
 import { saveAs } from 'file-saver';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
+import { fromCognitoIdentityPool } from "@aws-sdk/credential-provider-cognito-identity";
 
 function App() {
   const [fieldSelections, setFieldSelections] = useState({});

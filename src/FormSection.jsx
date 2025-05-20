@@ -244,43 +244,43 @@ function FormSection({
     }
   };
 
-// Optimized uploadToS3 function with improved performance
-const uploadToS3 = async (file) => {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    
-    reader.onload = async () => {
-      try {
-        const fileName = `${Date.now()}_${file.name}`;
-        const arrayBuffer = reader.result;
-        
-        const uploadParams = {
-          Bucket: BUCKET_NAME,
-          Key: fileName,
-          Body: new Uint8Array(arrayBuffer),
-          ContentType: file.type,
-          ACL: "public-read",
-        };
-        
+  // Upload file to S3
+  const uploadToS3 = async (file) => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      
+      reader.onload = async () => {
         try {
-          const command = new PutObjectCommand(uploadParams);
-          await s3Client.send(command);
+          const fileName = `${Date.now()}_${file.name}`;
+          const arrayBuffer = reader.result;
           
-          const s3Url = `https://${BUCKET_NAME}.s3.${REGION}.amazonaws.com/${fileName}`;
-          resolve(s3Url);
-        } catch (uploadError) {
-          console.error("Upload error:", uploadError);
-          reject(uploadError);
+          const uploadParams = {
+            Bucket: BUCKET_NAME,
+            Key: fileName,
+            Body: new Uint8Array(arrayBuffer),
+            ContentType: file.type,
+            ACL: "public-read",
+          };
+          
+          try {
+            const command = new PutObjectCommand(uploadParams);
+            await s3Client.send(command);
+            
+            const s3Url = `https://${BUCKET_NAME}.s3.${REGION}.amazonaws.com/${fileName}`;
+            resolve(s3Url);
+          } catch (uploadError) {
+            console.error("Upload error:", uploadError);
+            reject(uploadError);
+          }
+        } catch (err) {
+          reject("Error uploading: " + err.message);
         }
-      } catch (err) {
-        reject("Error uploading: " + err.message);
-      }
-    };
+      };
 
-    reader.onerror = (err) => reject(err);
-    reader.readAsArrayBuffer(file);
-  });
-};
+      reader.onerror = (err) => reject(err);
+      reader.readAsArrayBuffer(file);
+    });
+  };
 
   // Handle image rotation
   const handleRotateImage = async (index, direction) => {
@@ -313,73 +313,53 @@ const uploadToS3 = async (file) => {
     }
   };
 
-// Optimized file processing with improved image handling
-const handleFileChange = async (e) => {
-  const files = Array.from(e.target.files);
-  if (files.length === 0) return;
+  // Updated file change handler with diagnostic logging
+  const handleFileChange = async (e) => {
+    const files = Array.from(e.target.files);
+    if (files.length === 0) return;
 
-  console.log(`Processing ${files.length} files...`);
-  setIsUploading(true);
-  setTotalFiles(files.length);
-  setProcessedFiles(0);
-  setUploadProgress(0);
+    console.log(`Processing ${files.length} files...`);
+    setIsUploading(true);
+    setTotalFiles(files.length);
+    setProcessedFiles(0);
+    setUploadProgress(0);
 
-  // Process files in batches to avoid overwhelming the browser
-  const BATCH_SIZE = 4;
-  const base64List = [];
-  const newRawFiles = [];
-  const processingErrors = [];
-  
-  // Create batches
-  const fileBatches = [];
-  for (let i = 0; i < files.length; i += BATCH_SIZE) {
-    fileBatches.push(files.slice(i, i + BATCH_SIZE));
-  }
-  
-  // Process each batch sequentially, but process files within each batch in parallel
-  let processedCount = 0;
-  for (const batch of fileBatches) {
-    const batchPromises = batch.map(async (file) => {
+    const base64List = [];
+    const newRawFiles = [];
+    const processingErrors = [];
+
+    for (let i = 0; i < files.length; i++) {
       try {
-        console.log(`Processing file: ${file.name}`);
-        const base64 = await processImage(file, autoRotateEnabled);
-        return { base64, file };
+        console.log(`Processing file ${i+1}/${files.length}: ${files[i].name}`);
+        
+        // Use the imported processImage function with auto-rotation flag
+        const base64 = await processImage(files[i], autoRotateEnabled);
+        
+        base64List.push(base64);
+        newRawFiles.push(files[i]);
+        
+        setProcessedFiles(i + 1);
+        setUploadProgress(Math.round(((i + 1) / files.length) * 100));
       } catch (error) {
-        console.error(`Error processing file ${file.name}:`, error);
-        processingErrors.push(`Failed to process ${file.name}: ${error.message}`);
-        return null;
+        console.error(`Error processing file ${files[i].name}:`, error);
+        processingErrors.push(`Failed to process ${files[i].name}: ${error.message}`);
       }
-    });
-    
-    const batchResults = await Promise.all(batchPromises);
-    
-    // Add successful results to our arrays
-    batchResults.forEach(result => {
-      if (result) {
-        base64List.push(result.base64);
-        newRawFiles.push(result.file);
-      }
-    });
-    
-    processedCount += batch.length;
-    setProcessedFiles(processedCount);
-    setUploadProgress(Math.round((processedCount / files.length) * 100));
-  }
+    }
 
-  // If we have processing errors, you can handle them here
-  if (processingErrors.length > 0) {
-    console.warn(`${processingErrors.length} files failed to process:`, processingErrors);
-    // Optionally display these errors to the user
-  }
+    // If we have processing errors, alert the user
+    if (processingErrors.length > 0) {
+      console.warn(`${processingErrors.length} files failed to process:`, processingErrors);
+      // Optionally display these errors to the user
+    }
 
-  setFilesBase64(prev => [...prev, ...base64List]);
-  setRawFiles(prev => [...prev, ...newRawFiles]);
-  setErrorMessages(prev => prev.filter(msg => msg !== "Please upload at least one image."));
-  setIsDirty(true);
-  setTimeout(() => setIsUploading(false), 500);
-  
-  console.log(`Completed processing ${base64List.length} files successfully`);
-};
+    setFilesBase64(prev => [...prev, ...base64List]);
+    setRawFiles(prev => [...prev, ...newRawFiles]);
+    setErrorMessages(prev => prev.filter(msg => msg !== "Please upload at least one image."));
+    setIsDirty(true);
+    setTimeout(() => setIsUploading(false), 500);
+    
+    console.log(`Completed processing ${base64List.length} files successfully`);
+  };
 
   // Similarly update the drop handler
   const handleDrop = async (e) => {
@@ -507,211 +487,191 @@ const handleFileChange = async (e) => {
     }
   };
 
-  // Optimized handleGenerateListingWithUpload function for FormSection.jsx
-const handleGenerateListingWithUpload = async () => {
-  try {
-    setIsUploading(true);
-    
-    // Collect all raw files that need uploading
-    let allRawFiles = [...rawFiles];
-    
-    rawImageGroups.forEach(group => {
-      if (group && group.length) {
-        allRawFiles = [...allRawFiles, ...group];
-      }
-    });
-    
-    setTotalFiles(allRawFiles.length);
-    
-    // Handle case with no raw files but base64 images
-    if (allRawFiles.length === 0) {
-      if (filesBase64.length > 0) {
-        // Convert base64 images to files in parallel
-        const convertPromises = filesBase64.map(async (base64, i) => {
-          try {
-            const matches = base64.match(/^data:([A-Za-z-+\/]+);base64,(.+)$/);
-            
-            if (!matches || matches.length !== 3) return null;
-            
-            const contentType = matches[1];
-            const base64Data = matches[2];
-            const byteCharacters = atob(base64Data);
-            const byteArrays = [];
-            
-            for (let offset = 0; offset < byteCharacters.length; offset += 512) {
-              const slice = byteCharacters.slice(offset, offset + 512);
-              const byteNumbers = new Array(slice.length);
-              for (let i = 0; i < slice.length; i++) {
-                byteNumbers[i] = slice.charCodeAt(i);
+  // Handle generate listing with upload
+  const handleGenerateListingWithUpload = async () => {
+    try {
+      setIsUploading(true);
+      
+      // Collect all raw files that need uploading
+      let allRawFiles = [...rawFiles];
+      
+      rawImageGroups.forEach(group => {
+        if (group && group.length) {
+          allRawFiles = [...allRawFiles, ...group];
+        }
+      });
+      
+      setTotalFiles(allRawFiles.length);
+      
+      // Handle case with no raw files but base64 images
+      if (allRawFiles.length === 0) {
+        if (filesBase64.length > 0) {
+          const convertedFiles = [];
+          for (let i = 0; i < filesBase64.length; i++) {
+            try {
+              const base64 = filesBase64[i];
+              const matches = base64.match(/^data:([A-Za-z-+\/]+);base64,(.+)$/);
+              
+              if (!matches || matches.length !== 3) continue;
+              
+              const contentType = matches[1];
+              const base64Data = matches[2];
+              const byteCharacters = atob(base64Data);
+              const byteArrays = [];
+              
+              for (let offset = 0; offset < byteCharacters.length; offset += 512) {
+                const slice = byteCharacters.slice(offset, offset + 512);
+                const byteNumbers = new Array(slice.length);
+                for (let i = 0; i < slice.length; i++) {
+                  byteNumbers[i] = slice.charCodeAt(i);
+                }
+                const byteArray = new Uint8Array(byteNumbers);
+                byteArrays.push(byteArray);
               }
-              const byteArray = new Uint8Array(byteNumbers);
-              byteArrays.push(byteArray);
+              
+              const blob = new Blob(byteArrays, {type: contentType});
+              const fileName = `image_${Date.now()}_${i}.${contentType.split('/')[1] || 'jpg'}`;
+              const file = new File([blob], fileName, {type: contentType});
+              
+              convertedFiles.push(file);
+            } catch (error) {
+              console.error(`Error converting base64 to file:`, error);
             }
-            
-            const blob = new Blob(byteArrays, {type: contentType});
-            const fileName = `image_${Date.now()}_${i}.${contentType.split('/')[1] || 'jpg'}`;
-            return new File([blob], fileName, {type: contentType});
-          } catch (error) {
-            console.error(`Error converting base64 to file:`, error);
-            return null;
           }
-        });
-        
-        const convertedFiles = (await Promise.all(convertPromises)).filter(Boolean);
-        
-        if (convertedFiles.length > 0) {
-          allRawFiles = convertedFiles;
-          setTotalFiles(convertedFiles.length);
+          
+          if (convertedFiles.length > 0) {
+            allRawFiles = convertedFiles;
+            setTotalFiles(convertedFiles.length);
+          } else {
+            setIsUploading(false);
+            handleGenerateListing();
+            return;
+          }
         } else {
           setIsUploading(false);
           handleGenerateListing();
           return;
         }
-      } else {
-        setIsUploading(false);
-        handleGenerateListing();
-        return;
       }
-    }
-    
-    // Fetch the eBay category ID in parallel with file uploads
-    const categoryIdPromise = fetchEbayCategoryID(selectedCategory, subCategory);
-    
-    // Upload all raw files to S3 in parallel batches
-    const BATCH_SIZE = 5; // Process 5 files at a time
-    const s3UrlsList = [];
-    let processedCount = 0;
-    
-    // Create batches of files
-    const fileBatches = [];
-    for (let i = 0; i < allRawFiles.length; i += BATCH_SIZE) {
-      fileBatches.push(allRawFiles.slice(i, i + BATCH_SIZE));
-    }
-    
-    // Process each batch sequentially, but files within a batch in parallel
-    for (const batch of fileBatches) {
-      const batchUploadPromises = batch.map(async (file) => {
-        if (!file) return null;
-        
+      
+      // Upload all raw files to S3
+      const s3UrlsList = [];
+      
+      for (let i = 0; i < allRawFiles.length; i++) {
         try {
-          const s3Url = await uploadToS3(file);
-          return s3Url;
+          if (!allRawFiles[i]) continue;
+          
+          const s3Url = await uploadToS3(allRawFiles[i]);
+          s3UrlsList.push(s3Url);
+          
+          setProcessedFiles(i + 1);
+          setUploadProgress(Math.round(((i + 1) / allRawFiles.length) * 100));
         } catch (error) {
           console.error(`Error uploading file:`, error);
-          return null;
-        }
-      });
-      
-      const batchResults = await Promise.all(batchUploadPromises);
-      const validUrls = batchResults.filter(Boolean);
-      s3UrlsList.push(...validUrls);
-      
-      processedCount += batch.length;
-      setProcessedFiles(processedCount);
-      setUploadProgress(Math.round((processedCount / allRawFiles.length) * 100));
-    }
-    
-    // Replace base64 images with S3 URLs
-    let urlIndex = 0;
-    
-    // Replace main filesBase64 array
-    let newFilesBase64 = [];
-    let mainUrlsUsed = 0;
-    if (filesBase64.length > 0) {
-      const availableUrls = s3UrlsList.length - urlIndex;
-      const urlsToUse = Math.min(filesBase64.length, availableUrls);
-      const mainUrls = s3UrlsList.slice(urlIndex, urlIndex + urlsToUse);
-      newFilesBase64 = mainUrls;
-      urlIndex += urlsToUse;
-      mainUrlsUsed = urlsToUse;
-    }
-    
-    // Create new image groups based on batchSize for the main pool images
-    const mainImageGroups = [];
-    const mainS3ImageGroups = [];
-    if (newFilesBase64.length > 0 && batchSize > 0) {
-      for (let i = 0; i < mainUrlsUsed; i += batchSize) {
-        const groupUrls = newFilesBase64.slice(i, i + batchSize);
-        if (groupUrls.length > 0) {
-          mainImageGroups.push(groupUrls);
-          mainS3ImageGroups.push(groupUrls);
         }
       }
-    }
-    
-    // Replace image groups with S3 URLs
-    const newImageGroups = [];
-    const newS3ImageGroups = [];
-    if (imageGroups.length > 0) {
-      for (let i = 0; i < imageGroups.length; i++) {
-        const group = imageGroups[i];
-        if (group && group.length > 0) {
-          const availableUrls = s3UrlsList.length - urlIndex;
-          const urlsToUse = Math.min(group.length, availableUrls);
-          if (urlsToUse > 0) {
-            const groupUrls = s3UrlsList.slice(urlIndex, urlIndex + urlsToUse);
-            newImageGroups.push(groupUrls);
-            newS3ImageGroups.push(groupUrls);
-            urlIndex += urlsToUse;
-          } else {
+      
+      // Replace base64 images with S3 URLs
+      let urlIndex = 0;
+      
+      // Replace main filesBase64 array
+      let newFilesBase64 = [];
+      let mainUrlsUsed = 0;
+      if (filesBase64.length > 0) {
+        const availableUrls = s3UrlsList.length - urlIndex;
+        const urlsToUse = Math.min(filesBase64.length, availableUrls);
+        const mainUrls = s3UrlsList.slice(urlIndex, urlIndex + urlsToUse);
+        newFilesBase64 = mainUrls;
+        urlIndex += urlsToUse;
+        mainUrlsUsed = urlsToUse;
+      }
+      
+      // Create new image groups based on batchSize for the main pool images
+      const mainImageGroups = [];
+      const mainS3ImageGroups = [];
+      if (newFilesBase64.length > 0 && batchSize > 0) {
+        for (let i = 0; i < mainUrlsUsed; i += batchSize) {
+          const groupUrls = newFilesBase64.slice(i, i + batchSize);
+          if (groupUrls.length > 0) {
+            mainImageGroups.push(groupUrls);
+            mainS3ImageGroups.push(groupUrls);
+          }
+        }
+      }
+      
+      // Replace image groups with S3 URLs
+      const newImageGroups = [];
+      const newS3ImageGroups = [];
+      if (imageGroups.length > 0) {
+        for (let i = 0; i < imageGroups.length; i++) {
+          const group = imageGroups[i];
+          if (group && group.length > 0) {
+            const availableUrls = s3UrlsList.length - urlIndex;
+            const urlsToUse = Math.min(group.length, availableUrls);
+            if (urlsToUse > 0) {
+              const groupUrls = s3UrlsList.slice(urlIndex, urlIndex + urlsToUse);
+              newImageGroups.push(groupUrls);
+              newS3ImageGroups.push(groupUrls);
+              urlIndex += urlsToUse;
+            } else {
+              newS3ImageGroups.push([]);
+            }
+          } else if (i === imageGroups.length - 1) {
+            newImageGroups.push([]);
             newS3ImageGroups.push([]);
           }
-        } else if (i === imageGroups.length - 1) {
-          newImageGroups.push([]);
-          newS3ImageGroups.push([]);
         }
       }
+      
+      // Combine the main image groups with the existing groups
+      const finalImageGroups = [...newImageGroups];
+      const finalS3ImageGroups = [...newS3ImageGroups];
+      
+      // Add the created main image groups if they don't already exist
+      if (mainImageGroups.length > 0) {
+        mainImageGroups.forEach((group, index) => {
+          if (group.length > 0) {
+            finalImageGroups.push(group);
+            finalS3ImageGroups.push(mainS3ImageGroups[index]);
+          }
+        });
+      }
+      
+      // Make sure we have an empty group at the end
+      if (finalImageGroups.length === 0 || finalImageGroups[finalImageGroups.length - 1].length > 0) {
+        finalImageGroups.push([]);
+        finalS3ImageGroups.push([]);
+      }
+      
+      // Pass the updated images to parent
+      onImageGroupsChange(finalImageGroups, finalS3ImageGroups);
+      
+      // Update parent state with URLs instead of base64 images
+      setFilesBase64([]);
+      
+      // Fetch the eBay category ID
+      const ebayCategoryID = await fetchEbayCategoryID(selectedCategory, subCategory);
+      setLocalCategoryID(ebayCategoryID);
+      onCategoryChange(ebayCategoryID);
+      
+      // Update local state after parent state
+      setLocalImageGroups(finalImageGroups);
+      
+      // Clear raw files state
+      setRawFiles([]);
+      setRawImageGroups([[]]);
+      setImageRotations({});
+      
+      setIsUploading(false);
+      
+      // Now call handleGenerateListing
+      await handleGenerateListing();
+      
+    } catch (error) {
+      console.error('Error during upload process:', error);
+      setIsUploading(false);
     }
-    
-    // Combine the main image groups with the existing groups
-    const finalImageGroups = [...newImageGroups];
-    const finalS3ImageGroups = [...newS3ImageGroups];
-    
-    // Add the created main image groups if they don't already exist
-    if (mainImageGroups.length > 0) {
-      mainImageGroups.forEach((group, index) => {
-        if (group.length > 0) {
-          finalImageGroups.push(group);
-          finalS3ImageGroups.push(mainS3ImageGroups[index]);
-        }
-      });
-    }
-    
-    // Make sure we have an empty group at the end
-    if (finalImageGroups.length === 0 || finalImageGroups[finalImageGroups.length - 1].length > 0) {
-      finalImageGroups.push([]);
-      finalS3ImageGroups.push([]);
-    }
-    
-    // Get the eBay category ID that we fetched in parallel
-    const ebayCategoryID = await categoryIdPromise;
-    setLocalCategoryID(ebayCategoryID);
-    onCategoryChange(ebayCategoryID);
-    
-    // Pass the updated images to parent
-    onImageGroupsChange(finalImageGroups, finalS3ImageGroups);
-    
-    // Update parent state with URLs instead of base64 images
-    setFilesBase64([]);
-    
-    // Update local state after parent state
-    setLocalImageGroups(finalImageGroups);
-    
-    // Clear raw files state
-    setRawFiles([]);
-    setRawImageGroups([[]]);
-    setImageRotations({});
-    
-    setIsUploading(false);
-    
-    // Now call handleGenerateListing
-    await handleGenerateListing();
-    
-  } catch (error) {
-    console.error('Error during upload process:', error);
-    setIsUploading(false);
-  }
-};
+  };
 
   const isValidSelection = selectedCategory !== "--" && subCategory !== "--";
 

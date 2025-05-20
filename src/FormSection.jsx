@@ -635,14 +635,14 @@ function FormSection({
     }
   };
   
- 
+// Upload file to S3
   const uploadToS3 = async (file) => {
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
 
       reader.onload = async () => {
         try {
-          const fileName = ${Date.now()}_${file.name};
+          const fileName = `${Date.now()}_${file.name}`;
           const arrayBuffer = reader.result;
 
           const uploadParams = {

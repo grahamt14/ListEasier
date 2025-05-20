@@ -26,12 +26,17 @@ function App() {
   const [categoryID, setCategoryID] = useState('');
   const [s3ImageGroups, setS3ImageGroups] = useState([[]]);
   
+   // AWS Configuration
+  const REGION = "us-east-2";
+  const BUCKET_NAME = "listeasier";
+  const IDENTITY_POOL_ID = "us-east-2:f81d1240-32a8-4aff-87e8-940effdf5908";
+
   const client = new DynamoDBClient({
-    region: 'us-east-2',
-    credentials: {
-      accessKeyId: 'AKIA5QMLZNPJMZIFQFFS',
-      secretAccessKey: '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',
-    },
+   region: REGION,
+    credentials: fromCognitoIdentityPool({
+      clientConfig: { region: REGION },
+      identityPoolId: IDENTITY_POOL_ID,
+    }),
   });
   
   const handleCategoryChange = (newCategoryID) => {

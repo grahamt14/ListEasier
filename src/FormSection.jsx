@@ -81,11 +81,11 @@ function FormSection({
   const IDENTITY_POOL_ID = "us-east-2:f81d1240-32a8-4aff-87e8-940effdf5908";
 
   const client = new DynamoDBClient({
-    region: REGION,
-    credentials: {
-      accessKeyId: 'AKIA5QMLZNPJMZIFQFFS',
-      secretAccessKey: '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',
-    },
+   region: REGION,
+    credentials: fromCognitoIdentityPool({
+      clientConfig: { region: REGION },
+      identityPoolId: IDENTITY_POOL_ID,
+    }),
   });
   
   const handleAutoRotateToggle = (e) => {

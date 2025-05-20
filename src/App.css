@@ -164,12 +164,7 @@
   font-weight: 500;
   color: #555;
 }
-.form-group select {
-  padding: 0.5rem;
-  border-radius: 4px;
-  border: 1px solid #ccc;
-  font-size: 1rem;
-}
+
 
 /* New scrollable fields section */
 .scrollable-fields {
@@ -199,14 +194,6 @@
   margin-bottom: 0.8rem;
 }
 
-.field-row select {
-  padding: 0.5rem;
-  border-radius: 4px;
-  border: 1px solid #ccc;
-  font-size: 1rem;
-  background-color: #3b3b3b;
-}
-
 .field-row:last-child {
   margin-bottom: 0;
 }
@@ -216,17 +203,6 @@
   margin-bottom: 0.3rem;
   font-weight: 500;
   color: #555;
-}
-
-.uniform-select {
-  width: 100%;
-  padding: 0.5rem;
-  border-radius: 4px;
-  border: 1px solid #ccc;
-  font-size: 1rem;
-  height: 38px; /* Ensuring uniform height */
-  background-color: white;
-  appearance: auto; /* To match native select appearance */
 }
 
 .upload-area {
@@ -452,4 +428,52 @@
   align-items: center;
   justify-content: center;
   padding: 20px;
+}
+
+/* Add these CSS rules to your App.css file */
+
+/* Fix for dropdown text color consistency */
+.field-row select {
+  padding: 0.5rem;
+  border-radius: 4px;
+  border: 1px solid #ccc;
+  font-size: 1rem;
+  background-color: #3b3b3b;
+  color: white; /* Explicitly setting text color to white for dark backgrounds */
+}
+
+/* Make sure all selects in the form have consistent styling */
+.form-group select {
+  padding: 0.5rem;
+  border-radius: 4px;
+  border: 1px solid #ccc;
+  font-size: 1rem;
+  color: black; /* Explicitly setting text color for light backgrounds */
+}
+
+/* Optional: If you want all selects to have the same styling */
+/* 
+select {
+  padding: 0.5rem;
+  border-radius: 4px;
+  border: 1px solid #ccc;
+  font-size: 1rem;
+  background-color: white;
+  color: black;
+  height: 38px;
+  appearance: auto;
+}
+*/
+
+/* For consistency, make sure your .uniform-select also has an explicit text color */
+.uniform-select {
+  width: 100%;
+  padding: 0.5rem;
+  border-radius: 4px;
+  border: 1px solid #ccc;
+  font-size: 1rem;
+  height: 38px;
+  background-color: white;
+  color: black; /* Explicitly setting text color */
+  appearance: auto;
 }

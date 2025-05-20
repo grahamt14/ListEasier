@@ -657,7 +657,7 @@ function FormSection({
             const command = new PutObjectCommand(uploadParams);
             await s3Client.send(command);
 
-            const s3Url = https://${BUCKET_NAME}.s3.${REGION}.amazonaws.com/${fileName};
+		const s3Url = `https://${BUCKET_NAME}.s3.${REGION}.amazonaws.com/${fileName}`;
             resolve(s3Url);
           } catch (uploadError) {
             console.error("Upload error:", uploadError);

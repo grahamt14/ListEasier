@@ -42,7 +42,9 @@ function FormSection({ onGenerateListing }) {
     fieldSelections,
     imageRotations,
     rawFiles,
-    uploadStatus
+    uploadStatus,
+    processedGroupIndices,
+    processingStatus
   } = state;
   
   // Local state for UI
@@ -90,8 +92,9 @@ function FormSection({ onGenerateListing }) {
     setCategoryFields([]);
     setAutoRotateEnabled(false);
     
-    // Reset global state
+    // Reset global state and clear processed groups tracking
     dispatch({ type: 'CLEAR_ALL' });
+    dispatch({ type: 'CLEAR_PROCESSED_GROUPS' });
   };
 
   // Fetch categories on component mount
@@ -585,6 +588,19 @@ function FormSection({ onGenerateListing }) {
     </div>
   );
 
+  // Check if there are new groups that need processing
+  const hasNewGroupsToProcess = () => {
+    // Check for unprocessed image groups
+    const hasUnprocessedGroups = imageGroups.some((group, idx) => 
+      group.length > 0 && !processedGroupIndices.includes(idx)
+    );
+    
+    // Or if there are images in the pool waiting to be processed
+    const hasUnprocessedPoolImages = filesBase64.length > 0 && batchSize > 0;
+    
+    return hasUnprocessedGroups || hasUnprocessedPoolImages;
+  };
+
   return (
     <section className="form-section">
       <div className="form-group">
@@ -704,10 +720,10 @@ function FormSection({ onGenerateListing }) {
       >
         <button 
           className="primary large" 
-          disabled={!isValidSelection || isLoading || uploadStatus.isUploading || !isDirty} 
+          disabled={!isValidSelection || isLoading || uploadStatus.isUploading || processingStatus.isProcessing || (!isDirty && !hasNewGroupsToProcess())} 
           onClick={handleGenerateListingWithUpload}
         >
-          {isLoading ? (
+          {isLoading || processingStatus.isProcessing ? (
             <span className="loading-button">
               <Spinner /> Generating... ({completedChunks}/{totalChunks})
             </span>
@@ -715,7 +731,7 @@ function FormSection({ onGenerateListing }) {
             <span className="loading-button">
               <Spinner /> {uploadStatus.uploadStage} ({uploadStatus.uploadCompleted}/{uploadStatus.uploadTotal})
             </span>
-          ) : 'Generate Listing'}
+          ) : hasNewGroupsToProcess() ? 'Generate New Listings' : 'Generate Listing'}
         </button>
         {showTooltip && <span className="tooltip">Please select a valid category and subcategory.</span>}
       </div>

@@ -46,7 +46,10 @@ const initialState = {
     isProcessing: false,
     processTotal: 0,
     processCompleted: 0
-  }
+  },
+  
+  // Track processed groups for incremental processing
+  processedGroupIndices: []
 };
 
 // Create reducer to handle all state updates
@@ -178,11 +181,16 @@ function appReducer(state, action) {
       return { ...state, responseData: action.payload };
       
     case 'UPDATE_RESPONSE_DATA':
+      const updatedResponseData = [...state.responseData];
+      // Make sure the array is long enough
+      while (updatedResponseData.length <= action.payload.index) {
+        updatedResponseData.push(null);
+      }
+      updatedResponseData[action.payload.index] = action.payload.value;
+      
       return {
         ...state,
-        responseData: state.responseData.map((item, i) => 
-          i === action.payload.index ? action.payload.value : item
-        )
+        responseData: updatedResponseData
       };
       
     case 'SET_UPLOAD_STATUS':
@@ -220,6 +228,19 @@ function appReducer(state, action) {
         }
       };
       
+    // New actions for incremental processing
+    case 'MARK_GROUPS_AS_PROCESSED':
+      return {
+        ...state,
+        processedGroupIndices: [...(state.processedGroupIndices || []), ...action.payload]
+      };
+      
+    case 'CLEAR_PROCESSED_GROUPS':
+      return {
+        ...state,
+        processedGroupIndices: []
+      };
+      
     case 'GROUP_SELECTED_IMAGES':
       const groupImgs = state.selectedImages.map(i => state.filesBase64[i]);
       const groupRawFiles = state.selectedImages.map(i => state.rawFiles[i]);
@@ -227,169 +248,3 @@ function appReducer(state, action) {
       const remainingBase64 = state.filesBase64.filter((_, i) => 
         !state.selectedImages.includes(i)
       );
-      
-      const remainingRawFiles = state.rawFiles.filter((_, i) => 
-        !state.selectedImages.includes(i)
-      );
-      
-      // Update rotations
-      const newRotations = { ...state.imageRotations };
-      state.selectedImages.forEach(index => {
-        delete newRotations[index];
-      });
-      
-      // Reindex rotations
-      const finalRotations = {};
-      let newIndex = 0;
-      state.filesBase64.forEach((_, oldIndex) => {
-        if (!state.selectedImages.includes(oldIndex)) {
-          if (newRotations[oldIndex] !== undefined) {
-            finalRotations[newIndex] = newRotations[oldIndex];
-          }
-          newIndex++;
-        }
-      });
-      
-      // Update image groups to include the selected images
-      let updatedGroups = [...state.imageGroups];
-      const firstEmptyIndex = updatedGroups.findIndex(g => g.length === 0);
-      
-      if (firstEmptyIndex !== -1) {
-        updatedGroups[firstEmptyIndex] = [...updatedGroups[firstEmptyIndex], ...groupImgs];
-      } else {
-        updatedGroups.push(groupImgs);
-      }
-      
-      if (updatedGroups[updatedGroups.length - 1].length > 0) {
-        updatedGroups.push([]);
-      }
-      
-      return {
-        ...state,
-        filesBase64: remainingBase64,
-        rawFiles: remainingRawFiles,
-        selectedImages: [],
-        imageRotations: finalRotations,
-        imageGroups: updatedGroups,
-        isDirty: true
-      };
-      
-    case 'HANDLE_GROUP_DROP':
-      const { dropGroupIdx, imgIdx, from, fromIndex } = action.payload;
-      let newGroups = [...state.imageGroups];
-      
-      if (from === "pool") {
-        const i = parseInt(fromIndex, 10);
-        const img = state.filesBase64[i];
-        
-        // Update filesBase64
-        const newFilesBase64 = state.filesBase64.filter((_, j) => j !== i);
-        
-        // Update target group
-        const tgt = [...newGroups[dropGroupIdx]];
-        imgIdx === null ? tgt.push(img) : tgt.splice(imgIdx, 0, img);
-        newGroups[dropGroupIdx] = tgt;
-        
-        // Ensure empty group at end
-        if (newGroups[newGroups.length - 1].length > 0) {
-          newGroups.push([]);
-        }
-        
-        return {
-          ...state,
-          filesBase64: newFilesBase64,
-          imageGroups: newGroups,
-          selectedImages: [],
-          isDirty: true
-        };
-      } else {
-        const [srcG, srcI] = fromIndex.split("-").map(Number);
-        
-        if (!(srcG === dropGroupIdx && srcI === imgIdx)) {
-          const img = newGroups[srcG][srcI];
-          newGroups[srcG] = newGroups[srcG].filter((_, j) => j !== srcI);
-          const tgt = [...newGroups[dropGroupIdx]];
-          imgIdx === null ? tgt.push(img) : tgt.splice(imgIdx, 0, img);
-          newGroups[dropGroupIdx] = tgt;
-        }
-        
-        // Ensure empty group at end
-        if (newGroups[newGroups.length - 1].length > 0) {
-          newGroups.push([]);
-        }
-        
-        return {
-          ...state,
-          imageGroups: newGroups,
-          selectedImages: [],
-          isDirty: true
-        };
-      }
-      
-    case 'CLEAR_ALL':
-      return {
-        ...initialState,
-        imageGroups: [[]], // Keep an empty group
-        s3ImageGroups: [[]]
-      };
-
-    case 'ROTATE_IMAGE':
-      const { index, direction } = action.payload;
-      // Note: The actual rotation logic would be implemented elsewhere and
-      // dispatch UPDATE_FILES_BASE64 to update the actual image
-
-      // Just update the rotation state here
-      const currentRotation = state.imageRotations[index] || 0;
-      const rotationChange = direction === 'right' ? 90 : -90;
-      const newRotation = (currentRotation + rotationChange + 360) % 360;
-
-      return {
-        ...state,
-        imageRotations: {
-          ...state.imageRotations,
-          [index]: newRotation
-        },
-        isDirty: true
-      };
-
-    case 'UPDATE_FILES_BASE64_AT_INDEX':
-      const updatedFiles = [...state.filesBase64];
-      updatedFiles[action.payload.index] = action.payload.value;
-      
-      return {
-        ...state,
-        filesBase64: updatedFiles,
-        isDirty: true
-      };
-      
-    default:
-      return state;
-  }
-}
-
-// Create provider component
-export function AppStateProvider({ children }) {
-  const [state, dispatch] = useReducer(appReducer, initialState);
-  
-  // For debugging
-  useEffect(() => {
-    if (process.env.NODE_ENV === 'development') {
-      console.log('AppState updated:', state);
-    }
-  }, [state]);
-  
-  return (
-    <AppStateContext.Provider value={{ state, dispatch }}>
-      {children}
-    </AppStateContext.Provider>
-  );
-}
-
-// Custom hook for using the app state
-export function useAppState() {
-  const context = useContext(AppStateContext);
-  if (!context) {
-    throw new Error('useAppState must be used within an AppStateProvider');
-  }
-  return context;
-}

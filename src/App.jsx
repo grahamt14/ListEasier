@@ -215,7 +215,7 @@ Action(SiteID=US|Country=US|Currency=USD|Version=1193|CC=UTF-8),Custom label (SK
           let groupClass = "";
           if (processingGroups[gi]) {
             groupClass = "processing";
-          } else if (processedGroupIndices.includes(gi)) {
+          } else if (processedGroupIndices && processedGroupIndices.includes(gi)) { // Add a check for undefined
             groupClass = "processed";
           } else if (group.length > 0 && !responseData[gi]) {
             groupClass = "new";
@@ -285,7 +285,7 @@ function AppContent() {
     // Only process groups that haven't been processed yet
     const newGroupsToProcess = nonEmptyGroups.filter((group, idx) => {
       const originalIndex = imageGroups.findIndex(g => g === group);
-      return !processedGroupIndices.includes(originalIndex);
+      return !processedGroupIndices || !processedGroupIndices.includes(originalIndex); // Add a check for undefined
     });
     
     // Get indices of new groups to be processed

@@ -64,7 +64,7 @@ function FormSection({
   const [rawImageGroups, setRawImageGroups] = useState([[]]);
   const [fieldSelections, setFieldSelections] = useState({});
   const [imageRotations, setImageRotations] = useState({}); // Track rotation degrees for each image
-  const [autoRotateEnabled, setAutoRotateEnabled] = useState(true);
+  const [autoRotateEnabled, setAutoRotateEnabled] = useState(false);
   
   const fileInputRef = useRef(null);
 
@@ -1077,7 +1077,7 @@ const handleDrop = async (e) => {
     onChange={handleAutoRotateToggle} 
   />
   <label htmlFor="auto-rotate">
-    Auto-rotate images (uses Tesseract OCR to detect and correct image orientation)
+    Auto-rotate images
   </label>
 </div>
 

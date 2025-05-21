@@ -439,11 +439,6 @@ function AppContent() {
   let allGroupsToProcess = [...newGroupsToProcess];
   let newGroups = [];
   
-  // Get S3 groups for download
-  const s3GroupsForDownload = state.s3ImageGroups.filter(group => 
-    group.length > 0 && group.some(url => url && !url.startsWith('data:'))
-  );
-  
   // If there are unprocessed images in the pool, use them based on batchSize
   let newPoolGroupIndices = [];
   if (filesBase64.length > 0 && batchSize > 0) {
@@ -498,15 +493,18 @@ function AppContent() {
     return;
   }
 
-  // Update state for processing - Only count the new groups
+  // Get total number of groups to process
+  const totalGroups = allGroupsToProcess.length;
+  
+  // Initialize processing status before starting any API calls
   dispatch({ type: 'SET_PROCESSING_STATUS', payload: { 
     isProcessing: true,
-    processTotal: allGroupsToProcess.length,
+    processTotal: totalGroups,
     processCompleted: 0
   }});
   
   // Legacy state updates
-  dispatch({ type: 'SET_TOTAL_CHUNKS', payload: allGroupsToProcess.length });
+  dispatch({ type: 'SET_TOTAL_CHUNKS', payload: totalGroups });
   dispatch({ type: 'SET_COMPLETED_CHUNKS', payload: 0 });
   
   // Only initialize response data for new groups, keep existing responses
@@ -538,7 +536,7 @@ function AppContent() {
   // Track indices of groups being processed
   const processedIndices = [];
   
-  // Track completed count for progress updates
+  // Use a stable counter for tracking progress
   let completedCount = 0;
   
   // Process each group with the API using sequential processing for better tracking
@@ -559,6 +557,15 @@ function AppContent() {
     processedIndices.push(actualIndex);
     
     try {
+      // Update UI to show which item is currently being processed
+      dispatch({ 
+        type: 'SET_PROCESSING_STATUS', 
+        payload: { 
+          processCompleted: completedCount,
+          processStage: `Processing group ${arrayIndex + 1} of ${totalGroups}...`
+        } 
+      });
+      
       const response = await fetch(
         "https://7f26uyyjs5.execute-api.us-east-2.amazonaws.com/ListEasily/ListEasilyAPI",
         {
@@ -604,7 +611,7 @@ function AppContent() {
         }
       });
       
-      // Increment completion count
+      // Increment completion count AFTER finishing the API call
       completedCount++;
       
       // Update progress for each individual group completion
@@ -615,6 +622,7 @@ function AppContent() {
         } 
       });
       
+      // Update legacy progress tracking as well
       dispatch({ type: 'SET_COMPLETED_CHUNKS', payload: completedCount });
     }
   }
@@ -627,7 +635,7 @@ function AppContent() {
     dispatch({ type: 'SET_FILES_BASE64', payload: [] });
   }
   
-  // Reset status indicators
+  // Reset status indicators after all processing is complete
   dispatch({ type: 'RESET_STATUS' });
   dispatch({ type: 'SET_IS_LOADING', payload: false });
 };

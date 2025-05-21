@@ -1100,21 +1100,21 @@ const handleGenerateListingWithUpload = async () => {
         onMouseEnter={() => !isValidSelection && setShowTooltip(true)} 
         onMouseLeave={() => setShowTooltip(false)}
       >
-        <button 
-          className="primary large" 
-          disabled={!isValidSelection || isLoading || uploadStatus.isUploading || processingStatus.isProcessing || (!isDirty && !hasNewGroupsToProcess())} 
-          onClick={handleGenerateListingWithUpload}
-        >
-          {isLoading || processingStatus.isProcessing ? (
-            <span className="loading-button">
-              <Spinner /> Generating... ({completedChunks}/{totalChunks})
-            </span>
-          ) : uploadStatus.isUploading ? (
-            <span className="loading-button">
-              <Spinner /> {uploadStatus.uploadStage} ({uploadStatus.uploadCompleted}/{uploadStatus.uploadTotal})
-            </span>
-          ) : hasNewGroupsToProcess() ? 'Generate New Listings' : 'Generate Listing'}
-        </button>
+<button 
+  className="primary large" 
+  disabled={!isValidSelection || isLoading || uploadStatus.isUploading || processingStatus.isProcessing || (!isDirty && !hasNewGroupsToProcess())} 
+  onClick={handleGenerateListingWithUpload}
+>
+  {isLoading || processingStatus.isProcessing ? (
+    <span className="loading-button">
+      <Spinner /> {processingStatus.processStage || `Generating... (${completedChunks}/${totalChunks})`}
+    </span>
+  ) : uploadStatus.isUploading ? (
+    <span className="loading-button">
+      <Spinner /> {uploadStatus.uploadStage} ({uploadStatus.uploadCompleted}/{uploadStatus.uploadTotal})
+    </span>
+  ) : hasNewGroupsToProcess() ? 'Generate New Listings' : 'Generate Listing'}
+</button>
         {showTooltip && <span className="tooltip">Please select a valid category and subcategory.</span>}
       </div>
 

@@ -42,10 +42,12 @@ const initialState = {
     uploadCompleted: 0,
     uploadStage: ''
   },
-  processingStatus: {
+  
+ processingStatus: {
     isProcessing: false,
     processTotal: 0,
-    processCompleted: 0
+    processCompleted: 0,
+    processStage: '' // Add this property
   },
   
   // Track processed groups for incremental processing
@@ -58,6 +60,16 @@ const initialState = {
 // Create reducer to handle all state updates
 function appReducer(state, action) {
   switch (action.type) {
+	  // In the appReducer function in StateContext.jsx
+case 'SET_PROCESSING_STATUS':
+  return {
+    ...state,
+    processingStatus: {
+      ...state.processingStatus,
+      ...action.payload
+    }
+  };
+
     case 'SET_CATEGORY':
       return { ...state, category: action.payload, isDirty: true };
       
@@ -214,22 +226,23 @@ function appReducer(state, action) {
         }
       };
       
-    case 'RESET_STATUS':
-      return {
-        ...state,
-        uploadStatus: {
-          isUploading: false,
-          uploadProgress: 0,
-          uploadTotal: 0,
-          uploadCompleted: 0,
-          uploadStage: ''
-        },
-        processingStatus: {
-          isProcessing: false,
-          processTotal: 0,
-          processCompleted: 0
-        }
-      };
+case 'RESET_STATUS':
+  return {
+    ...state,
+    uploadStatus: {
+      isUploading: false,
+      uploadProgress: 0,
+      uploadTotal: 0,
+      uploadCompleted: 0,
+      uploadStage: ''
+    },
+    processingStatus: {
+      isProcessing: false,
+      processTotal: 0,
+      processCompleted: 0,
+      processStage: ''
+    }
+  };
       
     // New actions for incremental processing
     case 'MARK_GROUPS_AS_PROCESSED':

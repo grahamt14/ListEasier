@@ -674,7 +674,8 @@ const handleGenerateListing = async () => {
     dispatch({ type: 'SET_PROCESSING_GROUPS', payload: updatedProcessingGroups });
 
     // Prepare options for API call
-    const selectedCategoryOptions = getSelectedCategoryOptionsJSON(fieldSelections, price, sku);
+    const selectedCategoryOptions = getSelectedCategoryOptionsJSON(fieldSelections, price, sku);   // Save current field selections to use in listings
+    const currentFieldSelections = {...fieldSelections};
 
     // Track indices of groups being processed
     const processedIndices = [];

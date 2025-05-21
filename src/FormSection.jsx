@@ -355,7 +355,7 @@ const uploadGroupedImagesToS3 = async (selectedIndices) => {
     
     // Use Promise.all to upload files in parallel but in batches
     // Increased batch size for faster processing
-    const UPLOAD_BATCH_SIZE = 20; // Increased to 20 concurrent uploads
+    const UPLOAD_BATCH_SIZE = 80; // Increased to 20 concurrent uploads
     const s3Urls = [];
     
     for (let i = 0; i < selectedRawFiles.length; i += UPLOAD_BATCH_SIZE) {

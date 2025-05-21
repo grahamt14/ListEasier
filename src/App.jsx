@@ -549,7 +549,7 @@ const handleGenerateListing = async () => {
     const processedIndices = [];
     
     // Increase batch size but with retry mechanism for failures
-    const PROCESSING_BATCH_SIZE = 20; // Increased to 20 concurrent requests
+    const PROCESSING_BATCH_SIZE = 80; // Increased to 80 concurrent requests
     const MAX_RETRIES = 3; // Allow up to 3 retries for failed requests
     const RETRY_DELAY_MS = 1000; // Wait 1 second between retries
     

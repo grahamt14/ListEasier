@@ -101,8 +101,7 @@ Action(SiteID=US|Country=US|Currency=USD|Version=1193|CC=UTF-8),Custom label (SK
   validResponseIndices.forEach(({ response, index }) => {
     const title = response.title ? response.title.replace(/\r?\n|\r/g, ' ').replace(/"/g, '""') : '';
     
-    // Simplified photo URL handling - just use the S3ImageGroups directly without any complex mapping
-    // This should work because we now ensure S3ImageGroups matches imageGroups exactly
+    // Get photo URLs directly from the MATCHING s3ImageGroups for this listing index
     let photoUrls = [];
     
     // Log what we're using for this listing
@@ -111,7 +110,7 @@ Action(SiteID=US|Country=US|Currency=USD|Version=1193|CC=UTF-8),Custom label (SK
       s3GroupLength: s3ImageGroups && index < s3ImageGroups.length ? s3ImageGroups[index]?.length : 'N/A'
     });
     
-    // Get S3 URLs directly from the corresponding S3ImageGroup
+    // Get S3 URLs directly from the CORRECT corresponding S3ImageGroup by index
     if (s3ImageGroups && 
         Array.isArray(s3ImageGroups) && 
         index < s3ImageGroups.length && 
@@ -162,8 +161,6 @@ Action(SiteID=US|Country=US|Currency=USD|Version=1193|CC=UTF-8),Custom label (SK
   return csvContent;
 };
 
-  
-
   const downloadListingsAsCsv = () => {
     const csvContent = generateCSVContent();
     if (!csvContent) return;
@@ -194,14 +191,15 @@ Action(SiteID=US|Country=US|Currency=USD|Version=1193|CC=UTF-8),Custom label (SK
     return;
   }
   
-  // Simplified photo URL handling - use S3ImageGroups directly
+  // Get photo URLs directly from the MATCHING s3ImageGroups for this specific group
   let photoUrls = [];
   
   // Look directly in the matching S3ImageGroup for this listing
   if (s3ImageGroups && 
       Array.isArray(s3ImageGroups) && 
       groupIndex < s3ImageGroups.length && 
-      Array.isArray(s3ImageGroups[groupIndex])) {
+      Array.isArray(s3ImageGroups[groupIndex]) && 
+      s3ImageGroups[groupIndex].length > 0) {
     
     photoUrls = s3ImageGroups[groupIndex].filter(url => 
       url && 

@@ -421,6 +421,7 @@ function AppContent() {
     }),
   });
 
+// Modified handleGenerateListing in App.jsx that doesn't depend on S3 URLs being set first
 const handleGenerateListing = async () => {
   try {
     const { imageGroups, filesBase64, batchSize, processedGroupIndices } = state;
@@ -704,6 +705,9 @@ const handleGenerateListing = async () => {
       dispatch({ type: 'SET_IS_LOADING', payload: false });
     }, 500);
     
+    // Return success for Promise.allSettled
+    return true;
+    
   } catch (error) {
     // Handle any unexpected errors
     console.error("Error in generate listing process:", error);
@@ -714,6 +718,9 @@ const handleGenerateListing = async () => {
     // Reset status on error
     dispatch({ type: 'RESET_STATUS' });
     dispatch({ type: 'SET_IS_LOADING', payload: false });
+    
+    // Re-throw for Promise.allSettled
+    throw error;
   }
 };
 

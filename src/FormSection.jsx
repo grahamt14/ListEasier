@@ -586,298 +586,139 @@ const handleGenerateListingWithUpload = async () => {
       }
     }
     
-    // Start uploading - update global state
-    const uploadStatusObject = {
-      isUploading: true, 
-      uploadTotal: allRawFiles.length,
-      uploadCompleted: 0,
-      uploadProgress: 0,
-      uploadStage: 'Uploading images to S3...',
-      currentFileIndex: 0
+    // Start a processing flag to track overall progress
+    const isProcessing = {
+      uploads: allRawFiles.length > 0,
+      listings: true
     };
     
-    dispatch({ 
-      type: 'SET_UPLOAD_STATUS', 
-      payload: uploadStatusObject
-    });
+    // Start both operations in parallel
+    const parallelOperations = [];
     
-    // Create a batching system for parallel uploads
-    const BATCH_SIZE = 5; // Process 5 files at a time
-    const s3UrlsList = [];
-    
-    // Process files in parallel batches
-    for (let i = 0; i < allRawFiles.length; i += BATCH_SIZE) {
-      const batch = allRawFiles.slice(i, i + BATCH_SIZE);
-      
-      // Upload batch in parallel
-      const batchPromises = batch.map((file, batchIndex) => {
-        const fileIndex = i + batchIndex;
-        return uploadToS3(file).then(url => ({ url, index: fileIndex }));
-      });
-      
-      // Wait for all uploads in this batch to complete
-      const batchResults = await Promise.all(
-        batchPromises.map(p => p.catch(error => ({ url: null, error })))
-      );
-      
-      // Add successful URLs to the result list
-      batchResults.forEach(result => {
-        if (result.url) {
-          s3UrlsList.push(result.url);
-        }
-      });
-      
-      // Update progress
-      const completedCount = Math.min(i + BATCH_SIZE, allRawFiles.length);
-      uploadStatusObject.uploadCompleted = completedCount;
-      uploadStatusObject.uploadProgress = Math.round((completedCount / allRawFiles.length) * 100);
-      uploadStatusObject.currentFileIndex = completedCount;
-      
+    // 1. S3 Upload process (if needed)
+    if (allRawFiles.length > 0) {
+      // Start uploading - update global state
       dispatch({ 
         type: 'SET_UPLOAD_STATUS', 
-        payload: { ...uploadStatusObject } 
+        payload: { 
+          isUploading: true, 
+          uploadTotal: allRawFiles.length,
+          uploadCompleted: 0,
+          uploadProgress: 0,
+          uploadStage: 'Uploading images to S3...'
+        } 
       });
-    }
-    
-    // Complete S3 upload process
-    uploadStatusObject.uploadProgress = 100;
-    uploadStatusObject.uploadCompleted = allRawFiles.length;
-    uploadStatusObject.uploadStage = 'Upload complete! Organizing images...';
-    
-    dispatch({ 
-      type: 'SET_UPLOAD_STATUS', 
-      payload: { ...uploadStatusObject } 
-    });
-
-    // Synchronize S3 URLs with image groups
-    console.log("Successfully uploaded images to S3:", s3UrlsList.length);
-    
-    // First, map out which images are already in groups and which are in the pool
-    const totalExistingGroupImages = state.imageGroups.reduce((total, group) => 
-      total + (group ? group.length : 0), 0);
-    const poolImageCount = filesBase64.length;
-    
-    console.log(`Images in existing groups: ${totalExistingGroupImages}, Images in pool: ${poolImageCount}`);
-    
-    // Create or update S3 URL groups
-    let updatedS3Groups = [...(state.s3ImageGroups || [])];
-    
-    // Ensure S3 groups array has the same structure as image groups
-    while (updatedS3Groups.length < state.imageGroups.length) {
-      updatedS3Groups.push([]);
-    }
-    
-    // Process pool images if batch size is set
-    if (batchSize > 0 && poolImageCount > 0) {
-      // Create batches based on batch size
-      const numBatches = Math.ceil(poolImageCount / batchSize);
-      console.log(`Creating ${numBatches} batches of S3 URLs (batch size: ${batchSize})`);
       
-      // Find first empty group index
-      let targetGroupIndex = updatedS3Groups.findIndex(g => !g || g.length === 0);
-      if (targetGroupIndex === -1) {
-        targetGroupIndex = updatedS3Groups.length;
-      }
-      
-      // Distribute S3 URLs into batches
-      let s3UrlIndex = 0;
-      for (let i = 0; i < numBatches && s3UrlIndex < s3UrlsList.length; i++) {
-        // Take up to batchSize URLs for this batch
-        const batchUrls = s3UrlsList.slice(s3UrlIndex, s3UrlIndex + batchSize);
-        s3UrlIndex += batchSize;
-        
-        // Store batch in S3 groups at the appropriate index
-        if (targetGroupIndex < updatedS3Groups.length) {
-          updatedS3Groups[targetGroupIndex] = batchUrls;
-        } else {
-          updatedS3Groups.push(batchUrls);
-        }
-        
-        targetGroupIndex++;
-      }
-    }
-    
-    // For individual image uploads without batching
-    if (batchSize === 0 && poolImageCount > 0 && s3UrlsList.length > 0) {
-      // Store S3 URLs in the first group of s3ImageGroups
-      // This allows them to be accessed when using Group Selected
-      const poolS3Urls = [...(updatedS3Groups[0] || [])];
-      
-      // Add new S3 URLs to the pool
-      for (let i = 0; i < Math.min(poolImageCount, s3UrlsList.length); i++) {
-        poolS3Urls[i] = s3UrlsList[i];
-      }
-      
-      // Update the first group with the pool's S3 URLs
-      updatedS3Groups[0] = poolS3Urls;
-    }
-    
-    // Ensure there's an empty group at the end
-    if (updatedS3Groups.length === 0 || 
-        (updatedS3Groups[updatedS3Groups.length - 1] && 
-         updatedS3Groups[updatedS3Groups.length - 1].length > 0)) {
-      updatedS3Groups.push([]);
-    }
-    
-    // Make sure all the indexes align properly
-    console.log("Image Groups:", state.imageGroups.map(g => g ? g.length : 0));
-    console.log("Updated S3 Groups:", updatedS3Groups.map(g => g ? g.length : 0));
-    
-    // Update S3 image groups in state
-    dispatch({ type: 'SET_S3_IMAGE_GROUPS', payload: updatedS3Groups });
-
-    // Log all the S3 URLs we received
-    console.log("All uploaded S3 URLs:", s3UrlsList);
-
-    // Step 1: Understand what we have:
-    console.log("Files uploaded:", rawFiles.length);
-    console.log("Base64 files:", filesBase64.length);
-    console.log("S3 URLs generated:", s3UrlsList.length);
-    console.log("Current image groups:", state.imageGroups.map(g => g.length));
-    console.log("Current S3 image groups:", state.s3ImageGroups?.map(g => g?.length || 0) || []);
-
-    // Step 2: Figure out which images are already in groups and which are in the pool
-    const imagesInGroups = state.imageGroups.reduce((total, group) => total + group.filter(img => img).length, 0);
-    console.log(`Images in groups: ${imagesInGroups}, Images in pool: ${filesBase64.length}`);
-
-    // Step 3: Preserve existing S3 image groups and add new ones
-    // Clone the existing S3 image groups from state to avoid direct state mutation
-    const newS3ImageGroups = [...(state.s3ImageGroups || []).map(group => [...(group || [])])];
-    let s3UrlIndex = 0; // Keep track of which S3 URLs we've used
-
-    // Create new S3 URL groups for images in the pool
-    if (s3UrlIndex < s3UrlsList.length && batchSize > 0) {
-      const remainingUrls = s3UrlsList.slice(s3UrlIndex);
-      console.log(`Creating new groups from ${remainingUrls.length} remaining S3 URLs`);
-      
-      // Find the first empty group index to start adding new groups
-      let insertIndex = newS3ImageGroups.findIndex(g => !g || g.length === 0);
-      if (insertIndex === -1) {
-        insertIndex = newS3ImageGroups.length;
-      }
-      
-      // Create batches of the specified size
-      for (let i = 0; i < remainingUrls.length; i += batchSize) {
-        const groupUrls = remainingUrls.slice(i, i + batchSize);
-        if (groupUrls.length > 0) {
-          // If we're at an existing empty group, replace it
-          if (insertIndex < newS3ImageGroups.length) {
-            newS3ImageGroups[insertIndex] = groupUrls;
-          } else {
-            // Otherwise add a new group
-            newS3ImageGroups.push(groupUrls);
+      // Create the S3 upload promise
+      const uploadPromise = (async () => {
+        try {
+          // Create a batching system for parallel uploads
+          const BATCH_SIZE = 20; // Process 20 files at a time
+          const s3UrlsList = [];
+          
+          // Process files in parallel batches
+          for (let i = 0; i < allRawFiles.length; i += BATCH_SIZE) {
+            const batch = allRawFiles.slice(i, i + BATCH_SIZE);
+            
+            // Upload batch in parallel
+            const batchPromises = batch.map((file, batchIndex) => {
+              const fileIndex = i + batchIndex;
+              return uploadToS3(file).then(url => ({ url, index: fileIndex }));
+            });
+            
+            // Wait for all uploads in this batch to complete
+            const batchResults = await Promise.all(
+              batchPromises.map(p => p.catch(error => ({ url: null, error })))
+            );
+            
+            // Add successful URLs to the result list
+            batchResults.forEach(result => {
+              if (result.url) {
+                s3UrlsList.push(result.url);
+              }
+            });
+            
+            // Update progress
+            const completedCount = Math.min(i + BATCH_SIZE, allRawFiles.length);
+            dispatch({ 
+              type: 'SET_UPLOAD_STATUS', 
+              payload: { 
+                uploadCompleted: completedCount,
+                uploadProgress: Math.round((completedCount / allRawFiles.length) * 100),
+                currentFileIndex: completedCount
+              } 
+            });
           }
-          insertIndex++;
+          
+          // Complete S3 upload process
+          dispatch({ 
+            type: 'SET_UPLOAD_STATUS', 
+            payload: { 
+              uploadProgress: 100,
+              uploadCompleted: allRawFiles.length,
+              uploadStage: 'Images uploaded to S3',
+              isUploading: false
+            } 
+          });
+          
+          isProcessing.uploads = false;
+          return s3UrlsList;
+        } catch (error) {
+          console.error('Error during upload process:', error);
+          dispatch({ 
+            type: 'SET_UPLOAD_STATUS', 
+            payload: { 
+              uploadStage: `Error: ${error.message}`,
+              isUploading: false
+            } 
+          });
+          throw error; // Re-throw to be caught by Promise.allSettled
         }
-      }
-    }
-
-    // Ensure we have an empty group at the end for future uploads
-    if (newS3ImageGroups.length === 0 || newS3ImageGroups[newS3ImageGroups.length - 1].length > 0) {
-      newS3ImageGroups.push([]);
-    }
-
-    // Log the new groups we're creating
-    console.log("Updated S3 image groups:", newS3ImageGroups.map(g => g?.length || 0));
-
-    // Create matching imageGroups for the newly added S3ImageGroups
-    // Preserve the existing image groups and add new ones that match the newly added S3 groups
-    const newImageGroups = [...state.imageGroups];
-    
-    // Replace empty groups or add new ones
-    let emptyGroupIndex = newImageGroups.findIndex(g => !g || g.length === 0);
-    const newPoolGroups = [];
-    
-    // Create batches from remaining base64 images
-    if (filesBase64.length > 0 && batchSize > 0) {
-      for (let i = 0; i < filesBase64.length; i += batchSize) {
-        const groupImages = filesBase64.slice(i, i + batchSize);
-        if (groupImages.length > 0) {
-          newPoolGroups.push(groupImages);
-        }
-      }
+      })();
+      
+      parallelOperations.push(uploadPromise);
+    } else {
+      // No uploads needed, just add a resolved promise with empty list
+      parallelOperations.push(Promise.resolve([]));
+      isProcessing.uploads = false;
     }
     
-    // Add new pool groups to image groups
-    newPoolGroups.forEach(group => {
-      if (emptyGroupIndex !== -1) {
-        newImageGroups[emptyGroupIndex] = group;
-        emptyGroupIndex = newImageGroups.findIndex((g, idx) => (idx > emptyGroupIndex) && (!g || g.length === 0));
-      } else {
-        newImageGroups.push(group);
-      }
-    });
+    // 2. Start ChatGPT processing in parallel
+    const processingPromise = onGenerateListing();
+    parallelOperations.push(processingPromise);
     
-    // Ensure there's an empty group at the end
-    if (newImageGroups.length === 0 || newImageGroups[newImageGroups.length - 1].length > 0) {
-      newImageGroups.push([]);
-    }
-
-    // Update state with the new groups
-    dispatch({ type: 'SET_IMAGE_GROUPS', payload: newImageGroups });
-    dispatch({ type: 'SET_S3_IMAGE_GROUPS', payload: newS3ImageGroups });
-    dispatch({ type: 'SET_FILES_BASE64', payload: [] });
-
-    // Update group metadata for newly added groups
-    const updatedMetadata = [...(state.groupMetadata || [])];
+    // Wait for both operations to complete
+    const [s3UrlsResult, processingResult] = await Promise.allSettled(parallelOperations);
     
-    // Extend metadata array if needed
-    while (updatedMetadata.length < newImageGroups.length) {
-      updatedMetadata.push(null);
+    // Handle any errors
+    if (s3UrlsResult.status === 'rejected') {
+      console.error('S3 upload process failed:', s3UrlsResult.reason);
     }
     
-    // Add metadata for new groups
-    newImageGroups.forEach((group, index) => {
-      if (group && group.length > 0 && (!updatedMetadata[index] || updatedMetadata[index] === null)) {
-        // Create new metadata with default price/sku for new groups
-        updatedMetadata[index] = { price: price || '', sku: sku || '' };
-      }
-    });
-
-    // Update metadata state
-    dispatch({ type: 'UPDATE_GROUP_METADATA', payload: updatedMetadata });
-
-    // Fetch the eBay category ID and continue with the process
-    try {
-      const ebayCategoryID = await fetchEbayCategoryID(selectedCategory, subCategory);
-      dispatch({ type: 'SET_CATEGORY_ID', payload: ebayCategoryID });
-    } catch (error) {
-      console.error('Error fetching eBay category ID:', error);
-      dispatch({ type: 'SET_CATEGORY_ID', payload: null });
+    if (processingResult.status === 'rejected') {
+      console.error('ChatGPT processing failed:', processingResult.reason);
     }
     
-    // Clear raw files state
-    dispatch({ type: 'SET_RAW_FILES', payload: [] });
-    dispatch({ type: 'SET_IMAGE_ROTATIONS', payload: {} });
+    // Check if both processes completed successfully
+    const uploadSuccessful = s3UrlsResult.status === 'fulfilled';
+    const processingSuccessful = processingResult.status === 'fulfilled';
     
-    // Update status before calling the listing generator
-    dispatch({ 
-      type: 'SET_UPLOAD_STATUS', 
-      payload: { 
-        uploadStage: 'Preparing to generate listings...',
-        isUploading: false
-      } 
-    });
+    // Update UI accordingly
+    if (!uploadSuccessful || !processingSuccessful) {
+      alert('One or more operations encountered errors. Please check the console for details.');
+    }
     
-    // Now call handleGenerateListing
-    await onGenerateListing();
+    // Reset all statuses
+    dispatch({ type: 'RESET_STATUS' });
     
   } catch (error) {
-    console.error('Error during upload process:', error);
+    console.error('Error during parallel processing:', error);
     
-    // Show error in upload status
-    dispatch({ 
-      type: 'SET_UPLOAD_STATUS', 
-      payload: { 
-        uploadStage: `Error: ${error.message}`,
-        isUploading: false
-      } 
-    });
+    // Show error in status
+    alert(`An error occurred: ${error.message}`);
     
     // Reset status after a delay
-    setTimeout(() => {
-      dispatch({ type: 'RESET_STATUS' });
-    }, 3000);
+    dispatch({ type: 'RESET_STATUS' });
   }
 };
   

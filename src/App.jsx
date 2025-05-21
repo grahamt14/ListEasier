@@ -60,90 +60,189 @@ function PreviewSection() {
   };
 
   const generateCSVContent = () => {
-    const validResponses = responseData.filter((response, index) => 
-      response && !response.error && imageGroups[index] && imageGroups[index].length > 0
+  const validResponseIndices = responseData
+    .map((response, index) => ({ response, index }))
+    .filter(item => 
+      item.response && 
+      !item.response.error && 
+      imageGroups[item.index] && 
+      imageGroups[item.index].length > 0
     );
-    
-    if (validResponses.length === 0) {
-      alert("No valid listings to download!");
-      return null;
-    }
-    
-    let filteredS3ImageGroups = s3ImageGroups.filter((imageGroup, index) => 
-      Array.isArray(imageGroup) && imageGroup.length > 0 && 
-      responseData[index] && !responseData[index].error
-    );
-    
-    const header = `#INFO,Version=0.0.2,Template= eBay-draft-listings-template_US,,,,,,,,
+  
+  if (validResponseIndices.length === 0) {
+    alert("No valid listings to download!");
+    return null;
+  }
+  
+  const header = `#INFO,Version=0.0.2,Template= eBay-draft-listings-template_US,,,,,,,,
 #INFO Action and Category ID are required fields. 1) Set Action to Draft 2) Please find the category ID for your listings here: https://pages.ebay.com/sellerinformation/news/categorychanges.html,,,,,,,,,,
 "#INFO After you've successfully uploaded your draft from the Seller Hub Reports tab, complete your drafts to active listings here: https://www.ebay.com/sh/lst/drafts",,,,,,,,,,
 #INFO,,,,,,,,,,
 Action(SiteID=US|Country=US|Currency=USD|Version=1193|CC=UTF-8),Custom label (SKU),Category ID,Title,UPC,Price,Quantity,Item photo URL,Condition ID,Description,Format
 `;
 
-    let csvContent = header;
+  let csvContent = header;
 
-    validResponses.forEach((listing, i) => {
-      // Find the actual index in the responseData array
-      const index = responseData.findIndex((response, idx) => 
-        response === listing && imageGroups[idx] && imageGroups[idx].length > 0
+  validResponseIndices.forEach(({ response, index }) => {
+    const title = response.title ? response.title.replace(/\r?\n|\r/g, ' ').replace(/"/g, '""') : '';
+    
+    // Improved photo URL handling - prioritize S3 URLs but handle more cases
+    let photoUrls = [];
+    
+    // First, try to get URLs from S3ImageGroups
+    if (s3ImageGroups && 
+        Array.isArray(s3ImageGroups) && 
+        index < s3ImageGroups.length && 
+        Array.isArray(s3ImageGroups[index])) {
+      
+      // Filter only valid S3 URLs
+      const s3Urls = s3ImageGroups[index].filter(url => 
+        url && 
+        typeof url === 'string' && 
+        url.includes('amazonaws.com') && // Looks like an S3 URL
+        !url.startsWith('data:')
       );
       
-      if (index === -1) return; // Skip if we can't find the mapping
-      
-      const title = listing.title ? listing.title.replace(/\r?\n|\r/g, ' ').replace(/"/g, '""') : '';
-      
-      let photoUrls = [];
-      
-      // Try to get URLs from S3ImageGroups first
-      if (s3ImageGroups && Array.isArray(s3ImageGroups) && index < s3ImageGroups.length) {
-        if (Array.isArray(s3ImageGroups[index])) {
-          photoUrls = s3ImageGroups[index].filter(url => url && typeof url === 'string' && !url.startsWith('data:'));
-        }
+      if (s3Urls.length > 0) {
+        photoUrls = s3Urls;
       }
+    }
+    
+    // If no valid S3 URLs found, try any valid URLs from imageGroups
+    if (photoUrls.length === 0 && 
+        imageGroups && 
+        Array.isArray(imageGroups) && 
+        index < imageGroups.length && 
+        Array.isArray(imageGroups[index])) {
       
-      // If no S3 URLs found, try imageGroups
-      if (photoUrls.length === 0 && imageGroups && Array.isArray(imageGroups) && index < imageGroups.length) {
-        if (Array.isArray(imageGroups[index])) {
-          photoUrls = imageGroups[index].filter(url => url && typeof url === 'string' && !url.startsWith('data:'));
-        }
+      const validUrls = imageGroups[index].filter(url => 
+        url && 
+        typeof url === 'string' && 
+        !url.startsWith('data:') // Exclude base64 images
+      );
+      
+      if (validUrls.length > 0) {
+        photoUrls = validUrls;
       }
-      
-      const formattedUrls = photoUrls.filter(url => url).join('||');
-      const description = listing.description ? listing.description.replace(/\r?\n|\r/g, ' ').replace(/"/g, '""') : '';
-      
-      // Get metadata for this group, or fall back to global price/sku
-      const metadata = groupMetadata && groupMetadata[index] 
-        ? groupMetadata[index] 
-        : { price: price, sku: sku };
-      
-      const groupPrice = metadata.price || price;
-      const groupSku = metadata.sku || sku;
-      
-      const line = `Draft,${groupSku},${categoryID},"${title}",,${groupPrice},1,${formattedUrls},3000,"${description}",FixedPrice`;
-      
-      csvContent += `${line}\n`;
-    });
+    }
     
-    return csvContent;
-  };
-
-  const downloadListingsAsZip = () => {
-    const csvContent = generateCSVContent();
-    if (!csvContent) return;
-    
-    const zip = new JSZip();
-    zip.file("ebay_draft_listings.csv", csvContent);
-    
-    zip.generateAsync({ type: "blob" })
-      .then(content => {
-        const zipFileName = `listings_${new Date().toISOString().split('T')[0]}.zip`;
-        saveAs(content, zipFileName);
-      })
-      .catch(err => {
-        alert("Failed to create download. Please try again.");
+    // If we still have no valid URLs, log a warning for debugging
+    if (photoUrls.length === 0) {
+      console.warn(`No valid photo URLs found for listing at index ${index}`);
+      
+      // Add a diagnostic message to help troubleshoot
+      console.debug(`Diagnostic info for listing ${index}:`, {
+        hasS3Group: s3ImageGroups && index < s3ImageGroups.length,
+        s3GroupLength: s3ImageGroups && index < s3ImageGroups.length ? s3ImageGroups[index].length : 'N/A',
+        hasImageGroup: imageGroups && index < imageGroups.length,
+        imageGroupLength: imageGroups && index < imageGroups.length ? imageGroups[index].length : 'N/A'
       });
-  };
+    }
+    
+    const formattedUrls = photoUrls.filter(url => url).join('||');
+    const description = response.description ? response.description.replace(/\r?\n|\r/g, ' ').replace(/"/g, '""') : '';
+    
+    // Get metadata for this group, or fall back to global price/sku
+    const metadata = groupMetadata && groupMetadata[index] 
+      ? groupMetadata[index] 
+      : { price: price, sku: sku };
+    
+    const groupPrice = metadata.price || price;
+    const groupSku = metadata.sku || sku;
+    
+    const line = `Draft,${groupSku},${categoryID},"${title}",,${groupPrice},1,${formattedUrls},3000,"${description}",FixedPrice`;
+    
+    csvContent += `${line}\n`;
+  });
+  
+  return csvContent;
+};
+
+  const downloadSingleListing = (groupIndex, groupPrice, groupSku) => {
+  const listing = responseData[groupIndex];
+  if (!listing || listing.error) {
+    alert("No valid listing to download!");
+    return;
+  }
+  
+  // Improved photo URL handling - similar to the main function
+  let photoUrls = [];
+  
+  // First try S3 URLs
+  if (s3ImageGroups && 
+      Array.isArray(s3ImageGroups) && 
+      groupIndex < s3ImageGroups.length && 
+      Array.isArray(s3ImageGroups[groupIndex])) {
+    
+    const s3Urls = s3ImageGroups[groupIndex].filter(url => 
+      url && 
+      typeof url === 'string' && 
+      url.includes('amazonaws.com') && 
+      !url.startsWith('data:')
+    );
+    
+    if (s3Urls.length > 0) {
+      photoUrls = s3Urls;
+    }
+  }
+  
+  // Fall back to any valid URLs
+  if (photoUrls.length === 0 && 
+      imageGroups && 
+      Array.isArray(imageGroups) && 
+      groupIndex < imageGroups.length && 
+      Array.isArray(imageGroups[groupIndex])) {
+    
+    const validUrls = imageGroups[groupIndex].filter(url => 
+      url && 
+      typeof url === 'string' && 
+      !url.startsWith('data:')
+    );
+    
+    if (validUrls.length > 0) {
+      photoUrls = validUrls;
+    }
+  }
+  
+  // Log warning if no URLs found
+  if (photoUrls.length === 0) {
+    console.warn(`No valid photo URLs found for single listing at index ${groupIndex}`);
+  }
+  
+  const header = `#INFO,Version=0.0.2,Template= eBay-draft-listings-template_US,,,,,,,,
+#INFO Action and Category ID are required fields. 1) Set Action to Draft 2) Please find the category ID for your listings here: https://pages.ebay.com/sellerinformation/news/categorychanges.html,,,,,,,,,,
+"#INFO After you've successfully uploaded your draft from the Seller Hub Reports tab, complete your drafts to active listings here: https://www.ebay.com/sh/lst/drafts",,,,,,,,,,
+#INFO,,,,,,,,,,
+Action(SiteID=US|Country=US|Currency=USD|Version=1193|CC=UTF-8),Custom label (SKU),Category ID,Title,UPC,Price,Quantity,Item photo URL,Condition ID,Description,Format
+`;
+
+  const title = listing.title ? listing.title.replace(/\r?\n|\r/g, ' ').replace(/"/g, '""') : '';
+  const formattedUrls = photoUrls.filter(url => url).join('||');
+  const description = listing.description ? listing.description.replace(/\r?\n|\r/g, ' ').replace(/"/g, '""') : '';
+  
+  const line = `Draft,${groupSku},${categoryID},"${title}",,${groupPrice},1,${formattedUrls},3000,"${description}",FixedPrice`;
+  
+  const csvContent = header + line + '\n';
+  
+  // Create and download the CSV
+  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+  const csvFileName = `listing_group_${groupIndex+1}_${new Date().toISOString().split('T')[0]}.csv`;
+  
+  if (navigator.msSaveBlob) {
+    navigator.msSaveBlob(blob, csvFileName);
+  } else {
+    const link = document.createElement("a");
+    if (link.download !== undefined) {
+      const url = URL.createObjectURL(blob);
+      link.setAttribute("href", url);
+      link.setAttribute("download", csvFileName);
+      link.style.visibility = "hidden";
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    }
+  }
+};
 
   const downloadListingsAsCsv = () => {
     const csvContent = generateCSVContent();

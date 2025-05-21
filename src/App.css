@@ -827,3 +827,58 @@ select {
 .response-field:nth-child(2) span {
   font-weight: 500;
 }
+
+/* Add these styles to your App.css */
+
+/* Category fields metadata section */
+.category-fields-metadata {
+  margin-top: 15px;
+  padding-top: 10px;
+  border-top: 1px solid #eee;
+}
+
+.category-fields-metadata h5 {
+  color: #333;
+  font-size: 0.95rem;
+  margin-bottom: 8px;
+}
+
+/* Better styling for primary fields (title and description) */
+.response-field.primary-field {
+  padding-bottom: 8px;
+  margin-bottom: 8px;
+  border-bottom: 1px dashed #eee;
+}
+
+.response-field.primary-field strong {
+  font-size: 1rem;
+  color: #333;
+}
+
+.response-field.primary-field span {
+  font-weight: 500;
+  line-height: 1.4;
+}
+
+/* Styling for category field metadata items */
+.listing-metadata {
+  background-color: #f9f9f9;
+  padding: 6px 10px;
+  border-radius: 4px;
+  margin-top: 6px;
+  border-left: 3px solid #2196F3;
+  transition: background-color 0.2s;
+}
+
+.listing-metadata:hover {
+  background-color: #f0f0f0;
+}
+
+.listing-metadata strong {
+  font-size: 0.8rem !important;
+  color: #555 !important;
+}
+
+.listing-metadata span {
+  font-size: 0.9rem;
+}

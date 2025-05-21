@@ -60,107 +60,130 @@ function PreviewSection() {
   };
 
   const generateCSVContent = () => {
-    // Debug output to help diagnose data structure issues
-    console.log("Generating CSV with data:", {
-      responseData: responseData,
-      imageGroups: imageGroups,
-      s3ImageGroups: s3ImageGroups,
-      groupMetadata: groupMetadata
-    });
-    
-    // Validate that we have processed data
-    if (!responseData || responseData.length === 0) {
-      console.error("Missing response data");
-      alert("Error: No listing data available. Please generate listings first.");
-      return null;
-    }
-    
-    // Find valid listings - groups that have been successfully processed
-    const validIndices = responseData
-      .map((response, index) => ({ response, index }))
-      .filter(item => 
-        item.response && 
-        !item.response.error && 
-        imageGroups[item.index] && 
-        imageGroups[item.index].length > 0
-      );
-    
-    if (validIndices.length === 0) {
-      alert("No valid listings to download!");
-      return null;
-    }
-    
-    const header = `#INFO,Version=0.0.2,Template= eBay-draft-listings-template_US,,,,,,,,
+  // Debug output to help diagnose data structure issues
+  console.log("Generating CSV with data:", {
+    responseData: responseData,
+    imageGroups: imageGroups,
+    s3ImageGroups: s3ImageGroups,
+    groupMetadata: groupMetadata,
+    fieldSelections: fieldSelections
+  });
+  
+  // Validate that we have processed data
+  if (!responseData || responseData.length === 0) {
+    console.error("Missing response data");
+    alert("Error: No listing data available. Please generate listings first.");
+    return null;
+  }
+  
+  // Find valid listings - groups that have been successfully processed
+  const validIndices = responseData
+    .map((response, index) => ({ response, index }))
+    .filter(item => 
+      item.response && 
+      !item.response.error && 
+      imageGroups[item.index] && 
+      imageGroups[item.index].length > 0
+    );
+  
+  if (validIndices.length === 0) {
+    alert("No valid listings to download!");
+    return null;
+  }
+  
+  // Create header including standard fields and all category fields
+  let header = `#INFO,Version=0.0.2,Template= eBay-draft-listings-template_US,,,,,,,,
 #INFO Action and Category ID are required fields. 1) Set Action to Draft 2) Please find the category ID for your listings here: https://pages.ebay.com/sellerinformation/news/categorychanges.html,,,,,,,,,,
 "#INFO After you've successfully uploaded your draft from the Seller Hub Reports tab, complete your drafts to active listings here: https://www.ebay.com/sh/lst/drafts",,,,,,,,,,
 #INFO,,,,,,,,,,
-Action(SiteID=US|Country=US|Currency=USD|Version=1193|CC=UTF-8),Custom label (SKU),Category ID,Title,UPC,Price,Quantity,Item photo URL,Condition ID,Description,Format
-`;
+Action(SiteID=US|Country=US|Currency=USD|Version=1193|CC=UTF-8),Custom label (SKU),Category ID,Title,UPC,Price,Quantity,Item photo URL,Condition ID,Description,Format`;
 
-    let csvContent = header;
-    let missingImageGroups = [];
-
-    // Process each valid listing with the correct images
-    validIndices.forEach(({ response, index }) => {
-      const title = response.title ? response.title.replace(/\r?\n|\r/g, ' ').replace(/"/g, '""') : '';
-      const description = response.description ? response.description.replace(/\r?\n|\r/g, ' ').replace(/"/g, '""') : '';
-      
-      // Get the S3 image URLs that correspond to this group
-      let photoUrls = [];
-      
-      // Check if we have valid S3 image URLs for this group
-      if (s3ImageGroups && 
-          s3ImageGroups[index] && 
-          Array.isArray(s3ImageGroups[index]) && 
-          s3ImageGroups[index].length > 0) {
-        
-        // Filter to keep only valid URLs
-        photoUrls = s3ImageGroups[index].filter(url => 
-          url && 
-          typeof url === 'string' && 
-          (url.includes('amazonaws.com') || url.startsWith('http'))
-        );
-        
-        console.log(`Found ${photoUrls.length} photo URLs for listing ${index}`);
-      } else {
-        console.warn(`No S3 image group found for listing ${index}, using placeholders`);
-      }
-      
-      // If no valid URLs, use placeholders
-      if (photoUrls.length === 0) {
-        console.warn(`No valid photo URLs for listing ${index}, using placeholder`);
-        missingImageGroups.push(index);
-        
-        // Create placeholder URLs for each image in the group
-        photoUrls = Array.from(
-          { length: imageGroups[index].length }, 
-          (_, i) => `https://via.placeholder.com/800x600?text=Image+Not+Available+Group+${index+1}+Image+${i+1}`
-        );
-      }
-      
-      const formattedUrls = photoUrls.filter(url => url).join('||');
-      
-      // Get metadata for this group, or fall back to global price/sku
-      const metadata = groupMetadata && groupMetadata[index] 
-        ? groupMetadata[index] 
-        : { price: price, sku: sku };
-      
-      const groupPrice = metadata.price || price || '9.99';
-      const groupSku = metadata.sku || sku || `SKU-${index+1}`;
-      
-      const line = `Draft,${groupSku},${categoryID},"${title}",,${groupPrice},1,${formattedUrls},3000,"${description}",FixedPrice`;
-      
-      csvContent += `${line}\n`;
-    });
+  // Add category fields to header if any are selected
+  const selectedFields = Object.entries(fieldSelections)
+    .filter(([_, value]) => value && value !== "" && value !== "-- Select --")
+    .map(([label]) => label);
     
-    // Show a single alert for all missing images
-    if (missingImageGroups.length > 0) {
-      const groupNumbers = missingImageGroups.map(idx => idx + 1).join(", ");
-      alert(`Warning: ${missingImageGroups.length} listings are missing valid image URLs (groups: ${groupNumbers}). The CSV may not work correctly on eBay.`);
+  if (selectedFields.length > 0) {
+    selectedFields.forEach(field => {
+      header += `,${field}`;
+    });
+  }
+  
+  header += '\n';
+
+  let csvContent = header;
+  let missingImageGroups = [];
+
+  // Process each valid listing with the correct images
+  validIndices.forEach(({ response, index }) => {
+    const title = response.title ? response.title.replace(/\r?\n|\r/g, ' ').replace(/"/g, '""') : '';
+    const description = response.description ? response.description.replace(/\r?\n|\r/g, ' ').replace(/"/g, '""') : '';
+    
+    // Get the S3 image URLs that correspond to this group
+    let photoUrls = [];
+    
+    // Check if we have valid S3 image URLs for this group
+    if (s3ImageGroups && 
+        s3ImageGroups[index] && 
+        Array.isArray(s3ImageGroups[index]) && 
+        s3ImageGroups[index].length > 0) {
+      
+      // Filter to keep only valid URLs
+      photoUrls = s3ImageGroups[index].filter(url => 
+        url && 
+        typeof url === 'string' && 
+        (url.includes('amazonaws.com') || url.startsWith('http'))
+      );
+      
+      console.log(`Found ${photoUrls.length} photo URLs for listing ${index}`);
+    } else {
+      console.warn(`No S3 image group found for listing ${index}, using placeholders`);
     }
     
-    return csvContent;
-  };
+    // If no valid URLs, use placeholders
+    if (photoUrls.length === 0) {
+      console.warn(`No valid photo URLs for listing ${index}, using placeholder`);
+      missingImageGroups.push(index);
+      
+      // Create placeholder URLs for each image in the group
+      photoUrls = Array.from(
+        { length: imageGroups[index].length }, 
+        (_, i) => `https://via.placeholder.com/800x600?text=Image+Not+Available+Group+${index+1}+Image+${i+1}`
+      );
+    }
+    
+    const formattedUrls = photoUrls.filter(url => url).join('||');
+    
+    // Get metadata for this group, or fall back to global price/sku
+    const metadata = groupMetadata && groupMetadata[index] 
+      ? groupMetadata[index] 
+      : { price: price, sku: sku };
+    
+    const groupPrice = metadata.price || price || '9.99';
+    const groupSku = metadata.sku || sku || `SKU-${index+1}`;
+    
+    // Start with the standard fields
+    let line = `Draft,${groupSku},${categoryID},"${title}",,${groupPrice},1,${formattedUrls},3000,"${description}",FixedPrice`;
+    
+    // Add category fields to the line
+    if (selectedFields.length > 0) {
+      selectedFields.forEach(field => {
+        const fieldValue = fieldSelections[field] || '';
+        line += `,"${fieldValue.replace(/"/g, '""')}"`;
+      });
+    }
+    
+    csvContent += `${line}\n`;
+  });
+  
+  // Show a single alert for all missing images
+  if (missingImageGroups.length > 0) {
+    const groupNumbers = missingImageGroups.map(idx => idx + 1).join(", ");
+    alert(`Warning: ${missingImageGroups.length} listings are missing valid image URLs (groups: ${groupNumbers}). The CSV may not work correctly on eBay.`);
+  }
+  
+  return csvContent;
+};
 
   const downloadListingsAsCsv = () => {
     const csvContent = generateCSVContent();
@@ -186,82 +209,104 @@ Action(SiteID=US|Country=US|Currency=USD|Version=1193|CC=UTF-8),Custom label (SK
   };
 
   const downloadSingleListing = (groupIndex, groupPrice, groupSku) => {
-    const listing = responseData[groupIndex];
-    if (!listing || listing.error) {
-      alert("No valid listing to download!");
-      return;
-    }
+  const listing = responseData[groupIndex];
+  if (!listing || listing.error) {
+    alert("No valid listing to download!");
+    return;
+  }
+  
+  // Get the correct S3 image URLs for this specific group
+  let photoUrls = [];
+  
+  // Check if we have valid S3 image URLs for this group
+  if (s3ImageGroups && 
+      s3ImageGroups[groupIndex] && 
+      Array.isArray(s3ImageGroups[groupIndex]) && 
+      s3ImageGroups[groupIndex].length > 0) {
     
-    // Get the correct S3 image URLs for this specific group
-    let photoUrls = [];
+    photoUrls = s3ImageGroups[groupIndex].filter(url => 
+      url && 
+      typeof url === 'string' && 
+      (url.includes('amazonaws.com') || url.startsWith('http'))
+    );
     
-    // Check if we have valid S3 image URLs for this group
-    if (s3ImageGroups && 
-        s3ImageGroups[groupIndex] && 
-        Array.isArray(s3ImageGroups[groupIndex]) && 
-        s3ImageGroups[groupIndex].length > 0) {
-      
-      photoUrls = s3ImageGroups[groupIndex].filter(url => 
-        url && 
-        typeof url === 'string' && 
-        (url.includes('amazonaws.com') || url.startsWith('http'))
-      );
-      
-      console.log(`Found ${photoUrls.length} photo URLs for single listing ${groupIndex}:`, photoUrls);
-    } else {
-      console.warn(`No S3 image group found for listing ${groupIndex}, using placeholders`);
-    }
+    console.log(`Found ${photoUrls.length} photo URLs for single listing ${groupIndex}:`, photoUrls);
+  } else {
+    console.warn(`No S3 image group found for listing ${groupIndex}, using placeholders`);
+  }
+  
+  // If no valid URLs found, use placeholders for each image in the group
+  if (photoUrls.length === 0) {
+    console.warn(`No valid photo URLs for listing ${groupIndex}, using placeholders`);
+    alert(`Warning: Listing in Group ${groupIndex+1} has no valid image URLs. The CSV may not work correctly on eBay.`);
     
-    // If no valid URLs found, use placeholders for each image in the group
-    if (photoUrls.length === 0) {
-      console.warn(`No valid photo URLs for listing ${groupIndex}, using placeholders`);
-      alert(`Warning: Listing in Group ${groupIndex+1} has no valid image URLs. The CSV may not work correctly on eBay.`);
-      
-      // Create placeholder URLs for each image in the group
-      photoUrls = Array.from(
-        { length: imageGroups[groupIndex].length }, 
-        (_, i) => `https://via.placeholder.com/800x600?text=Image+Not+Available+Group+${groupIndex+1}+Image+${i+1}`
-      );
-    }
-    
-    const header = `#INFO,Version=0.0.2,Template= eBay-draft-listings-template_US,,,,,,,,
+    // Create placeholder URLs for each image in the group
+    photoUrls = Array.from(
+      { length: imageGroups[groupIndex].length }, 
+      (_, i) => `https://via.placeholder.com/800x600?text=Image+Not+Available+Group+${groupIndex+1}+Image+${i+1}`
+    );
+  }
+  
+  // Add category fields to header if any are selected
+  const selectedFields = Object.entries(fieldSelections)
+    .filter(([_, value]) => value && value !== "" && value !== "-- Select --")
+    .map(([label]) => label);
+  
+  let header = `#INFO,Version=0.0.2,Template= eBay-draft-listings-template_US,,,,,,,,
 #INFO Action and Category ID are required fields. 1) Set Action to Draft 2) Please find the category ID for your listings here: https://pages.ebay.com/sellerinformation/news/categorychanges.html,,,,,,,,,,
 "#INFO After you've successfully uploaded your draft from the Seller Hub Reports tab, complete your drafts to active listings here: https://www.ebay.com/sh/lst/drafts",,,,,,,,,,
 #INFO,,,,,,,,,,
-Action(SiteID=US|Country=US|Currency=USD|Version=1193|CC=UTF-8),Custom label (SKU),Category ID,Title,UPC,Price,Quantity,Item photo URL,Condition ID,Description,Format
-`;
+Action(SiteID=US|Country=US|Currency=USD|Version=1193|CC=UTF-8),Custom label (SKU),Category ID,Title,UPC,Price,Quantity,Item photo URL,Condition ID,Description,Format`;
 
-    const title = listing.title ? listing.title.replace(/\r?\n|\r/g, ' ').replace(/"/g, '""') : '';
-    const formattedUrls = photoUrls.filter(url => url).join('||');
-    const description = listing.description ? listing.description.replace(/\r?\n|\r/g, ' ').replace(/"/g, '""') : '';
-    
-    // Ensure we have valid price and SKU values
-    const finalGroupPrice = groupPrice || price || '9.99';
-    const finalGroupSku = groupSku || sku || `SKU-${groupIndex+1}`;
-    
-    const line = `Draft,${finalGroupSku},${categoryID},"${title}",,${finalGroupPrice},1,${formattedUrls},3000,"${description}",FixedPrice`;
-    
-    const csvContent = header + line + '\n';
-    
-    // Create and download the CSV
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const csvFileName = `listing_group_${groupIndex+1}_${new Date().toISOString().split('T')[0]}.csv`;
-    
-    if (navigator.msSaveBlob) {
-      navigator.msSaveBlob(blob, csvFileName);
-    } else {
-      const link = document.createElement("a");
-      if (link.download !== undefined) {
-        const url = URL.createObjectURL(blob);
-        link.setAttribute("href", url);
-        link.setAttribute("download", csvFileName);
-        link.style.visibility = "hidden";
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-      }
+  // Add category fields to header
+  if (selectedFields.length > 0) {
+    selectedFields.forEach(field => {
+      header += `,${field}`;
+    });
+  }
+  
+  header += '\n';
+
+  const title = listing.title ? listing.title.replace(/\r?\n|\r/g, ' ').replace(/"/g, '""') : '';
+  const formattedUrls = photoUrls.filter(url => url).join('||');
+  const description = listing.description ? listing.description.replace(/\r?\n|\r/g, ' ').replace(/"/g, '""') : '';
+  
+  // Ensure we have valid price and SKU values
+  const finalGroupPrice = groupPrice || price || '9.99';
+  const finalGroupSku = groupSku || sku || `SKU-${groupIndex+1}`;
+  
+  // Start with standard fields
+  let line = `Draft,${finalGroupSku},${categoryID},"${title}",,${finalGroupPrice},1,${formattedUrls},3000,"${description}",FixedPrice`;
+  
+  // Add category fields to the line
+  if (selectedFields.length > 0) {
+    selectedFields.forEach(field => {
+      const fieldValue = fieldSelections[field] || '';
+      line += `,"${fieldValue.replace(/"/g, '""')}"`;
+    });
+  }
+  
+  const csvContent = header + line + '\n';
+  
+  // Create and download the CSV
+  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+  const csvFileName = `listing_group_${groupIndex+1}_${new Date().toISOString().split('T')[0]}.csv`;
+  
+  if (navigator.msSaveBlob) {
+    navigator.msSaveBlob(blob, csvFileName);
+  } else {
+    const link = document.createElement("a");
+    if (link.download !== undefined) {
+      const url = URL.createObjectURL(blob);
+      link.setAttribute("href", url);
+      link.setAttribute("download", csvFileName);
+      link.style.visibility = "hidden";
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
     }
-  };
+  }
+};
 
   const renderResponseData = (index) => {
   const response = responseData[index];
@@ -289,16 +334,21 @@ Action(SiteID=US|Country=US|Currency=USD|Version=1193|CC=UTF-8),Custom label (SK
     <div className="response-data">
       <h4 style={{ color: '#000' }}>Generated Listing</h4>
       <div className="response-fields">
-        {Object.entries(response).map(([key, value]) => (
-          <div key={key} className="response-field">
-            <strong style={{ color: '#000' }}>
-              {key.replace(/_/g, ' ').replace(/^\w/, c => c.toUpperCase())}:
-            </strong>
-            <span style={{ color: '#000' }}>{value}</span>
+        {/* Display title and description first */}
+        {response.title && (
+          <div className="response-field primary-field">
+            <strong style={{ color: '#000' }}>Title:</strong>
+            <span style={{ color: '#000' }}>{response.title}</span>
           </div>
-        ))}
+        )}
+        {response.description && (
+          <div className="response-field primary-field">
+            <strong style={{ color: '#000' }}>Description:</strong>
+            <span style={{ color: '#000' }}>{response.description}</span>
+          </div>
+        )}
         
-        {/* Add price and SKU information in the listing content */}
+        {/* Add price and SKU information */}
         <div className="response-field listing-metadata">
           <strong style={{ color: '#000' }}>Price:</strong>
           <span style={{ color: '#000' }}>${groupPrice}</span>
@@ -307,6 +357,35 @@ Action(SiteID=US|Country=US|Currency=USD|Version=1193|CC=UTF-8),Custom label (SK
           <strong style={{ color: '#000' }}>SKU:</strong>
           <span style={{ color: '#000' }}>{groupSku}</span>
         </div>
+        
+        {/* Add all selected category fields as metadata */}
+        <div className="category-fields-metadata">
+          <h5 style={{ margin: '10px 0 5px 0', color: '#000' }}>Category Details</h5>
+          {Object.entries(fieldSelections).map(([label, value]) => {
+            // Only display fields that have a value selected
+            if (value && value !== "" && value !== "-- Select --") {
+              return (
+                <div key={label} className="response-field listing-metadata">
+                  <strong style={{ color: '#000' }}>{label}:</strong>
+                  <span style={{ color: '#000' }}>{value}</span>
+                </div>
+              );
+            }
+            return null;
+          })}
+        </div>
+        
+        {/* Add other response fields excluding title and description (already displayed) */}
+        {Object.entries(response)
+          .filter(([key]) => key !== 'title' && key !== 'description' && !key.startsWith('error') && !key.startsWith('raw_'))
+          .map(([key, value]) => (
+            <div key={key} className="response-field">
+              <strong style={{ color: '#000' }}>
+                {key.replace(/_/g, ' ').replace(/^\w/, c => c.toUpperCase())}:
+              </strong>
+              <span style={{ color: '#000' }}>{value}</span>
+            </div>
+        ))}
       </div>
     </div>
   );

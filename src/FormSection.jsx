@@ -365,8 +365,6 @@ const handleGenerateListingWithUpload = async () => {
     // Collect all raw files that need uploading
     let allRawFiles = [...rawFiles];
     
-    const rawImageGroups = state.imageGroups.map(() => []); // Placeholder for raw files in groups
-    
     // If no files to upload, just generate listings
     if (allRawFiles.length === 0) {
       if (filesBase64.length > 0) {
@@ -473,17 +471,7 @@ const handleGenerateListingWithUpload = async () => {
     // Log all the S3 URLs we received
     console.log("All uploaded S3 URLs:", s3UrlsList);
 
-    // THE KEY ISSUE: We need to ensure the S3 URLs maintain proper correspondence with the images
-    // -----------------------------------------------------------------------------------------
-
-    // APPROACH: Reset our thinking and create a completely new approach that preserves order
-
-    // Step 1: First, let's understand what we have:
-    // - rawFiles: Original files that were uploaded
-    // - filesBase64: Base64 versions of those files
-    // - s3UrlsList: S3 URLs that were generated from those files in the SAME ORDER
-    // - imageGroups: How the user has organized their images
-
+    // Step 1: Understand what we have:
     console.log("Files uploaded:", rawFiles.length);
     console.log("Base64 files:", filesBase64.length);
     console.log("S3 URLs generated:", s3UrlsList.length);
@@ -493,20 +481,7 @@ const handleGenerateListingWithUpload = async () => {
     const imagesInGroups = imageGroups.reduce((total, group) => total + group.filter(img => img).length, 0);
     console.log(`Images in groups: ${imagesInGroups}, Images in pool: ${filesBase64.length}`);
 
-    // Step 3: Create image-to-URL mappings based on the original order
-    const imageUrlMappings = {};
-
-    // If we have raw files, map them directly to S3 URLs in the same order
-    if (rawFiles.length > 0 && s3UrlsList.length > 0) {
-      rawFiles.forEach((file, index) => {
-        if (index < s3UrlsList.length) {
-          const fileId = `${file.name}_${file.size}`;
-          imageUrlMappings[fileId] = s3UrlsList[index];
-        }
-      });
-    }
-
-    // Step 4: Build brand new S3 image groups in the correct order
+    // Step 3: Build brand new S3 image groups in the correct order
     const newS3ImageGroups = [];
     let s3UrlIndex = 0; // Keep track of which S3 URLs we've used
 
@@ -588,8 +563,8 @@ const handleGenerateListingWithUpload = async () => {
     // Update metadata state
     dispatch({ type: 'UPDATE_GROUP_METADATA', payload: updatedMetadata });
 
-    // Fetch the eBay category ID - using Promise instead of await
-    fetchEbayCategoryID(selectedCategory, subCategory)
+    // Use Promise for fetching eBay category ID instead of await
+    return fetchEbayCategoryID(selectedCategory, subCategory)
       .then(ebayCategoryID => {
         dispatch({ type: 'SET_CATEGORY_ID', payload: ebayCategoryID });
         
@@ -613,6 +588,7 @@ const handleGenerateListingWithUpload = async () => {
         console.error('Error fetching eBay category ID:', error);
         
         // Still continue with the rest of the process
+        dispatch({ type: 'SET_CATEGORY_ID', payload: null });
         dispatch({ type: 'SET_RAW_FILES', payload: [] });
         dispatch({ type: 'SET_IMAGE_ROTATIONS', payload: {} });
         

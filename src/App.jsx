@@ -547,18 +547,20 @@ const handleGenerateListing = async () => {
     // Track indices of groups being processed
     const processedIndices = [];
     
-    // Process groups in parallel batches
-    const PROCESSING_BATCH_SIZE = 3; // Process 3 groups at a time
-    const allProcessingPromises = [];
-    const completedGroups = [];
+    // IMPORTANT CHANGE: Use a more conservative approach with only 2 concurrent requests
+    // and add a delay between batches to prevent Gateway Timeout
+    const PROCESSING_BATCH_SIZE = 2; // Only process 2 groups at a time
+    const BATCH_DELAY_MS = 2000; // Add a 2-second delay between batches
     
-    for (let startIdx = 0; startIdx < allGroupsToProcess.length; startIdx += PROCESSING_BATCH_SIZE) {
-      const currentBatch = allGroupsToProcess.slice(startIdx, startIdx + PROCESSING_BATCH_SIZE);
+    // Process each group with the API using sequential batch processing
+    for (let batchStart = 0; batchStart < allGroupsToProcess.length; batchStart += PROCESSING_BATCH_SIZE) {
+      // Get the current batch of groups to process
+      const currentBatch = allGroupsToProcess.slice(batchStart, batchStart + PROCESSING_BATCH_SIZE);
       const batchIndices = [];
       
       // Map current batch items to their actual indices
       for (let i = 0; i < currentBatch.length; i++) {
-        const batchItemIndex = startIdx + i;
+        const batchItemIndex = batchStart + i;
         let actualIndex;
         
         if (batchItemIndex < newGroupIndices.length) {
@@ -574,9 +576,17 @@ const handleGenerateListing = async () => {
         processedIndices.push(actualIndex);
       }
       
-      // Process the current batch in parallel
+      // Create promises for the current batch
       const batchPromises = currentBatch.map((group, batchIdx) => {
         const actualIndex = batchIndices[batchIdx];
+        
+        // Update processing status to show which group is being processed
+        processingStatus.currentGroup = batchStart + batchIdx + 1; // 1-based index for display
+        
+        dispatch({ 
+          type: 'SET_PROCESSING_STATUS', 
+          payload: {...processingStatus}
+        });
         
         return (async () => {
           try {
@@ -595,6 +605,10 @@ const handleGenerateListing = async () => {
               }
             );
             
+            if (!response.ok) {
+              throw new Error(`API error: ${response.status} ${response.statusText}`);
+            }
+            
             const data = await response.json();
             let parsed = data.body;
             if (typeof parsed === "string") parsed = JSON.parse(parsed);
@@ -604,6 +618,7 @@ const handleGenerateListing = async () => {
               result: Array.isArray(parsed) ? parsed[0] : parsed 
             };
           } catch (err) {
+            console.error(`Error processing group ${actualIndex}:`, err);
             return { 
               index: actualIndex, 
               error: true, 
@@ -616,16 +631,11 @@ const handleGenerateListing = async () => {
         })();
       });
       
-      // Add the batch promises to the overall list
-      allProcessingPromises.push(...batchPromises);
-      
       // Wait for all promises in this batch to complete
       const batchResults = await Promise.all(batchPromises);
       
       // Update state with batch results
       batchResults.forEach(({ index, result, error }) => {
-        completedGroups.push(index);
-        
         // Update response data
         dispatch({
           type: 'UPDATE_RESPONSE_DATA',
@@ -639,9 +649,9 @@ const handleGenerateListing = async () => {
         });
       });
       
-      // Update processing status
-      processingStatus.processCompleted = completedGroups.length;
-      processingStatus.currentGroup = Math.min(startIdx + PROCESSING_BATCH_SIZE, totalGroups);
+      // Update completion count
+      const completedCount = Math.min(batchStart + PROCESSING_BATCH_SIZE, allGroupsToProcess.length);
+      processingStatus.processCompleted = completedCount;
       
       dispatch({ 
         type: 'SET_PROCESSING_STATUS', 
@@ -650,12 +660,15 @@ const handleGenerateListing = async () => {
       
       dispatch({ 
         type: 'SET_COMPLETED_CHUNKS', 
-        payload: completedGroups.length 
+        payload: completedCount 
       });
+      
+      // Add delay between batches to prevent API gateway timeout
+      // Skip delay for the last batch
+      if (batchStart + PROCESSING_BATCH_SIZE < allGroupsToProcess.length) {
+        await new Promise(resolve => setTimeout(resolve, BATCH_DELAY_MS));
+      }
     }
-    
-    // Wait for any remaining promises to complete
-    await Promise.all(allProcessingPromises);
     
     // All processing complete - update the final status
     processingStatus.processCompleted = totalGroups;

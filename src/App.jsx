@@ -264,32 +264,53 @@ Action(SiteID=US|Country=US|Currency=USD|Version=1193|CC=UTF-8),Custom label (SK
   };
 
   const renderResponseData = (index) => {
-    const response = responseData[index];
-    if (!response) return null;
-    if (response.error) {
-      return (
-        <div className="response-error">
-          <p style={{ color: '#000' }}>Error: {response.error}</p>
-          {response.raw_content && <p style={{ color: '#000' }}>Raw content: {response.raw_content}</p>}
-        </div>
-      );
-    }
+  const response = responseData[index];
+  if (!response) return null;
+  
+  // Get group metadata for this listing
+  const metadata = groupMetadata && groupMetadata[index] 
+    ? groupMetadata[index] 
+    : { price: price || '', sku: sku || '' };
+  
+  // Group-specific price and SKU or fall back to global settings
+  const groupPrice = metadata.price || price || '';
+  const groupSku = metadata.sku || sku || '';
+  
+  if (response.error) {
     return (
-      <div className="response-data">
-        <h4 style={{ color: '#000' }}>Generated Listing</h4>
-        <div className="response-fields">
-          {Object.entries(response).map(([key, value]) => (
-            <div key={key} className="response-field">
-              <strong style={{ color: '#000' }}>
-                {key.replace(/_/g, ' ').replace(/^\w/, c => c.toUpperCase())}:
-              </strong>
-              <span style={{ color: '#000' }}>{value}</span>
-            </div>
-          ))}
-        </div>
+      <div className="response-error">
+        <p style={{ color: '#000' }}>Error: {response.error}</p>
+        {response.raw_content && <p style={{ color: '#000' }}>Raw content: {response.raw_content}</p>}
       </div>
     );
-  };
+  }
+  
+  return (
+    <div className="response-data">
+      <h4 style={{ color: '#000' }}>Generated Listing</h4>
+      <div className="response-fields">
+        {Object.entries(response).map(([key, value]) => (
+          <div key={key} className="response-field">
+            <strong style={{ color: '#000' }}>
+              {key.replace(/_/g, ' ').replace(/^\w/, c => c.toUpperCase())}:
+            </strong>
+            <span style={{ color: '#000' }}>{value}</span>
+          </div>
+        ))}
+        
+        {/* Add price and SKU information in the listing content */}
+        <div className="response-field listing-metadata">
+          <strong style={{ color: '#000' }}>Price:</strong>
+          <span style={{ color: '#000' }}>${groupPrice}</span>
+        </div>
+        <div className="response-field listing-metadata">
+          <strong style={{ color: '#000' }}>SKU:</strong>
+          <span style={{ color: '#000' }}>{groupSku}</span>
+        </div>
+      </div>
+    </div>
+  );
+};
 
   // Spinner component
   const Spinner = () => (
@@ -352,52 +373,58 @@ Action(SiteID=US|Country=US|Currency=USD|Version=1193|CC=UTF-8),Custom label (SK
           const groupPrice = metadata.price || price;
           const groupSku = metadata.sku || sku;
           
-          return (
-            <div
-              key={gi}
-              className={`group-card ${groupClass}`}
-              onDrop={e => handleGroupDrop(e, gi)}
-              onDragOver={e => e.preventDefault()}
+return (
+  <div
+    key={gi}
+    className={`group-card ${groupClass}`}
+    onDrop={e => handleGroupDrop(e, gi)}
+    onDragOver={e => e.preventDefault()}
+  >
+    {/* Remove the group metadata header 
+    <div className="group-metadata">
+      <span className="group-number">Group {gi + 1}</span>
+      <div className="metadata-details">
+        <span className="metadata-item">Price: ${groupPrice}</span>
+        <span className="metadata-item">SKU: {groupSku}</span>
+      </div>
+    </div>
+    */}
+    
+    {/* Instead, just add a simple group number indicator */}
+    <div className="group-header">
+      <span className="group-number">Group {gi + 1}</span>
+    </div>
+    
+    <div className="thumbs">
+      {group.map((src, xi) => (
+        <img key={xi} src={src} alt={`group-${gi}-img-${xi}`} draggable onDragStart={e => {
+          e.dataTransfer.setData("from", "group");
+          e.dataTransfer.setData("index", `${gi}-${xi}`);
+        }} />
+      ))}
+    </div>
+    <div className="listing">
+      {processingGroups[gi] ? (
+        <div className="listing-loading">
+          <Spinner />
+          <p>Generating listing for group {gi+1}...</p>
+        </div>
+      ) : (
+        <div>
+          {renderResponseData(gi) || <p>No data. Click "Generate Listing".</p>}
+          {responseData[gi] && !responseData[gi].error && (
+            <button 
+              className="download-single-button"
+              onClick={() => downloadSingleListing(gi, groupPrice, groupSku)}
             >
-              {/* Add group metadata info */}
-              <div className="group-metadata">
-                <span className="group-number">Group {gi + 1}</span>
-                <div className="metadata-details">
-                  <span className="metadata-item">Price: ${groupPrice}</span>
-                  <span className="metadata-item">SKU: {groupSku}</span>
-                </div>
-              </div>
-              
-              <div className="thumbs">
-                {group.map((src, xi) => (
-                  <img key={xi} src={src} alt={`group-${gi}-img-${xi}`} draggable onDragStart={e => {
-                    e.dataTransfer.setData("from", "group");
-                    e.dataTransfer.setData("index", `${gi}-${xi}`);
-                  }} />
-                ))}
-              </div>
-              <div className="listing">
-                {processingGroups[gi] ? (
-                  <div className="listing-loading">
-                    <Spinner />
-                    <p>Generating listing for group {gi+1}...</p>
-                  </div>
-                ) : (
-                  <div>
-                    {renderResponseData(gi) || <p>No data. Click "Generate Listing".</p>}
-                    {responseData[gi] && !responseData[gi].error && (
-                      <button 
-                        className="download-single-button"
-                        onClick={() => downloadSingleListing(gi, groupPrice, groupSku)}
-                      >
-                        Download This Listing
-                      </button>
-                    )}
-                  </div>
-                )}
-              </div>
-            </div>
-          );
+              Download This Listing
+            </button>
+          )}
+        </div>
+      )}
+    </div>
+  </div>
+);
         })}
       </div>
     </section>

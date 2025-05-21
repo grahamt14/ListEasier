@@ -773,3 +773,57 @@ select {
     gap: 5px;
   }
 }
+
+/* New styles for group header (replacing metadata header) */
+.group-header {
+  display: flex;
+  justify-content: flex-start;
+  padding: 8px 12px;
+  background-color: #f0f0f0;
+  border-bottom: 1px solid #ddd;
+  border-top-left-radius: 8px;
+  border-top-right-radius: 8px;
+}
+
+/* Style for listing metadata inside the listing content */
+.listing-metadata {
+  background-color: #f9f9f9;
+  padding: 6px 10px;
+  border-radius: 4px;
+  margin-top: 8px;
+  border-left: 3px solid #2196F3;
+}
+
+/* Make the response fields look nicer */
+.response-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.response-field {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.response-field strong {
+  font-size: 0.9rem;
+  color: #555;
+}
+
+.response-field span {
+  word-break: break-word;
+}
+
+/* Make the title and description stand out */
+.response-field:first-child strong,
+.response-field:nth-child(2) strong {
+  font-size: 1.1rem;
+  color: #333;
+}
+
+.response-field:first-child span,
+.response-field:nth-child(2) span {
+  font-weight: 500;
+}

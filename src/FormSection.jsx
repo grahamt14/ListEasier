@@ -331,29 +331,137 @@ function FormSection({ onGenerateListing }) {
     dispatch({ type: 'TOGGLE_IMAGE_SELECTION', payload: idx });
   };
 
-  // Group selected images
-  const handleGroupSelected = () => {
-    dispatch({ type: 'GROUP_SELECTED_IMAGES' });
-  };
-
-  // Fetch eBay category ID
-  const fetchEbayCategoryID = async (selectedCategory, subCategory) => {
-    try {
-      const command = new GetCommand({
-        TableName: 'ListCategory',
-        Key: {
-          Category: selectedCategory,
-          SubCategory: subCategory,
-        },
-      });
-
-      const response = await docClient.send(command);
-      return response.Item?.EbayCategoryID || null;
-    } catch (err) {
-      console.error('Error fetching EbayCategoryID:', err);
-      return null;
+const uploadGroupedImagesToS3 = async (selectedIndices) => {
+  try {
+    // Get the selected images from the pool
+    const selectedRawFiles = selectedIndices.map(i => rawFiles[i]).filter(file => file);
+    
+    if (!selectedRawFiles.length) {
+      console.log("No raw files to upload");
+      return [];
     }
-  };
+    
+    // Update upload status
+    dispatch({ 
+      type: 'SET_UPLOAD_STATUS', 
+      payload: { 
+        isUploading: true, 
+        uploadTotal: selectedRawFiles.length,
+        uploadCompleted: 0,
+        uploadProgress: 0,
+        uploadStage: 'Uploading selected images to S3...'
+      } 
+    });
+    
+    // Upload files in parallel
+    const s3UrlsPromises = selectedRawFiles.map(async (file, index) => {
+      try {
+        const result = await uploadToS3(file);
+        
+        // Update progress for each file
+        dispatch({ 
+          type: 'SET_UPLOAD_STATUS', 
+          payload: { 
+            uploadCompleted: index + 1,
+            uploadProgress: Math.round(((index + 1) / selectedRawFiles.length) * 100)
+          } 
+        });
+        
+        return result;
+      } catch (error) {
+        console.error(`Error uploading file:`, error);
+        return null;
+      }
+    });
+    
+    const s3Urls = await Promise.all(s3UrlsPromises);
+    
+    // Upload complete
+    dispatch({ 
+      type: 'SET_UPLOAD_STATUS', 
+      payload: { 
+        uploadProgress: 100,
+        uploadCompleted: selectedRawFiles.length,
+        uploadStage: 'Upload complete!',
+        isUploading: false
+      } 
+    });
+    
+    // Reset status after a moment
+    setTimeout(() => {
+      dispatch({ type: 'RESET_STATUS' });
+    }, 1000);
+    
+    return s3Urls.filter(url => url !== null);
+  } catch (error) {
+    console.error('Error uploading selected images:', error);
+    
+    // Show error in upload status
+    dispatch({ 
+      type: 'SET_UPLOAD_STATUS', 
+      payload: { 
+        uploadStage: `Error: ${error.message}`,
+        isUploading: false
+      } 
+    });
+    
+    // Reset status after a delay
+    setTimeout(() => {
+      dispatch({ type: 'RESET_STATUS' });
+    }, 3000);
+    
+    return [];
+  }
+};
+
+// Replace the handleGroupSelected function with this version
+const handleGroupSelected = async () => {
+  if (!selectedImages.length) return;
+  
+  try {
+    // Upload the selected images to S3 first
+    const s3Urls = await uploadGroupedImagesToS3(selectedImages);
+    console.log(`Uploaded ${s3Urls.length} images to S3 for grouping`);
+    
+    // Get the current S3 image groups
+    let updatedS3Groups = [...(state.s3ImageGroups || [])];
+    while (updatedS3Groups.length < state.imageGroups.length) {
+      updatedS3Groups.push([]);
+    }
+    
+    // Find the first empty group or add a new one
+    const firstEmptyIndex = updatedS3Groups.findIndex(g => g.length === 0);
+    let targetIndex = firstEmptyIndex !== -1 ? firstEmptyIndex : updatedS3Groups.length;
+    
+    // Set the S3 URLs to be added to the right group
+    if (s3Urls.length > 0) {
+      // If we need to add a new group
+      if (targetIndex >= updatedS3Groups.length) {
+        updatedS3Groups.push(s3Urls);
+      } else {
+        // Update existing empty group
+        updatedS3Groups[targetIndex] = s3Urls;
+      }
+      
+      // Ensure there's an empty group at the end
+      if (updatedS3Groups[updatedS3Groups.length - 1].length > 0) {
+        updatedS3Groups.push([]);
+      }
+      
+      // Update the S3 image groups in state
+      dispatch({ type: 'SET_S3_IMAGE_GROUPS', payload: updatedS3Groups });
+    }
+    
+    // Now perform the standard grouping action
+    dispatch({ type: 'GROUP_SELECTED_IMAGES' });
+    
+  } catch (error) {
+    console.error('Error in group selected function:', error);
+    
+    // Still perform the grouping even if S3 upload fails
+    dispatch({ type: 'GROUP_SELECTED_IMAGES' });
+  }
+};
   
 const handleGenerateListingWithUpload = async () => {
   try {
@@ -820,6 +928,8 @@ const handleGenerateListingWithUpload = async () => {
       </div>
     );
   };
+  
+  
 
   return (
     <section className="form-section">

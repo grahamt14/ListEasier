@@ -488,7 +488,7 @@ function FormSection({ onGenerateListing }) {
       imageGroups.forEach((group, groupIndex) => {
         if (group.length === 0) {
           // Keep empty groups empty
-          newS3ImageGroups.push([]);
+          //newS3ImageGroups.push([]);
         } else {
           // Create a new S3 URL array for this group
           const groupS3Urls = [];

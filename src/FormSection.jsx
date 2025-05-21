@@ -484,6 +484,7 @@ function FormSection({ onGenerateListing }) {
       const newS3ImageGroups = [];
       let s3UrlIndex = 0; // Keep track of which S3 URLs we've used
 
+
       // First, process any existing groups
       imageGroups.forEach((group, groupIndex) => {
         if (group.length === 0) {

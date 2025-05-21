@@ -22,7 +22,8 @@ function PreviewSection() {
     categoryID,
     price,
     sku,
-    processingStatus
+    processingStatus,
+    groupMetadata
   } = state;
   
   // Use new processing status for consistent display
@@ -59,15 +60,18 @@ function PreviewSection() {
   };
 
   const generateCSVContent = () => {
-    const validResponses = responseData.filter(response => response && !response.error);
+    const validResponses = responseData.filter((response, index) => 
+      response && !response.error && imageGroups[index] && imageGroups[index].length > 0
+    );
     
     if (validResponses.length === 0) {
       alert("No valid listings to download!");
       return null;
     }
     
-    let filteredS3ImageGroups = s3ImageGroups.filter(imageGroup => 
-      Array.isArray(imageGroup) && imageGroup.length > 0
+    let filteredS3ImageGroups = s3ImageGroups.filter((imageGroup, index) => 
+      Array.isArray(imageGroup) && imageGroup.length > 0 && 
+      responseData[index] && !responseData[index].error
     );
     
     const header = `#INFO,Version=0.0.2,Template= eBay-draft-listings-template_US,,,,,,,,
@@ -79,15 +83,22 @@ Action(SiteID=US|Country=US|Currency=USD|Version=1193|CC=UTF-8),Custom label (SK
 
     let csvContent = header;
 
-    validResponses.forEach((listing, index) => {
+    validResponses.forEach((listing, i) => {
+      // Find the actual index in the responseData array
+      const index = responseData.findIndex((response, idx) => 
+        response === listing && imageGroups[idx] && imageGroups[idx].length > 0
+      );
+      
+      if (index === -1) return; // Skip if we can't find the mapping
+      
       const title = listing.title ? listing.title.replace(/\r?\n|\r/g, ' ').replace(/"/g, '""') : '';
       
       let photoUrls = [];
       
       // Try to get URLs from S3ImageGroups first
-      if (filteredS3ImageGroups && Array.isArray(filteredS3ImageGroups) && index < filteredS3ImageGroups.length) {
-        if (Array.isArray(filteredS3ImageGroups[index])) {
-          photoUrls = filteredS3ImageGroups[index].filter(url => url && typeof url === 'string' && !url.startsWith('data:'));
+      if (s3ImageGroups && Array.isArray(s3ImageGroups) && index < s3ImageGroups.length) {
+        if (Array.isArray(s3ImageGroups[index])) {
+          photoUrls = s3ImageGroups[index].filter(url => url && typeof url === 'string' && !url.startsWith('data:'));
         }
       }
       
@@ -100,7 +111,16 @@ Action(SiteID=US|Country=US|Currency=USD|Version=1193|CC=UTF-8),Custom label (SK
       
       const formattedUrls = photoUrls.filter(url => url).join('||');
       const description = listing.description ? listing.description.replace(/\r?\n|\r/g, ' ').replace(/"/g, '""') : '';
-      const line = `Draft,${sku},${categoryID},"${title}",,${price},1,${formattedUrls},3000,"${description}",FixedPrice`;
+      
+      // Get metadata for this group, or fall back to global price/sku
+      const metadata = groupMetadata && groupMetadata[index] 
+        ? groupMetadata[index] 
+        : { price: price, sku: sku };
+      
+      const groupPrice = metadata.price || price;
+      const groupSku = metadata.sku || sku;
+      
+      const line = `Draft,${groupSku},${categoryID},"${title}",,${groupPrice},1,${formattedUrls},3000,"${description}",FixedPrice`;
       
       csvContent += `${line}\n`;
     });
@@ -131,6 +151,65 @@ Action(SiteID=US|Country=US|Currency=USD|Version=1193|CC=UTF-8),Custom label (SK
     
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const csvFileName = `listings_${new Date().toISOString().split('T')[0]}.csv`;
+    
+    if (navigator.msSaveBlob) {
+      navigator.msSaveBlob(blob, csvFileName);
+    } else {
+      const link = document.createElement("a");
+      if (link.download !== undefined) {
+        const url = URL.createObjectURL(blob);
+        link.setAttribute("href", url);
+        link.setAttribute("download", csvFileName);
+        link.style.visibility = "hidden";
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+      }
+    }
+  };
+
+  const downloadSingleListing = (groupIndex, groupPrice, groupSku) => {
+    const listing = responseData[groupIndex];
+    if (!listing || listing.error) {
+      alert("No valid listing to download!");
+      return;
+    }
+    
+    // Get image URLs
+    let photoUrls = [];
+    
+    // Try to get URLs from S3ImageGroups first
+    if (s3ImageGroups && Array.isArray(s3ImageGroups) && groupIndex < s3ImageGroups.length) {
+      if (Array.isArray(s3ImageGroups[groupIndex])) {
+        photoUrls = s3ImageGroups[groupIndex].filter(url => url && typeof url === 'string' && !url.startsWith('data:'));
+      }
+    }
+    
+    // If no S3 URLs found, try imageGroups
+    if (photoUrls.length === 0 && imageGroups && Array.isArray(imageGroups) && groupIndex < imageGroups.length) {
+      if (Array.isArray(imageGroups[groupIndex])) {
+        photoUrls = imageGroups[groupIndex].filter(url => url && typeof url === 'string' && !url.startsWith('data:'));
+      }
+    }
+    
+    const header = `#INFO,Version=0.0.2,Template= eBay-draft-listings-template_US,,,,,,,,
+#INFO Action and Category ID are required fields. 1) Set Action to Draft 2) Please find the category ID for your listings here: https://pages.ebay.com/sellerinformation/news/categorychanges.html,,,,,,,,,,
+"#INFO After you've successfully uploaded your draft from the Seller Hub Reports tab, complete your drafts to active listings here: https://www.ebay.com/sh/lst/drafts",,,,,,,,,,
+#INFO,,,,,,,,,,
+Action(SiteID=US|Country=US|Currency=USD|Version=1193|CC=UTF-8),Custom label (SKU),Category ID,Title,UPC,Price,Quantity,Item photo URL,Condition ID,Description,Format
+`;
+
+    const title = listing.title ? listing.title.replace(/\r?\n|\r/g, ' ').replace(/"/g, '""') : '';
+    const formattedUrls = photoUrls.filter(url => url).join('||');
+    const description = listing.description ? listing.description.replace(/\r?\n|\r/g, ' ').replace(/"/g, '""') : '';
+    
+    const line = `Draft,${groupSku},${categoryID},"${title}",,${groupPrice},1,${formattedUrls},3000,"${description}",FixedPrice`;
+    
+    const csvContent = header + line + '\n';
+    
+    // Create and download the CSV
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const csvFileName = `listing_group_${groupIndex+1}_${new Date().toISOString().split('T')[0]}.csv`;
     
     if (navigator.msSaveBlob) {
       navigator.msSaveBlob(blob, csvFileName);
@@ -211,15 +290,27 @@ Action(SiteID=US|Country=US|Currency=USD|Version=1193|CC=UTF-8),Custom label (SK
       )}
       <div className="groups-container">
         {imageGroups.map((group, gi) => {
+          // Skip empty groups
+          if (group.length === 0) return null;
+          
           // Determine the class based on processing state
           let groupClass = "";
           if (processingGroups[gi]) {
             groupClass = "processing";
-          } else if (processedGroupIndices && processedGroupIndices.includes(gi)) { // Add a check for undefined
+          } else if (processedGroupIndices && processedGroupIndices.includes(gi)) {
             groupClass = "processed";
           } else if (group.length > 0 && !responseData[gi]) {
             groupClass = "new";
           }
+          
+          // Get group metadata
+          const metadata = groupMetadata && groupMetadata[gi] 
+            ? groupMetadata[gi] 
+            : { price: price, sku: sku };
+          
+          // Group-specific price and SKU or fall back to global settings
+          const groupPrice = metadata.price || price;
+          const groupSku = metadata.sku || sku;
           
           return (
             <div
@@ -228,6 +319,15 @@ Action(SiteID=US|Country=US|Currency=USD|Version=1193|CC=UTF-8),Custom label (SK
               onDrop={e => handleGroupDrop(e, gi)}
               onDragOver={e => e.preventDefault()}
             >
+              {/* Add group metadata info */}
+              <div className="group-metadata">
+                <span className="group-number">Group {gi + 1}</span>
+                <div className="metadata-details">
+                  <span className="metadata-item">Price: ${groupPrice}</span>
+                  <span className="metadata-item">SKU: {groupSku}</span>
+                </div>
+              </div>
+              
               <div className="thumbs">
                 {group.map((src, xi) => (
                   <img key={xi} src={src} alt={`group-${gi}-img-${xi}`} draggable onDragStart={e => {
@@ -245,7 +345,14 @@ Action(SiteID=US|Country=US|Currency=USD|Version=1193|CC=UTF-8),Custom label (SK
                 ) : (
                   <div>
                     {renderResponseData(gi) || <p>No data. Click "Generate Listing".</p>}
-                    {responseData[gi] && !responseData[gi].error}
+                    {responseData[gi] && !responseData[gi].error && (
+                      <button 
+                        className="download-single-button"
+                        onClick={() => downloadSingleListing(gi, groupPrice, groupSku)}
+                      >
+                        Download This Listing
+                      </button>
+                    )}
                   </div>
                 )}
               </div>
@@ -285,7 +392,7 @@ function AppContent() {
     // Only process groups that haven't been processed yet
     const newGroupsToProcess = nonEmptyGroups.filter((group, idx) => {
       const originalIndex = imageGroups.findIndex(g => g === group);
-      return !processedGroupIndices || !processedGroupIndices.includes(originalIndex); // Add a check for undefined
+      return !processedGroupIndices || !processedGroupIndices.includes(originalIndex);
     });
     
     // Get indices of new groups to be processed
@@ -296,7 +403,7 @@ function AppContent() {
     let allGroupsToProcess = [...newGroupsToProcess];
     let newGroups = [];
     
-    // Get S3 groups for download (unchanged)
+    // Get S3 groups for download
     const s3GroupsForDownload = state.s3ImageGroups.filter(group => 
       group.length > 0 && group.some(url => url && !url.startsWith('data:'))
     );
@@ -318,12 +425,24 @@ function AppContent() {
       const firstEmptyGroupIndex = updatedGroups.findIndex(g => g.length === 0);
       let insertIndex = firstEmptyGroupIndex !== -1 ? firstEmptyGroupIndex : updatedGroups.length;
       
-      // Add the pool groups to the image groups
+      // Add the pool groups to the image groups and track their metadata
+      const updatedMetadata = [...state.groupMetadata || []];
+      
       poolGroups.forEach(group => {
         updatedGroups.splice(insertIndex, 0, group);
         newPoolGroupIndices.push(insertIndex);
+        
+        // Add metadata for the new group using current price and SKU
+        while (updatedMetadata.length <= insertIndex) {
+          updatedMetadata.push(null);
+        }
+        updatedMetadata[insertIndex] = { price: state.price, sku: state.sku };
+        
         insertIndex++;
       });
+      
+      // Update the metadata in state
+      dispatch({ type: 'UPDATE_GROUP_METADATA', payload: updatedMetadata });
       
       // Ensure there's an empty group at the end
       if (updatedGroups[updatedGroups.length - 1]?.length !== 0) {
@@ -380,12 +499,6 @@ function AppContent() {
 
     const selectedCategoryOptions = getSelectedCategoryOptionsJSON(fieldSelections, price, sku);
 
-    // Create a mapping of group objects to their indices in the image groups array
-    const groupToIndexMap = new Map();
-    imageGroups.forEach((group, index) => {
-      groupToIndexMap.set(group, index);
-    });
-    
     // Track indices of groups being processed
     const processedIndices = [];
     

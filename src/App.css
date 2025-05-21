@@ -532,3 +532,154 @@ select {
   font-weight: bold;
   z-index: 10;
 }
+
+/* Add these styles to your App.css file */
+
+/* Styles for group metadata management in FormSection */
+.group-metadata-form {
+  background: #f8f8f8;
+  padding: 15px;
+  border-radius: 8px;
+  border: 1px solid #eee;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 5px;
+}
+
+.group-metadata-form select {
+  width: 100%;
+  padding: 0.5rem;
+  border-radius: 4px;
+  border: 1px solid #ccc;
+  margin-bottom: 5px;
+  background-color: #3b3b3b;
+  color: white;
+}
+
+.primary.small {
+  padding: 0.5rem 1rem;
+  font-size: 0.9rem;
+  margin-top: 8px;
+  align-self: flex-start;
+}
+
+/* Styles for displaying group metadata in PreviewSection */
+.group-metadata {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 12px;
+  background-color: #f0f0f0;
+  border-bottom: 1px solid #ddd;
+  border-top-left-radius: 8px;
+  border-top-right-radius: 8px;
+}
+
+.group-number {
+  font-weight: bold;
+  color: #333;
+  font-size: 0.9rem;
+}
+
+.metadata-details {
+  display: flex;
+  gap: 15px;
+}
+
+.metadata-item {
+  font-size: 0.85rem;
+  color: #555;
+  background-color: #fff;
+  padding: 3px 8px;
+  border-radius: 4px;
+  border: 1px solid #ddd;
+}
+
+/* Update existing group-card to allow for the metadata header */
+.group-card {
+  background: #fff;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+}
+
+/* Status indicator icons/badges */
+.group-card.processed::before {
+  content: "✓";
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  width: 24px;
+  height: 24px;
+  background-color: #4CAF50;
+  color: white;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: bold;
+  z-index: 10;
+}
+
+.group-card.processing::before {
+  content: "⋯";
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  width: 24px;
+  height: 24px;
+  background-color: #2196F3;
+  color: white;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: bold;
+  z-index: 10;
+}
+
+.group-card.new::before {
+  content: "NEW";
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  padding: 4px 8px;
+  background-color: #FF9800;
+  color: white;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: bold;
+  z-index: 10;
+}
+
+/* Ensure thumbs section appears below metadata */
+.thumbs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  padding: 1rem;
+  border-bottom: 1px solid #eee;
+}
+
+/* Style for the individual download button */
+.download-single-button {
+  background-color: #2196F3;
+  color: white;
+  padding: 8px 12px;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  margin-top: 10px;
+  font-size: 0.9em;
+  transition: background-color 0.3s;
+  display: block;
+  width: fit-content;
+}
+
+.download-single-button:hover {
+  background-color: #0b7dda;
+}

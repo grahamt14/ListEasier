@@ -20,7 +20,6 @@ export const getSelectedCategoryOptionsJSON = (fieldSelections, price, sku) => {
   if (price) output["price"] = price;
   if (sku) output["sku"] = sku;
   return output;
-  
 };
 
 function FormSection({ onGenerateListing }) {
@@ -45,7 +44,8 @@ function FormSection({ onGenerateListing }) {
     rawFiles,
     uploadStatus,
     processedGroupIndices,
-    processingStatus
+    processingStatus,
+    groupMetadata
   } = state;
   
   // Local state for UI
@@ -56,6 +56,22 @@ function FormSection({ onGenerateListing }) {
   const [categories, setCategories] = useState({});
   const [categoriesLoading, setCategoriesLoading] = useState(true);
   const [autoRotateEnabled, setAutoRotateEnabled] = useState(false);
+  
+  // Group metadata form state
+  const [selectedGroupIndex, setSelectedGroupIndex] = useState(0);
+  const [groupPrice, setGroupPrice] = useState('');
+  const [groupSku, setGroupSku] = useState('');
+  
+  // Update fields when selected group changes
+  useEffect(() => {
+    if (groupMetadata && groupMetadata[selectedGroupIndex]) {
+      setGroupPrice(groupMetadata[selectedGroupIndex].price || '');
+      setGroupSku(groupMetadata[selectedGroupIndex].sku || '');
+    } else {
+      setGroupPrice('');
+      setGroupSku('');
+    }
+  }, [selectedGroupIndex, groupMetadata]);
   
   // AWS Configuration
   const REGION = "us-east-2";
@@ -92,10 +108,37 @@ function FormSection({ onGenerateListing }) {
     setSubcategories(categories["--"] || ["--"]);
     setCategoryFields([]);
     setAutoRotateEnabled(false);
+    setSelectedGroupIndex(0);
+    setGroupPrice('');
+    setGroupSku('');
     
     // Reset global state and clear processed groups tracking
     dispatch({ type: 'CLEAR_ALL' });
     dispatch({ type: 'CLEAR_PROCESSED_GROUPS' });
+    
+    // Also clear group metadata
+    dispatch({ type: 'UPDATE_GROUP_METADATA', payload: [] });
+  };
+
+  // Handle update group metadata
+  // Handle update group metadata
+  const handleUpdateGroupMetadata = () => {
+    // Create updated metadata array
+    const updatedMetadata = [...(groupMetadata || [])];
+    
+    // Ensure array is long enough
+    while (updatedMetadata.length <= selectedGroupIndex) {
+      updatedMetadata.push(null);
+    }
+    
+    // Update metadata for the selected group
+    updatedMetadata[selectedGroupIndex] = {
+      price: groupPrice,
+      sku: groupSku
+    };
+    
+    // Update global state
+    dispatch({ type: 'UPDATE_GROUP_METADATA', payload: updatedMetadata });
   };
 
   // Fetch categories on component mount
@@ -582,6 +625,19 @@ function FormSection({ onGenerateListing }) {
 
   const isValidSelection = selectedCategory !== "--" && subCategory !== "--";
 
+  // Check if there are new groups that need processing
+  const hasNewGroupsToProcess = () => {
+    // Check for unprocessed image groups
+    const hasUnprocessedGroups = imageGroups.some((group, idx) => 
+      group.length > 0 && (!processedGroupIndices || !processedGroupIndices.includes(idx))
+    );
+    
+    // Or if there are images in the pool waiting to be processed
+    const hasUnprocessedPoolImages = filesBase64.length > 0 && batchSize > 0;
+    
+    return hasUnprocessedGroups || hasUnprocessedPoolImages;
+  };
+
   // Spinner component
   const Spinner = () => (
     <div className="spinner">
@@ -589,17 +645,60 @@ function FormSection({ onGenerateListing }) {
     </div>
   );
 
-  // Check if there are new groups that need processing
-  const hasNewGroupsToProcess = () => {
-    // Check for unprocessed image groups
-    const hasUnprocessedGroups = imageGroups.some((group, idx) => 
-      group.length > 0 && !processedGroupIndices.includes(idx)
+  // Group selector component for metadata editing
+  const renderGroupSelector = () => {
+    // Only render if there are non-empty groups
+    const nonEmptyGroups = imageGroups.filter(g => g.length > 0);
+    if (nonEmptyGroups.length === 0) {
+      return null;
+    }
+    
+    return (
+      <div className="form-group">
+        <label>Update Group Price/SKU</label>
+        <div className="group-metadata-form">
+          <select 
+            value={selectedGroupIndex}
+            onChange={(e) => setSelectedGroupIndex(Number(e.target.value))}
+          >
+            {imageGroups.map((group, index) => 
+              group.length > 0 ? (
+                <option key={index} value={index}>
+                  Group {index + 1} ({group.length} images)
+                </option>
+              ) : null
+            )}
+          </select>
+          
+          <div className="field-row">
+            <label>Group Price ($)</label>
+            <input 
+              type="text" 
+              value={groupPrice} 
+              onChange={(e) => setGroupPrice(e.target.value)}
+              placeholder="Enter price for this group" 
+            />
+          </div>
+          
+          <div className="field-row">
+            <label>Group SKU</label>
+            <input 
+              type="text" 
+              value={groupSku} 
+              onChange={(e) => setGroupSku(e.target.value)}
+              placeholder="Enter SKU for this group" 
+            />
+          </div>
+          
+          <button 
+            className="primary small"
+            onClick={handleUpdateGroupMetadata}
+          >
+            Update Group Data
+          </button>
+        </div>
+      </div>
     );
-    
-    // Or if there are images in the pool waiting to be processed
-    const hasUnprocessedPoolImages = filesBase64.length > 0 && batchSize > 0;
-    
-    return hasUnprocessedGroups || hasUnprocessedPoolImages;
   };
 
   return (
@@ -631,6 +730,9 @@ function FormSection({ onGenerateListing }) {
         <label>SKU</label>
         <input type="text" value={sku} onChange={handleSkuChange} placeholder="Enter SKU" className="form-control" />
       </div>
+      
+      {/* Add the group selector component */}
+      {renderGroupSelector()}
 
       <div className="form-group">
         <label>Category Fields</label>

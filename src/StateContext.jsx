@@ -49,7 +49,10 @@ const initialState = {
   },
   
   // Track processed groups for incremental processing
-  processedGroupIndices: []
+  processedGroupIndices: [],
+  
+  // Track price and SKU for each group
+  groupMetadata: []
 };
 
 // Create reducer to handle all state updates
@@ -241,6 +244,19 @@ function appReducer(state, action) {
         processedGroupIndices: []
       };
       
+    // New actions for group metadata
+    case 'UPDATE_GROUP_METADATA':
+      return {
+        ...state,
+        groupMetadata: action.payload
+      };
+      
+    case 'ADD_GROUP_METADATA':
+      return {
+        ...state,
+        groupMetadata: [...state.groupMetadata, action.payload]
+      };
+      
     case 'GROUP_SELECTED_IMAGES':
       const groupImgs = state.selectedImages.map(i => state.filesBase64[i]);
       const groupRawFiles = state.selectedImages.map(i => state.rawFiles[i]);
@@ -271,29 +287,61 @@ function appReducer(state, action) {
         }
       });
       
+      // Create metadata for this new group
+      const newGroupMetadata = {
+        price: state.price,
+        sku: state.sku
+      };
+      
       // Update image groups to include the selected images
       let updatedGroups = [...state.imageGroups];
       const firstEmptyIndex = updatedGroups.findIndex(g => g.length === 0);
       
       if (firstEmptyIndex !== -1) {
         updatedGroups[firstEmptyIndex] = [...updatedGroups[firstEmptyIndex], ...groupImgs];
+        
+        // Update group metadata at the same index
+        const updatedMetadata = [...state.groupMetadata];
+        while (updatedMetadata.length <= firstEmptyIndex) {
+          updatedMetadata.push(null);
+        }
+        updatedMetadata[firstEmptyIndex] = newGroupMetadata;
+        
+        if (updatedGroups[updatedGroups.length - 1].length > 0) {
+          updatedGroups.push([]);
+        }
+        
+        return {
+          ...state,
+          filesBase64: remainingBase64,
+          rawFiles: remainingRawFiles,
+          selectedImages: [],
+          imageRotations: finalRotations,
+          imageGroups: updatedGroups,
+          groupMetadata: updatedMetadata,
+          isDirty: true
+        };
       } else {
         updatedGroups.push(groupImgs);
+        
+        // Add metadata for the new group
+        const updatedMetadata = [...state.groupMetadata, newGroupMetadata];
+        
+        if (updatedGroups[updatedGroups.length - 1].length > 0) {
+          updatedGroups.push([]);
+        }
+        
+        return {
+          ...state,
+          filesBase64: remainingBase64,
+          rawFiles: remainingRawFiles,
+          selectedImages: [],
+          imageRotations: finalRotations,
+          imageGroups: updatedGroups,
+          groupMetadata: updatedMetadata,
+          isDirty: true
+        };
       }
-      
-      if (updatedGroups[updatedGroups.length - 1].length > 0) {
-        updatedGroups.push([]);
-      }
-      
-      return {
-        ...state,
-        filesBase64: remainingBase64,
-        rawFiles: remainingRawFiles,
-        selectedImages: [],
-        imageRotations: finalRotations,
-        imageGroups: updatedGroups,
-        isDirty: true
-      };
       
     case 'HANDLE_GROUP_DROP':
       const { dropGroupIdx, imgIdx, from, fromIndex } = action.payload;
@@ -352,7 +400,8 @@ function appReducer(state, action) {
         ...initialState,
         imageGroups: [[]], // Keep an empty group
         s3ImageGroups: [[]],
-        processedGroupIndices: [] // Clear processed groups
+        processedGroupIndices: [], // Clear processed groups
+        groupMetadata: [] // Clear group metadata
       };
 
     case 'ROTATE_IMAGE':

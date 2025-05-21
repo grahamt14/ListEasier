@@ -151,6 +151,7 @@ function FormSection({ onGenerateListing }) {
           TableName: 'ListCategory',
         });
 
+
         const response = await docClient.send(scanCommand);
         const categoryData = {};
         response.Items.forEach(item => {

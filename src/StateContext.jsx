@@ -40,14 +40,16 @@ const initialState = {
     uploadProgress: 0,
     uploadTotal: 0,
     uploadCompleted: 0,
-    uploadStage: ''
+    uploadStage: '',
+    currentFileIndex: 0 // Add this new property
   },
   
  processingStatus: {
     isProcessing: false,
     processTotal: 0,
     processCompleted: 0,
-    processStage: '' // Add this property
+    processStage: '', // Add this property,
+    currentGroup: 0
   },
   
   // Track processed groups for incremental processing
@@ -234,13 +236,14 @@ case 'RESET_STATUS':
       uploadProgress: 0,
       uploadTotal: 0,
       uploadCompleted: 0,
-      uploadStage: ''
+      uploadStage: '',
+      currentFileIndex: 0
     },
     processingStatus: {
       isProcessing: false,
       processTotal: 0,
       processCompleted: 0,
-      processStage: ''
+      currentGroup: 0
     }
   };
       

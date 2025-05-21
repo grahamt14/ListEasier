@@ -569,68 +569,79 @@ const handleGenerateListingWithUpload = async () => {
     }
     
     // Start uploading - update global state
+    const uploadStatusObject = {
+      isUploading: true, 
+      uploadTotal: allRawFiles.length,
+      uploadCompleted: 0,
+      uploadProgress: 0,
+      uploadStage: 'Uploading images to S3...',
+      currentFileIndex: 0 // Add a new property to track current file
+    };
+    
     dispatch({ 
       type: 'SET_UPLOAD_STATUS', 
-      payload: { 
-        isUploading: true, 
-        uploadTotal: allRawFiles.length,
-        uploadCompleted: 0,
-        uploadProgress: 0,
-        uploadStage: 'Uploading images to S3...'
-      } 
+      payload: uploadStatusObject
     });
     
     // Create a batching system for uploads to improve performance
-    const BATCH_SIZE = 5; // Upload 5 files in parallel
+    const BATCH_SIZE = 3; // Reduce to 3 files in parallel for better control
     const s3UrlsList = [];
     
     // Process files in batches
     for (let i = 0; i < allRawFiles.length; i += BATCH_SIZE) {
       const batch = allRawFiles.slice(i, i + BATCH_SIZE);
       
-      // Upload batch in parallel with individual progress updates
-      const batchResults = await Promise.all(
-        batch.map(async (file, batchIndex) => {
-          try {
-            const result = await uploadToS3(file);
-            
-            // Update progress incrementally for each file
-            const currentProcessed = i + batchIndex + 1;
-            const progress = Math.round((currentProcessed / allRawFiles.length) * 100);
-            
-            // Update progress after each individual file instead of after batch
-            dispatch({ 
-              type: 'SET_UPLOAD_STATUS', 
-              payload: { 
-                uploadCompleted: currentProcessed,
-                uploadProgress: progress
-              } 
-            });
-            
-            return result;
-          } catch (error) {
-            console.error(`Error uploading file:`, error);
-            return null; // Return null for failed uploads
+      // Upload batch one at a time to ensure stable progress
+      for (let batchIndex = 0; batchIndex < batch.length; batchIndex++) {
+        const file = batch[batchIndex];
+        const currentFileIndex = i + batchIndex;
+        
+        try {
+          // Update the status before starting this file's upload
+          uploadStatusObject.currentFileIndex = currentFileIndex + 1; // 1-based for display
+          uploadStatusObject.uploadStage = `Uploading file ${currentFileIndex + 1} of ${allRawFiles.length} to S3...`;
+          
+          // Dispatch a single update to avoid race conditions
+          dispatch({ 
+            type: 'SET_UPLOAD_STATUS', 
+            payload: { ...uploadStatusObject } 
+          });
+          
+          // Upload the file
+          const result = await uploadToS3(file);
+          
+          // Add to results if successful
+          if (result) {
+            s3UrlsList.push(result);
           }
-        })
-      );
-      
-      // Filter out failed uploads and add to results
-      const validUrls = batchResults.filter(url => url !== null);
-      s3UrlsList.push(...validUrls);
+          
+          // Update completion status after file is done
+          uploadStatusObject.uploadCompleted = currentFileIndex + 1;
+          uploadStatusObject.uploadProgress = Math.round(((currentFileIndex + 1) / allRawFiles.length) * 100);
+          
+          // Dispatch status update after file is complete
+          dispatch({ 
+            type: 'SET_UPLOAD_STATUS', 
+            payload: { ...uploadStatusObject } 
+          });
+        } catch (error) {
+          console.error(`Error uploading file #${currentFileIndex + 1}:`, error);
+          // Continue with the next file even if one fails
+        }
+      }
     }
     
     // Complete S3 upload process
+    uploadStatusObject.uploadProgress = 100;
+    uploadStatusObject.uploadCompleted = allRawFiles.length;
+    uploadStatusObject.uploadStage = 'Upload complete! Organizing images...';
+    
     dispatch({ 
       type: 'SET_UPLOAD_STATUS', 
-      payload: { 
-        uploadProgress: 100,
-        uploadCompleted: allRawFiles.length,
-        uploadStage: 'Upload complete! Organizing images...'
-      } 
+      payload: { ...uploadStatusObject } 
     });
 
-    // Synchronize S3 URLs with image groups - NEWLY ADDED CODE
+    // Synchronize S3 URLs with image groups
     console.log("Successfully uploaded images to S3:", s3UrlsList.length);
     
     // First, map out which images are already in groups and which are in the pool
@@ -706,10 +717,11 @@ const handleGenerateListingWithUpload = async () => {
     
     // Update S3 image groups in state
     dispatch({ type: 'SET_S3_IMAGE_GROUPS', payload: updatedS3Groups });
-    // END OF NEWLY ADDED CODE
 
     // Log all the S3 URLs we received
     console.log("All uploaded S3 URLs:", s3UrlsList);
+
+    // Rest of the function remains the same...
 
     // Step 1: Understand what we have:
     console.log("Files uploaded:", rawFiles.length);
@@ -1115,9 +1127,14 @@ const handleGenerateListingWithUpload = async () => {
     </span>
   ) : uploadStatus.isUploading ? (
     <span className="loading-button">
-      <Spinner /> {uploadStatus.uploadStage} ({uploadStatus.uploadCompleted}/{uploadStatus.uploadTotal})
+      <Spinner /> 
+      {uploadStatus.uploadStage} 
+      {uploadStatus.currentFileIndex ? 
+        `(${uploadStatus.currentFileIndex}/${uploadStatus.uploadTotal})` :
+        `(${uploadStatus.uploadCompleted}/${uploadStatus.uploadTotal})`
+      }
     </span>
-  ) : hasNewGroupsToProcess() ? 'Generate New Listings' : 'Generate Listing'}
+  ) : hasNewGroupsToProcess() ? 'Generate Listing' : 'Generate Listing'}
 </button>
         {showTooltip && <span className="tooltip">Please select a valid category and subcategory.</span>}
       </div>

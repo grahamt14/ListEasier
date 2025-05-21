@@ -462,6 +462,55 @@ const handleGroupSelected = async () => {
     dispatch({ type: 'GROUP_SELECTED_IMAGES' });
   }
 };
+
+// Function to fetch eBay category ID 
+const fetchEbayCategoryID = async (category, subCategory) => {
+  if (!category || category === "--" || !subCategory || subCategory === "--") {
+    return null;
+  }
+  
+  try {
+    // Query the eBay category mapping from DynamoDB
+    const command = new QueryCommand({
+      TableName: 'EbayCategoryMapping',
+      KeyConditionExpression: 'Category = :cat AND SubCategory = :sub',
+      ExpressionAttributeValues: {
+        ':cat': { S: category },
+        ':sub': { S: subCategory },
+      },
+    });
+
+    const response = await client.send(command);
+    
+    if (response.Items && response.Items.length > 0) {
+      const item = unmarshall(response.Items[0]);
+      return item.EbayCategoryID || null;
+    }
+    
+    // If no direct match, try to get a default category for the main category
+    const fallbackCommand = new QueryCommand({
+      TableName: 'EbayCategoryMapping',
+      KeyConditionExpression: 'Category = :cat',
+      ExpressionAttributeValues: {
+        ':cat': { S: category },
+      },
+      Limit: 1, // Just get the first result
+    });
+    
+    const fallbackResponse = await client.send(fallbackCommand);
+    
+    if (fallbackResponse.Items && fallbackResponse.Items.length > 0) {
+      const fallbackItem = unmarshall(fallbackResponse.Items[0]);
+      return fallbackItem.EbayCategoryID || null;
+    }
+    
+    // Fallback to a generic category if all else fails
+    return "11450"; // This is a generic eBay category ID (you can change this to whatever is appropriate)
+  } catch (error) {
+    console.error('Error in fetchEbayCategoryID:', error);
+    throw error; // Rethrow to be handled by the caller
+  }
+};
   
 const handleGenerateListingWithUpload = async () => {
   try {

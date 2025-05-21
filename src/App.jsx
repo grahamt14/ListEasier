@@ -23,7 +23,8 @@ function PreviewSection() {
     price,
     sku,
     processingStatus,
-    groupMetadata
+    groupMetadata,
+    fieldSelections  // Add this line to get fieldSelections from state
   } = state;
   
   // Use new processing status for consistent display
@@ -655,9 +656,9 @@ const handleGenerateListing = async () => {
     const processedIndices = [];
     
     // Increase batch size but with retry mechanism for failures
-    const PROCESSING_BATCH_SIZE = 80; // Increased to 80 concurrent requests
+    const PROCESSING_BATCH_SIZE = 40; // Increased to 80 concurrent requests
     const MAX_RETRIES = 3; // Allow up to 3 retries for failed requests
-    const RETRY_DELAY_MS = 1000; // Wait 1 second between retries
+    const RETRY_DELAY_MS = 2000; // Wait 1 second between retries
     
     // Function to process a single group with retries
     const processGroupWithRetry = async (group, actualIndex, retryCount = 0) => {

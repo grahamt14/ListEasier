@@ -1,4 +1,4 @@
-// StateContext.jsx
+// StateContext.jsx with Enhanced S3 Image Debugging
 import { createContext, useContext, useReducer, useEffect } from 'react';
 
 // Create context
@@ -110,9 +110,24 @@ function appReducer(state, action) {
       };
       
     case 'SET_IMAGE_GROUPS':
+      console.log('[STATE DEBUG] SET_IMAGE_GROUPS called with:', 
+        action.payload ? `${action.payload.length} groups` : 'null/undefined');
       return { ...state, imageGroups: action.payload, isDirty: true };
       
     case 'SET_S3_IMAGE_GROUPS':
+      console.log('[STATE DEBUG] SET_S3_IMAGE_GROUPS called with:',
+        action.payload ? {
+          length: action.payload.length,
+          groups: action.payload.map(group => group ? 
+            {
+              length: group.length,
+              hasValidUrls: group.some(url => url && typeof url === 'string' && url.includes('amazonaws.com')),
+              firstUrl: group.length > 0 ? (typeof group[0] === 'string' ? 
+                group[0].substring(0, 30) + '...' : 'non-string') : 'empty'
+            } : 'null/undefined'
+          )
+        } : 'null/undefined'
+      );
       return { ...state, s3ImageGroups: action.payload };
       
     case 'SET_BATCH_SIZE':
@@ -233,12 +248,14 @@ function appReducer(state, action) {
       
     // New actions for incremental processing
     case 'MARK_GROUPS_AS_PROCESSED':
+      console.log('[STATE DEBUG] Marking groups as processed:', action.payload);
       return {
         ...state,
         processedGroupIndices: [...(state.processedGroupIndices || []), ...action.payload]
       };
       
     case 'CLEAR_PROCESSED_GROUPS':
+      console.log('[STATE DEBUG] Clearing all processed groups');
       return {
         ...state,
         processedGroupIndices: []
@@ -297,6 +314,12 @@ function appReducer(state, action) {
       let updatedGroups = [...state.imageGroups];
       const firstEmptyIndex = updatedGroups.findIndex(g => g.length === 0);
       
+      console.log('[STATE DEBUG] Creating new group from selected images:', {
+        groupSize: groupImgs.length,
+        firstEmptyIndex,
+        currentGroups: updatedGroups.length
+      });
+      
       if (firstEmptyIndex !== -1) {
         updatedGroups[firstEmptyIndex] = [...updatedGroups[firstEmptyIndex], ...groupImgs];
         
@@ -311,6 +334,27 @@ function appReducer(state, action) {
           updatedGroups.push([]);
         }
         
+        // Create matching S3 group (empty for now, will be filled on upload)
+        const updatedS3Groups = [...state.s3ImageGroups];
+        while (updatedS3Groups.length <= firstEmptyIndex) {
+          updatedS3Groups.push([]);
+        }
+        
+        // The actual S3 URLs will be created during the upload process
+        // For now, we just need a placeholder that matches the structure
+        updatedS3Groups[firstEmptyIndex] = [...(updatedS3Groups[firstEmptyIndex] || []), ...Array(groupImgs.length).fill(null)];
+        
+        // Ensure empty group at the end
+        if (updatedS3Groups.length > 0 && updatedS3Groups[updatedS3Groups.length - 1].length > 0) {
+          updatedS3Groups.push([]);
+        }
+        
+        console.log('[STATE DEBUG] Updated S3 groups structure after adding new group:', {
+          groupIndex: firstEmptyIndex,
+          newLength: updatedS3Groups[firstEmptyIndex].length,
+          totalGroups: updatedS3Groups.length
+        });
+        
         return {
           ...state,
           filesBase64: remainingBase64,
@@ -318,6 +362,7 @@ function appReducer(state, action) {
           selectedImages: [],
           imageRotations: finalRotations,
           imageGroups: updatedGroups,
+          s3ImageGroups: updatedS3Groups,
           groupMetadata: updatedMetadata,
           isDirty: true
         };
@@ -331,6 +376,22 @@ function appReducer(state, action) {
           updatedGroups.push([]);
         }
         
+        // Create matching S3 group (empty for now, will be filled on upload)
+        const updatedS3Groups = [...state.s3ImageGroups];
+        // The S3 URLs will be created during the upload process
+        updatedS3Groups.push(Array(groupImgs.length).fill(null));
+        
+        // Ensure empty group at the end
+        if (updatedS3Groups.length > 0 && updatedS3Groups[updatedS3Groups.length - 1].length > 0) {
+          updatedS3Groups.push([]);
+        }
+        
+        console.log('[STATE DEBUG] Updated S3 groups structure after adding new group at the end:', {
+          newGroupIndex: updatedS3Groups.length - 2,
+          newLength: updatedS3Groups[updatedS3Groups.length - 2].length,
+          totalGroups: updatedS3Groups.length
+        });
+        
         return {
           ...state,
           filesBase64: remainingBase64,
@@ -338,6 +399,7 @@ function appReducer(state, action) {
           selectedImages: [],
           imageRotations: finalRotations,
           imageGroups: updatedGroups,
+          s3ImageGroups: updatedS3Groups,
           groupMetadata: updatedMetadata,
           isDirty: true
         };
@@ -346,6 +408,14 @@ function appReducer(state, action) {
     case 'HANDLE_GROUP_DROP':
       const { dropGroupIdx, imgIdx, from, fromIndex } = action.payload;
       let newGroups = [...state.imageGroups];
+      let newS3Groups = [...state.s3ImageGroups];
+      
+      console.log('[STATE DEBUG] Handling group drop:', {
+        dropGroupIdx,
+        imgIdx,
+        from,
+        fromIndex
+      });
       
       if (from === "pool") {
         const i = parseInt(fromIndex, 10);
@@ -359,15 +429,37 @@ function appReducer(state, action) {
         imgIdx === null ? tgt.push(img) : tgt.splice(imgIdx, 0, img);
         newGroups[dropGroupIdx] = tgt;
         
+        // Update S3 group with a placeholder
+        // The actual S3 URL will be generated on upload
+        // Ensure the s3ImageGroups structure matches imageGroups
+        while (newS3Groups.length <= dropGroupIdx) {
+          newS3Groups.push([]);
+        }
+        
+        const s3Target = [...(newS3Groups[dropGroupIdx] || [])];
+        imgIdx === null ? s3Target.push(null) : s3Target.splice(imgIdx, 0, null);
+        newS3Groups[dropGroupIdx] = s3Target;
+        
         // Ensure empty group at end
         if (newGroups[newGroups.length - 1].length > 0) {
           newGroups.push([]);
         }
         
+        if (newS3Groups.length > 0 && newS3Groups[newS3Groups.length - 1]?.length > 0) {
+          newS3Groups.push([]);
+        }
+        
+        console.log('[STATE DEBUG] Updated groups after drop from pool:', {
+          targetGroup: dropGroupIdx,
+          newImageGroupsLength: newGroups[dropGroupIdx].length,
+          newS3GroupsLength: newS3Groups[dropGroupIdx].length
+        });
+        
         return {
           ...state,
           filesBase64: newFilesBase64,
           imageGroups: newGroups,
+          s3ImageGroups: newS3Groups,
           selectedImages: [],
           isDirty: true
         };
@@ -380,6 +472,35 @@ function appReducer(state, action) {
           const tgt = [...newGroups[dropGroupIdx]];
           imgIdx === null ? tgt.push(img) : tgt.splice(imgIdx, 0, img);
           newGroups[dropGroupIdx] = tgt;
+          
+          // Make the same changes to s3ImageGroups to keep them in sync
+          if (newS3Groups && newS3Groups.length > srcG && newS3Groups[srcG] && 
+              newS3Groups.length > dropGroupIdx) {
+            
+            // Get the corresponding S3 URL or null
+            const s3Url = newS3Groups[srcG] && newS3Groups[srcG].length > srcI ? 
+              newS3Groups[srcG][srcI] : null;
+            
+            // Remove from source group
+            newS3Groups[srcG] = newS3Groups[srcG].filter((_, j) => j !== srcI);
+            
+            // Add to target group
+            const s3Tgt = [...(newS3Groups[dropGroupIdx] || [])];
+            imgIdx === null ? s3Tgt.push(s3Url) : s3Tgt.splice(imgIdx, 0, s3Url);
+            newS3Groups[dropGroupIdx] = s3Tgt;
+            
+            console.log('[STATE DEBUG] Moved S3 URL between groups:', {
+              fromGroup: srcG,
+              toGroup: dropGroupIdx,
+              s3Url: s3Url ? (typeof s3Url === 'string' ? s3Url.substring(0, 30) + '...' : 'non-string') : 'null'
+            });
+          } else {
+            console.warn('[STATE DEBUG] Unable to update S3 groups during drag-and-drop, structure mismatch:', {
+              s3GroupsLength: newS3Groups ? newS3Groups.length : 'null/undefined',
+              srcG,
+              dropGroupIdx
+            });
+          }
         }
         
         // Ensure empty group at end
@@ -387,15 +508,22 @@ function appReducer(state, action) {
           newGroups.push([]);
         }
         
+        if (newS3Groups && newS3Groups.length > 0 && 
+            newS3Groups[newS3Groups.length - 1]?.length > 0) {
+          newS3Groups.push([]);
+        }
+        
         return {
           ...state,
           imageGroups: newGroups,
+          s3ImageGroups: newS3Groups,
           selectedImages: [],
           isDirty: true
         };
       }
       
     case 'CLEAR_ALL':
+      console.log('[STATE DEBUG] Clearing all state data');
       return {
         ...initialState,
         imageGroups: [[]], // Keep an empty group
@@ -442,10 +570,55 @@ function appReducer(state, action) {
 export function AppStateProvider({ children }) {
   const [state, dispatch] = useReducer(appReducer, initialState);
   
-  // For debugging
+  // Enhanced debug monitoring
   useEffect(() => {
     if (process.env.NODE_ENV === 'development') {
       console.log('AppState updated:', state);
+      
+      // Add specific monitoring for s3ImageGroups changes
+      console.log('[STATE MONITOR] s3ImageGroups state:', 
+        state.s3ImageGroups ? {
+          length: state.s3ImageGroups.length,
+          nonEmptyGroups: state.s3ImageGroups.filter(g => g && g.length > 0).length,
+          totalUrls: state.s3ImageGroups.reduce((total, group) => 
+            total + (group ? group.length : 0), 0),
+          validUrls: state.s3ImageGroups.reduce((total, group) => 
+            total + (group ? group.filter(url => url && typeof url === 'string' && 
+              (url.includes('amazonaws.com') || url.startsWith('http'))).length : 0), 0)
+        } : 'null/undefined'
+      );
+      
+      // Check for inconsistencies between imageGroups and s3ImageGroups
+      if (state.imageGroups && state.s3ImageGroups) {
+        const imgGroupsLength = state.imageGroups.length;
+        const s3GroupsLength = state.s3ImageGroups.length;
+        
+        if (imgGroupsLength !== s3GroupsLength) {
+          console.warn('[STATE MONITOR] MISMATCH: imageGroups and s3ImageGroups have different lengths:', {
+            imageGroups: imgGroupsLength,
+            s3ImageGroups: s3GroupsLength
+          });
+        }
+        
+        // Check if the group sizes match
+        let mismatchFound = false;
+        state.imageGroups.forEach((group, idx) => {
+          if (idx < state.s3ImageGroups.length) {
+            const s3Group = state.s3ImageGroups[idx];
+            if (group && s3Group && group.length !== s3Group.length) {
+              mismatchFound = true;
+              console.warn(`[STATE MONITOR] MISMATCH: Group ${idx+1} has different sizes:`, {
+                imageGroup: group.length,
+                s3Group: s3Group.length
+              });
+            }
+          }
+        });
+        
+        if (!mismatchFound) {
+          console.log('[STATE MONITOR] VALIDATION PASSED: imageGroups and s3ImageGroups structures match');
+        }
+      }
     }
   }, [state]);
   

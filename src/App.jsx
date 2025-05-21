@@ -60,7 +60,7 @@ function PreviewSection() {
     });
   };
 
-  const generateCSVContent = () => {
+ const generateCSVContent = () => {
   // Debug output to help diagnose data structure issues
   console.log("Generating CSV with data:", {
     responseData: responseData,
@@ -95,11 +95,12 @@ function PreviewSection() {
   const allCategoryFieldLabels = new Set();
   validIndices.forEach(({ response }) => {
     if (response.storedFieldSelections) {
-      Object.entries(response.storedFieldSelections)
-        .filter(([_, value]) => value && value !== "" && value !== "-- Select --")
-        .forEach(([label]) => {
+      Object.keys(response.storedFieldSelections).forEach(label => {
+        // Include all field labels, regardless of their values
+        if (label !== 'price' && label !== 'sku') {
           allCategoryFieldLabels.add(label);
-        });
+        }
+      });
     }
   });
   
@@ -178,7 +179,8 @@ Action(SiteID=US|Country=US|Currency=USD|Version=1193|CC=UTF-8),Custom label (SK
       const listingFieldSelections = response.storedFieldSelections || {};
       
       allCategoryFieldLabels.forEach(field => {
-        const fieldValue = listingFieldSelections[field] || '';
+        // Include all fields, even those with default values
+        const fieldValue = listingFieldSelections[field] || "-- Select --";
         line += `,"${fieldValue.replace(/"/g, '""')}"`;
       });
     }
@@ -260,10 +262,10 @@ Action(SiteID=US|Country=US|Currency=USD|Version=1193|CC=UTF-8),Custom label (SK
     );
   }
   
-  // Add category fields to header if any are selected
-  const selectedFields = Object.entries(listingFieldSelections)
-    .filter(([_, value]) => value && value !== "" && value !== "-- Select --")
-    .map(([label]) => label);
+  // Get all field labels from stored selections (including those with default values)
+  const selectedFields = Object.keys(listingFieldSelections).filter(label => 
+    label !== 'price' && label !== 'sku'
+  );
   
   let header = `#INFO,Version=0.0.2,Template= eBay-draft-listings-template_US,,,,,,,,
 #INFO Action and Category ID are required fields. 1) Set Action to Draft 2) Please find the category ID for your listings here: https://pages.ebay.com/sellerinformation/news/categorychanges.html,,,,,,,,,,
@@ -291,10 +293,10 @@ Action(SiteID=US|Country=US|Currency=USD|Version=1193|CC=UTF-8),Custom label (SK
   // Start with standard fields
   let line = `Draft,${finalGroupSku},${categoryID},"${title}",,${finalGroupPrice},1,${formattedUrls},3000,"${description}",FixedPrice`;
   
-  // Add category fields to the line
+  // Add category fields to the line (including those with default values)
   if (selectedFields.length > 0) {
     selectedFields.forEach(field => {
-      const fieldValue = listingFieldSelections[field] || '';
+      const fieldValue = listingFieldSelections[field] || "-- Select --";
       line += `,"${fieldValue.replace(/"/g, '""')}"`;
     });
   }
@@ -320,7 +322,6 @@ Action(SiteID=US|Country=US|Currency=USD|Version=1193|CC=UTF-8),Custom label (SK
     }
   }
 };
-
   const renderResponseData = (index) => {
   const response = responseData[index];
   if (!response) return null;
@@ -396,14 +397,15 @@ Action(SiteID=US|Country=US|Currency=USD|Version=1193|CC=UTF-8),Custom label (SK
             <span style={{ color: '#000' }}>{groupSku}</span>
           </div>
           
-          {/* Add all selected category fields from the stored selections */}
+          {/* Add ALL category fields from the stored selections, including those with default values */}
           {Object.entries(listingFieldSelections).map(([label, value]) => {
-            // Only display fields that have a value selected
-            if (value && value !== "" && value !== "-- Select --") {
+            // Display ALL fields, including those with default values
+            if (label !== 'price' && label !== 'sku') {
+              const displayValue = value || "-- Select --";
               return (
                 <div key={label} className="response-field listing-metadata">
                   <strong style={{ color: '#000' }}>{label}:</strong>
-                  <span style={{ color: '#000' }}>{value}</span>
+                  <span style={{ color: '#000' }}>{displayValue}</span>
                 </div>
               );
             }
@@ -602,11 +604,16 @@ const handleGenerateListing = async () => {
         updatedGroups.splice(insertIndex, 0, group);
         newPoolGroupIndices.push(insertIndex);
         
-        // Add metadata for the new group using current price and SKU
+        // Add metadata for the new group using current price, SKU, and ALL field selections
         while (updatedMetadata.length <= insertIndex) {
           updatedMetadata.push(null);
         }
-        updatedMetadata[insertIndex] = { price: state.price, sku: state.sku };
+        updatedMetadata[insertIndex] = { 
+          price: state.price, 
+          sku: state.sku,
+          // Store ALL field selections, including those with default values
+          fieldSelections: { ...fieldSelections }
+        };
         
         insertIndex++;
       });
@@ -673,8 +680,9 @@ const handleGenerateListing = async () => {
     dispatch({ type: 'SET_IS_DIRTY', payload: false });
     dispatch({ type: 'SET_PROCESSING_GROUPS', payload: updatedProcessingGroups });
 
-    // Prepare options for API call
-    const selectedCategoryOptions = getSelectedCategoryOptionsJSON(fieldSelections, price, sku);   // Save current field selections to use in listings
+    // Prepare options for API call - include ALL field selections
+    const selectedCategoryOptions = getSelectedCategoryOptionsJSON(fieldSelections, price, sku);   
+    // Save current field selections to use in listings (including all fields with default values)
     const currentFieldSelections = {...fieldSelections};
 
     // Track indices of groups being processed
@@ -789,14 +797,14 @@ const handleGenerateListing = async () => {
       
       // Update UI with the results so far
       batchResults.forEach(({ index, result }) => {
-        // Update response data with field selections
+        // Update response data with ALL field selections (including default values)
         dispatch({
           type: 'UPDATE_RESPONSE_DATA',
           payload: { 
             index, 
             value: {
               ...result,
-              // Store the field selections with the response
+              // Store ALL the field selections with the response (including defaults)
               storedFieldSelections: currentFieldSelections
             }
           }

@@ -14,8 +14,10 @@ import './OptimizedUploaderStyles.css';
 
 export const getSelectedCategoryOptionsJSON = (fieldSelections, price, sku) => {
   const output = {};
+  // Include ALL field selections, even those with default values
   Object.entries(fieldSelections).forEach(([label, value]) => {
-    if (value && value !== "-- Select --") output[label] = value;
+    // Store all fields, including those with default values
+    output[label] = value || "-- Select --";
   });
   if (price) output["price"] = price;
   if (sku) output["sku"] = sku;
@@ -846,11 +848,16 @@ const handleGenerateListingWithUpload = async () => {
       updatedMetadata.push(null);
     }
     
-    // Add metadata for new groups
+    // Add metadata for new groups (including all field selections with default values)
     newImageGroups.forEach((group, index) => {
       if (group && group.length > 0 && (!updatedMetadata[index] || updatedMetadata[index] === null)) {
-        // Create new metadata with default price/sku for new groups
-        updatedMetadata[index] = { price: price || '', sku: sku || '' };
+        // Create new metadata with default price/sku and ALL field selections for new groups
+        updatedMetadata[index] = { 
+          price: price || '', 
+          sku: sku || '',
+          // Include ALL current field selections, even those with default values
+          fieldSelections: { ...fieldSelections }
+        };
       }
     });
 

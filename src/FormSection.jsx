@@ -357,6 +357,7 @@ function FormSection({ onGenerateListing }) {
   };
   
  // Handle generate listing with upload
+// Handle generate listing with upload
 const handleGenerateListingWithUpload = async () => {
   try {
     // Reset status indicators
@@ -473,16 +474,7 @@ const handleGenerateListingWithUpload = async () => {
     // Log all the S3 URLs we received
     console.log("All uploaded S3 URLs:", s3UrlsList);
 
-    // THE KEY ISSUE: We need to ensure the S3 URLs maintain proper correspondence with the images
-    // -----------------------------------------------------------------------------------------
-
-    // APPROACH: Reset our thinking and create a completely new approach that preserves order
-
-    // Step 1: First, let's understand what we have:
-    // - rawFiles: Original files that were uploaded
-    // - filesBase64: Base64 versions of those files
-    // - s3UrlsList: S3 URLs that were generated from those files in the SAME ORDER
-    // - imageGroups: How the user has organized their images
+ 
 
     console.log("Files uploaded:", rawFiles.length);
     console.log("Base64 files:", filesBase64.length);

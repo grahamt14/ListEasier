@@ -158,6 +158,31 @@ Action(SiteID=US|Country=US|Currency=USD|Version=1193|CC=UTF-8),Custom label (SK
   return csvContent;
 };
 
+  
+
+  const downloadListingsAsCsv = () => {
+    const csvContent = generateCSVContent();
+    if (!csvContent) return;
+    
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const csvFileName = `listings_${new Date().toISOString().split('T')[0]}.csv`;
+    
+    if (navigator.msSaveBlob) {
+      navigator.msSaveBlob(blob, csvFileName);
+    } else {
+      const link = document.createElement("a");
+      if (link.download !== undefined) {
+        const url = URL.createObjectURL(blob);
+        link.setAttribute("href", url);
+        link.setAttribute("download", csvFileName);
+        link.style.visibility = "hidden";
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+      }
+    }
+  };
+
   const downloadSingleListing = (groupIndex, groupPrice, groupSku) => {
   const listing = responseData[groupIndex];
   if (!listing || listing.error) {
@@ -243,88 +268,6 @@ Action(SiteID=US|Country=US|Currency=USD|Version=1193|CC=UTF-8),Custom label (SK
     }
   }
 };
-
-  const downloadListingsAsCsv = () => {
-    const csvContent = generateCSVContent();
-    if (!csvContent) return;
-    
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const csvFileName = `listings_${new Date().toISOString().split('T')[0]}.csv`;
-    
-    if (navigator.msSaveBlob) {
-      navigator.msSaveBlob(blob, csvFileName);
-    } else {
-      const link = document.createElement("a");
-      if (link.download !== undefined) {
-        const url = URL.createObjectURL(blob);
-        link.setAttribute("href", url);
-        link.setAttribute("download", csvFileName);
-        link.style.visibility = "hidden";
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-      }
-    }
-  };
-
-  const downloadSingleListing = (groupIndex, groupPrice, groupSku) => {
-    const listing = responseData[groupIndex];
-    if (!listing || listing.error) {
-      alert("No valid listing to download!");
-      return;
-    }
-    
-    // Get image URLs
-    let photoUrls = [];
-    
-    // Try to get URLs from S3ImageGroups first
-    if (s3ImageGroups && Array.isArray(s3ImageGroups) && groupIndex < s3ImageGroups.length) {
-      if (Array.isArray(s3ImageGroups[groupIndex])) {
-        photoUrls = s3ImageGroups[groupIndex].filter(url => url && typeof url === 'string' && !url.startsWith('data:'));
-      }
-    }
-    
-    // If no S3 URLs found, try imageGroups
-    if (photoUrls.length === 0 && imageGroups && Array.isArray(imageGroups) && groupIndex < imageGroups.length) {
-      if (Array.isArray(imageGroups[groupIndex])) {
-        photoUrls = imageGroups[groupIndex].filter(url => url && typeof url === 'string' && !url.startsWith('data:'));
-      }
-    }
-    
-    const header = `#INFO,Version=0.0.2,Template= eBay-draft-listings-template_US,,,,,,,,
-#INFO Action and Category ID are required fields. 1) Set Action to Draft 2) Please find the category ID for your listings here: https://pages.ebay.com/sellerinformation/news/categorychanges.html,,,,,,,,,,
-"#INFO After you've successfully uploaded your draft from the Seller Hub Reports tab, complete your drafts to active listings here: https://www.ebay.com/sh/lst/drafts",,,,,,,,,,
-#INFO,,,,,,,,,,
-Action(SiteID=US|Country=US|Currency=USD|Version=1193|CC=UTF-8),Custom label (SKU),Category ID,Title,UPC,Price,Quantity,Item photo URL,Condition ID,Description,Format
-`;
-
-    const title = listing.title ? listing.title.replace(/\r?\n|\r/g, ' ').replace(/"/g, '""') : '';
-    const formattedUrls = photoUrls.filter(url => url).join('||');
-    const description = listing.description ? listing.description.replace(/\r?\n|\r/g, ' ').replace(/"/g, '""') : '';
-    
-    const line = `Draft,${groupSku},${categoryID},"${title}",,${groupPrice},1,${formattedUrls},3000,"${description}",FixedPrice`;
-    
-    const csvContent = header + line + '\n';
-    
-    // Create and download the CSV
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const csvFileName = `listing_group_${groupIndex+1}_${new Date().toISOString().split('T')[0]}.csv`;
-    
-    if (navigator.msSaveBlob) {
-      navigator.msSaveBlob(blob, csvFileName);
-    } else {
-      const link = document.createElement("a");
-      if (link.download !== undefined) {
-        const url = URL.createObjectURL(blob);
-        link.setAttribute("href", url);
-        link.setAttribute("download", csvFileName);
-        link.style.visibility = "hidden";
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-      }
-    }
-  };
 
   const renderResponseData = (index) => {
     const response = responseData[index];

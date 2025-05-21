@@ -356,7 +356,6 @@ function FormSection({ onGenerateListing }) {
     }
   };
   
- // Handle generate listing with upload
 // Handle generate listing with upload
 const handleGenerateListingWithUpload = async () => {
   try {
@@ -474,7 +473,16 @@ const handleGenerateListingWithUpload = async () => {
     // Log all the S3 URLs we received
     console.log("All uploaded S3 URLs:", s3UrlsList);
 
- 
+    // THE KEY ISSUE: We need to ensure the S3 URLs maintain proper correspondence with the images
+    // -----------------------------------------------------------------------------------------
+
+    // APPROACH: Reset our thinking and create a completely new approach that preserves order
+
+    // Step 1: First, let's understand what we have:
+    // - rawFiles: Original files that were uploaded
+    // - filesBase64: Base64 versions of those files
+    // - s3UrlsList: S3 URLs that were generated from those files in the SAME ORDER
+    // - imageGroups: How the user has organized their images
 
     console.log("Files uploaded:", rawFiles.length);
     console.log("Base64 files:", filesBase64.length);
@@ -580,25 +588,44 @@ const handleGenerateListingWithUpload = async () => {
     // Update metadata state
     dispatch({ type: 'UPDATE_GROUP_METADATA', payload: updatedMetadata });
 
-    // Fetch the eBay category ID
-    const ebayCategoryID = await fetchEbayCategoryID(selectedCategory, subCategory);
-    dispatch({ type: 'SET_CATEGORY_ID', payload: ebayCategoryID });
-    
-    // Clear raw files state
-    dispatch({ type: 'SET_RAW_FILES', payload: [] });
-    dispatch({ type: 'SET_IMAGE_ROTATIONS', payload: {} });
-    
-    // Update status before calling the listing generator
-    dispatch({ 
-      type: 'SET_UPLOAD_STATUS', 
-      payload: { 
-        uploadStage: 'Preparing to generate listings...',
-        isUploading: false
-      } 
-    });
-    
-    // Now call handleGenerateListing
-    await onGenerateListing();
+    // Fetch the eBay category ID - using Promise instead of await
+    fetchEbayCategoryID(selectedCategory, subCategory)
+      .then(ebayCategoryID => {
+        dispatch({ type: 'SET_CATEGORY_ID', payload: ebayCategoryID });
+        
+        // Clear raw files state
+        dispatch({ type: 'SET_RAW_FILES', payload: [] });
+        dispatch({ type: 'SET_IMAGE_ROTATIONS', payload: {} });
+        
+        // Update status before calling the listing generator
+        dispatch({ 
+          type: 'SET_UPLOAD_STATUS', 
+          payload: { 
+            uploadStage: 'Preparing to generate listings...',
+            isUploading: false
+          } 
+        });
+        
+        // Now call handleGenerateListing
+        return onGenerateListing();
+      })
+      .catch(error => {
+        console.error('Error fetching eBay category ID:', error);
+        
+        // Still continue with the rest of the process
+        dispatch({ type: 'SET_RAW_FILES', payload: [] });
+        dispatch({ type: 'SET_IMAGE_ROTATIONS', payload: {} });
+        
+        dispatch({ 
+          type: 'SET_UPLOAD_STATUS', 
+          payload: { 
+            uploadStage: 'Preparing to generate listings...',
+            isUploading: false
+          } 
+        });
+        
+        return onGenerateListing();
+      });
     
   } catch (error) {
     console.error('Error during upload process:', error);

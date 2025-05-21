@@ -547,84 +547,115 @@ const handleGenerateListing = async () => {
     // Track indices of groups being processed
     const processedIndices = [];
     
-    // Process each group with the API using sequential processing for better tracking
-    for (let arrayIndex = 0; arrayIndex < allGroupsToProcess.length; arrayIndex++) {
-      const group = allGroupsToProcess[arrayIndex];
+    // Process groups in parallel batches
+    const PROCESSING_BATCH_SIZE = 3; // Process 3 groups at a time
+    const allProcessingPromises = [];
+    const completedGroups = [];
+    
+    for (let startIdx = 0; startIdx < allGroupsToProcess.length; startIdx += PROCESSING_BATCH_SIZE) {
+      const currentBatch = allGroupsToProcess.slice(startIdx, startIdx + PROCESSING_BATCH_SIZE);
+      const batchIndices = [];
       
-      // Get the actual index in the imageGroups array
-      let actualIndex;
-      if (arrayIndex < newGroupIndices.length) {
-        // This is a group from imageGroups
-        actualIndex = newGroupIndices[arrayIndex];
-      } else {
-        // This is a pool group
-        const poolArrayIndex = arrayIndex - newGroupIndices.length;
-        actualIndex = newPoolGroupIndices[poolArrayIndex];
+      // Map current batch items to their actual indices
+      for (let i = 0; i < currentBatch.length; i++) {
+        const batchItemIndex = startIdx + i;
+        let actualIndex;
+        
+        if (batchItemIndex < newGroupIndices.length) {
+          // This is a group from imageGroups
+          actualIndex = newGroupIndices[batchItemIndex];
+        } else {
+          // This is a pool group
+          const poolArrayIndex = batchItemIndex - newGroupIndices.length;
+          actualIndex = newPoolGroupIndices[poolArrayIndex];
+        }
+        
+        batchIndices.push(actualIndex);
+        processedIndices.push(actualIndex);
       }
       
-      processedIndices.push(actualIndex);
+      // Process the current batch in parallel
+      const batchPromises = currentBatch.map((group, batchIdx) => {
+        const actualIndex = batchIndices[batchIdx];
+        
+        return (async () => {
+          try {
+            // Make API call to generate listing
+            const response = await fetch(
+              "https://7f26uyyjs5.execute-api.us-east-2.amazonaws.com/ListEasily/ListEasilyAPI",
+              {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  category,
+                  subCategory,
+                  Base64Key: [group],
+                  SelectedCategoryOptions: selectedCategoryOptions
+                })
+              }
+            );
+            
+            const data = await response.json();
+            let parsed = data.body;
+            if (typeof parsed === "string") parsed = JSON.parse(parsed);
+            
+            return { 
+              index: actualIndex, 
+              result: Array.isArray(parsed) ? parsed[0] : parsed 
+            };
+          } catch (err) {
+            return { 
+              index: actualIndex, 
+              error: true, 
+              result: { 
+                error: "Failed to fetch listing data", 
+                raw_content: err.message 
+              } 
+            };
+          }
+        })();
+      });
       
-      try {
-        // Update processing status with the current group info
-        processingStatus.processCompleted = arrayIndex; // This matches the 0-based index
-        processingStatus.currentGroup = arrayIndex + 1; // 1-based index for display
+      // Add the batch promises to the overall list
+      allProcessingPromises.push(...batchPromises);
+      
+      // Wait for all promises in this batch to complete
+      const batchResults = await Promise.all(batchPromises);
+      
+      // Update state with batch results
+      batchResults.forEach(({ index, result, error }) => {
+        completedGroups.push(index);
         
-        // Dispatch a unified status update
-        dispatch({ 
-          type: 'SET_PROCESSING_STATUS', 
-          payload: processingStatus
-        });
-        
-        // Also update legacy progress indicator
-        dispatch({ type: 'SET_COMPLETED_CHUNKS', payload: arrayIndex });
-        
-        // Make API call to generate listing
-        const response = await fetch(
-          "https://7f26uyyjs5.execute-api.us-east-2.amazonaws.com/ListEasily/ListEasilyAPI",
-          {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              category,
-              subCategory,
-              Base64Key: [group],
-              SelectedCategoryOptions: selectedCategoryOptions
-            })
-          }
-        );
-        
-        const data = await response.json();
-        let parsed = data.body;
-        if (typeof parsed === "string") parsed = JSON.parse(parsed);
-
-        // Update response data at the correct index
+        // Update response data
         dispatch({
           type: 'UPDATE_RESPONSE_DATA',
-          payload: {
-            index: actualIndex,
-            value: Array.isArray(parsed) ? parsed[0] : parsed
-          }
+          payload: { index, value: result }
         });
-      } catch (err) {
-        // Handle error
-        dispatch({
-          type: 'UPDATE_RESPONSE_DATA',
-          payload: {
-            index: actualIndex,
-            value: { error: "Failed to fetch listing data", raw_content: err.message }
-          }
-        });
-      } finally {
-        // Update processing group status to show this group is done
+        
+        // Update processing status
         dispatch({
           type: 'UPDATE_PROCESSING_GROUP',
-          payload: {
-            index: actualIndex,
-            value: false
-          }
+          payload: { index, value: false }
         });
-      }
+      });
+      
+      // Update processing status
+      processingStatus.processCompleted = completedGroups.length;
+      processingStatus.currentGroup = Math.min(startIdx + PROCESSING_BATCH_SIZE, totalGroups);
+      
+      dispatch({ 
+        type: 'SET_PROCESSING_STATUS', 
+        payload: {...processingStatus}
+      });
+      
+      dispatch({ 
+        type: 'SET_COMPLETED_CHUNKS', 
+        payload: completedGroups.length 
+      });
     }
+    
+    // Wait for any remaining promises to complete
+    await Promise.all(allProcessingPromises);
     
     // All processing complete - update the final status
     processingStatus.processCompleted = totalGroups;

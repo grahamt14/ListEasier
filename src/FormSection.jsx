@@ -353,28 +353,28 @@ const uploadGroupedImagesToS3 = async (selectedIndices) => {
       } 
     });
     
-    // Upload files in parallel
-    const s3UrlsPromises = selectedRawFiles.map(async (file, index) => {
-      try {
-        const result = await uploadToS3(file);
-        
-        // Update progress for each file
-        dispatch({ 
-          type: 'SET_UPLOAD_STATUS', 
-          payload: { 
-            uploadCompleted: index + 1,
-            uploadProgress: Math.round(((index + 1) / selectedRawFiles.length) * 100)
-          } 
-        });
-        
-        return result;
-      } catch (error) {
-        console.error(`Error uploading file:`, error);
-        return null;
-      }
-    });
+    // Use Promise.all to upload files in parallel but in smaller batches to maintain control
+    // This balances performance with UI responsiveness
+    const UPLOAD_BATCH_SIZE = 5; // Adjust based on your network conditions
+    const s3Urls = [];
     
-    const s3Urls = await Promise.all(s3UrlsPromises);
+    for (let i = 0; i < selectedRawFiles.length; i += UPLOAD_BATCH_SIZE) {
+      const batch = selectedRawFiles.slice(i, i + UPLOAD_BATCH_SIZE);
+      
+      // Upload current batch in parallel
+      const batchResults = await Promise.all(batch.map(file => uploadToS3(file)));
+      s3Urls.push(...batchResults.filter(url => url !== null));
+      
+      // Update progress
+      const completedCount = Math.min(i + UPLOAD_BATCH_SIZE, selectedRawFiles.length);
+      dispatch({ 
+        type: 'SET_UPLOAD_STATUS', 
+        payload: { 
+          uploadCompleted: completedCount,
+          uploadProgress: Math.round((completedCount / selectedRawFiles.length) * 100)
+        } 
+      });
+    }
     
     // Upload complete
     dispatch({ 
@@ -392,7 +392,7 @@ const uploadGroupedImagesToS3 = async (selectedIndices) => {
       dispatch({ type: 'RESET_STATUS' });
     }, 1000);
     
-    return s3Urls.filter(url => url !== null);
+    return s3Urls;
   } catch (error) {
     console.error('Error uploading selected images:', error);
     
@@ -575,7 +575,7 @@ const handleGenerateListingWithUpload = async () => {
       uploadCompleted: 0,
       uploadProgress: 0,
       uploadStage: 'Uploading images to S3...',
-      currentFileIndex: 0 // Add a new property to track current file
+      currentFileIndex: 0
     };
     
     dispatch({ 
@@ -583,52 +583,42 @@ const handleGenerateListingWithUpload = async () => {
       payload: uploadStatusObject
     });
     
-    // Create a batching system for uploads to improve performance
-    const BATCH_SIZE = 3; // Reduce to 3 files in parallel for better control
+    // Create a batching system for parallel uploads
+    const BATCH_SIZE = 5; // Process 5 files at a time
     const s3UrlsList = [];
     
-    // Process files in batches
+    // Process files in parallel batches
     for (let i = 0; i < allRawFiles.length; i += BATCH_SIZE) {
       const batch = allRawFiles.slice(i, i + BATCH_SIZE);
       
-      // Upload batch one at a time to ensure stable progress
-      for (let batchIndex = 0; batchIndex < batch.length; batchIndex++) {
-        const file = batch[batchIndex];
-        const currentFileIndex = i + batchIndex;
-        
-        try {
-          // Update the status before starting this file's upload
-          uploadStatusObject.currentFileIndex = currentFileIndex + 1; // 1-based for display
-          uploadStatusObject.uploadStage = `Uploading file ${currentFileIndex + 1} of ${allRawFiles.length} to S3...`;
-          
-          // Dispatch a single update to avoid race conditions
-          dispatch({ 
-            type: 'SET_UPLOAD_STATUS', 
-            payload: { ...uploadStatusObject } 
-          });
-          
-          // Upload the file
-          const result = await uploadToS3(file);
-          
-          // Add to results if successful
-          if (result) {
-            s3UrlsList.push(result);
-          }
-          
-          // Update completion status after file is done
-          uploadStatusObject.uploadCompleted = currentFileIndex + 1;
-          uploadStatusObject.uploadProgress = Math.round(((currentFileIndex + 1) / allRawFiles.length) * 100);
-          
-          // Dispatch status update after file is complete
-          dispatch({ 
-            type: 'SET_UPLOAD_STATUS', 
-            payload: { ...uploadStatusObject } 
-          });
-        } catch (error) {
-          console.error(`Error uploading file #${currentFileIndex + 1}:`, error);
-          // Continue with the next file even if one fails
+      // Upload batch in parallel
+      const batchPromises = batch.map((file, batchIndex) => {
+        const fileIndex = i + batchIndex;
+        return uploadToS3(file).then(url => ({ url, index: fileIndex }));
+      });
+      
+      // Wait for all uploads in this batch to complete
+      const batchResults = await Promise.all(
+        batchPromises.map(p => p.catch(error => ({ url: null, error })))
+      );
+      
+      // Add successful URLs to the result list
+      batchResults.forEach(result => {
+        if (result.url) {
+          s3UrlsList.push(result.url);
         }
-      }
+      });
+      
+      // Update progress
+      const completedCount = Math.min(i + BATCH_SIZE, allRawFiles.length);
+      uploadStatusObject.uploadCompleted = completedCount;
+      uploadStatusObject.uploadProgress = Math.round((completedCount / allRawFiles.length) * 100);
+      uploadStatusObject.currentFileIndex = completedCount;
+      
+      dispatch({ 
+        type: 'SET_UPLOAD_STATUS', 
+        payload: { ...uploadStatusObject } 
+      });
     }
     
     // Complete S3 upload process
@@ -720,8 +710,6 @@ const handleGenerateListingWithUpload = async () => {
 
     // Log all the S3 URLs we received
     console.log("All uploaded S3 URLs:", s3UrlsList);
-
-    // Rest of the function remains the same...
 
     // Step 1: Understand what we have:
     console.log("Files uploaded:", rawFiles.length);
@@ -875,42 +863,35 @@ const handleGenerateListingWithUpload = async () => {
   }
 };
   
-  // Upload file to S3
-  const uploadToS3 = async (file) => {
-    return new Promise((resolve, reject) => {
+const uploadToS3 = async (file) => {
+  try {
+    const arrayBuffer = await new Promise((resolve, reject) => {
       const reader = new FileReader();
-
-      reader.onload = async () => {
-        try {
-          const fileName = `${Date.now()}_${file.name}`;
-          const arrayBuffer = reader.result;
-
-          const uploadParams = {
-            Bucket: BUCKET_NAME,
-            Key: fileName,
-            Body: new Uint8Array(arrayBuffer),
-            ContentType: file.type,
-            ACL: "public-read",
-          };
-
-          try {
-            const command = new PutObjectCommand(uploadParams);
-            await s3Client.send(command);
-
-            const s3Url = `https://${BUCKET_NAME}.s3.${REGION}.amazonaws.com/${fileName}`;
-            resolve(s3Url);
-          } catch (uploadError) {
-            console.error("Upload error:", uploadError);
-            reject(uploadError);
-          }
-        } catch (err) {
-          reject("Error uploading: " + err.message);
-        }
-      };
-      reader.onerror = (err) => reject(err);
+      reader.onload = () => resolve(reader.result);
+      reader.onerror = reject;
       reader.readAsArrayBuffer(file);
     });
-  };
+    
+    const fileName = `${Date.now()}_${file.name}`;
+    
+    const uploadParams = {
+      Bucket: BUCKET_NAME,
+      Key: fileName,
+      Body: new Uint8Array(arrayBuffer),
+      ContentType: file.type,
+      ACL: "public-read",
+    };
+    
+    const command = new PutObjectCommand(uploadParams);
+    await s3Client.send(command);
+    
+    const s3Url = `https://${BUCKET_NAME}.s3.${REGION}.amazonaws.com/${fileName}`;
+    return s3Url;
+  } catch (error) {
+    console.error("Error uploading to S3:", error);
+    throw error;
+  }
+};
 
   const isValidSelection = selectedCategory !== "--" && subCategory !== "--";
 

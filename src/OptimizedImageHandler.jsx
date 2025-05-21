@@ -133,72 +133,13 @@ export const processImagesInBatch = async (files, options = {}) => {
     initialQuality: quality,
   };
   
-  // Setup batches for processing
+  // Process up to maxWorkers files at once for better parallelization
   const results = new Array(files.length).fill(null);
   const errors = [];
   let completed = 0;
   
-  // Process using image-compression library for optimized results
-  const processWithCompression = async (file, index, worker) => {
-    try {
-      // Step 1: Compress the image first
-      let compressedFile;
-      
-      // Skip compression for small images
-      if (file.size <= 100 * 1024) { // 100KB
-        compressedFile = file;
-      } else {
-        try {
-          // Use the browser-image-compression library
-          compressedFile = await imageCompression(file, compressionOptions);
-        } catch (compressionError) {
-          console.warn('Compression failed, using original file:', compressionError);
-          compressedFile = file;
-        }
-      }
-      
-      // Return either a URL or base64 depending on options
-      if (toBase64) {
-        return new Promise((resolve, reject) => {
-          const reader = new FileReader();
-          reader.onload = () => resolve(reader.result);
-          reader.onerror = reject;
-          reader.readAsDataURL(compressedFile);
-        });
-      } else {
-        return URL.createObjectURL(compressedFile);
-      }
-    } catch (error) {
-      console.error(`Error processing file ${file.name}:`, error);
-      errors.push({ name: file.name, error: error.message });
-      return null;
-    }
-  };
-  
-  // Batch processing using Promise.all
-  const processBatch = async (batch) => {
-    return Promise.all(
-      batch.map(async ({ file, index, worker }) => {
-        try {
-          const processedImage = await processWithCompression(file, index, worker);
-          results[index] = processedImage;
-          completed++;
-          progressCallback(completed / files.length);
-          return { success: true, index };
-        } catch (error) {
-          console.error(`Error in batch processing file ${file.name}:`, error);
-          errors.push({ name: file.name, error: error.message });
-          results[index] = null;
-          completed++;
-          progressCallback(completed / files.length);
-          return { success: false, index, error };
-        }
-      })
-    );
-  };
-  
-  // Create batches to match worker count
-  const batchSize = Math.ceil(files.length / workerPool.length);
+  // Process in batches based on worker count
+  const batchSize = Math.max(1, Math.ceil(files.length / maxWorkers));
   const batches = [];
   
   for (let i = 0; i < files.length; i += batchSize) {
@@ -214,7 +155,52 @@ export const processImagesInBatch = async (files, options = {}) => {
   }
   
   // Process all batches in parallel
-  await Promise.all(batches.map(processBatch));
+  await Promise.all(batches.map(async (batch) => {
+    return Promise.all(
+      batch.map(async ({ file, index, worker }) => {
+        try {
+          // Skip compression for small images
+          let compressedFile;
+          if (file.size <= 100 * 1024) { // 100KB
+            compressedFile = file;
+          } else {
+            try {
+              // Use the browser-image-compression library
+              compressedFile = await imageCompression(file, compressionOptions);
+            } catch (compressionError) {
+              console.warn('Compression failed, using original file:', compressionError);
+              compressedFile = file;
+            }
+          }
+          
+          // Convert to base64 or URL
+          let processedImage;
+          if (toBase64) {
+            processedImage = await new Promise((resolve, reject) => {
+              const reader = new FileReader();
+              reader.onload = () => resolve(reader.result);
+              reader.onerror = reject;
+              reader.readAsDataURL(compressedFile);
+            });
+          } else {
+            processedImage = URL.createObjectURL(compressedFile);
+          }
+          
+          results[index] = processedImage;
+          completed++;
+          progressCallback(completed / files.length);
+          return { success: true, index };
+        } catch (error) {
+          console.error(`Error processing file ${file.name}:`, error);
+          errors.push({ name: file.name, error: error.message });
+          results[index] = null;
+          completed++;
+          progressCallback(completed / files.length);
+          return { success: false, index, error };
+        }
+      })
+    );
+  }));
   
   // Clean up workers
   workerPool.forEach(worker => worker.terminate());

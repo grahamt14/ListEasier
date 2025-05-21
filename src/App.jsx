@@ -60,6 +60,20 @@ function PreviewSection() {
   };
 
  const generateCSVContent = () => {
+  // Log all available data for debugging
+  console.log("Generating CSV with:", {
+    responseData: responseData.length,
+    imageGroups: imageGroups.length,
+    s3ImageGroups: s3ImageGroups.length
+  });
+  
+  // Validate that we have s3ImageGroups data
+  if (!s3ImageGroups || !Array.isArray(s3ImageGroups) || s3ImageGroups.length === 0) {
+    console.error("Missing s3ImageGroups data");
+    alert("Error: Missing S3 image data. Please reload the page and try again.");
+    return null;
+  }
+  
   const validResponseIndices = responseData
     .map((response, index) => ({ response, index }))
     .filter(item => 
@@ -82,65 +96,44 @@ Action(SiteID=US|Country=US|Currency=USD|Version=1193|CC=UTF-8),Custom label (SK
 `;
 
   let csvContent = header;
+  let missingImageGroups = [];
 
   validResponseIndices.forEach(({ response, index }) => {
     const title = response.title ? response.title.replace(/\r?\n|\r/g, ' ').replace(/"/g, '""') : '';
     
-    // Improved photo URL handling - prioritize S3 URLs with better fallback handling
+    // Simplified photo URL handling - just use the S3ImageGroups directly without any complex mapping
+    // This should work because we now ensure S3ImageGroups matches imageGroups exactly
     let photoUrls = [];
     
-    // First, try to get URLs from S3ImageGroups
+    // Log what we're using for this listing
+    console.log(`Processing listing ${index}:`, {
+      hasS3Group: s3ImageGroups && index < s3ImageGroups.length,
+      s3GroupLength: s3ImageGroups && index < s3ImageGroups.length ? s3ImageGroups[index]?.length : 'N/A'
+    });
+    
+    // Get S3 URLs directly from the corresponding S3ImageGroup
     if (s3ImageGroups && 
         Array.isArray(s3ImageGroups) && 
         index < s3ImageGroups.length && 
-        Array.isArray(s3ImageGroups[index])) {
+        Array.isArray(s3ImageGroups[index]) && 
+        s3ImageGroups[index].length > 0) {
       
-      // Filter only valid S3 URLs
-      const s3Urls = s3ImageGroups[index].filter(url => 
+      // Filter to keep only valid URLs
+      photoUrls = s3ImageGroups[index].filter(url => 
         url && 
         typeof url === 'string' && 
-        url.includes('amazonaws.com')
+        (url.includes('amazonaws.com') || url.startsWith('http'))
       );
       
-      if (s3Urls.length > 0) {
-        photoUrls = s3Urls;
-      }
+      console.log(`Found ${photoUrls.length} photo URLs for listing ${index}`);
+    } else {
+      console.warn(`No S3 image group found for listing ${index}`);
     }
     
-    // If no valid S3 URLs found, log a warning and try any non-base64 URLs from imageGroups
+    // If no valid URLs, use a placeholder
     if (photoUrls.length === 0) {
-      console.warn(`No valid S3 photo URLs found for listing at index ${index}, attempting fallback`);
-      
-      if (imageGroups && 
-          Array.isArray(imageGroups) && 
-          index < imageGroups.length && 
-          Array.isArray(imageGroups[index])) {
-        
-        const validUrls = imageGroups[index].filter(url => 
-          url && 
-          typeof url === 'string' && 
-          !url.startsWith('data:') && // Exclude base64 images
-          (url.startsWith('http') || url.startsWith('https')) // Ensure it's a web URL
-        );
-        
-        if (validUrls.length > 0) {
-          photoUrls = validUrls;
-          console.log(`Found ${validUrls.length} alternative URLs for listing ${index}`);
-        }
-      }
-    }
-    
-    // If we still have no valid URLs, create placeholder URLs
-    // This is important because eBay requires image URLs for listings
-    if (photoUrls.length === 0) {
-      console.warn(`No valid photo URLs at all for listing at index ${index}, using placeholder`);
-      
-      // Create an alert to notify the user about the missing image URLs
-      setTimeout(() => {
-        alert(`Warning: Listing "${title}" (Group ${index+1}) has no valid image URLs. The CSV may not work correctly on eBay. Please try re-uploading the images.`);
-      }, 500);
-      
-      // Create a placeholder URL
+      console.warn(`No valid photo URLs for listing ${index}, using placeholder`);
+      missingImageGroups.push(index);
       photoUrls = ['https://via.placeholder.com/800x600?text=Image+Not+Available'];
     }
     
@@ -159,6 +152,12 @@ Action(SiteID=US|Country=US|Currency=USD|Version=1193|CC=UTF-8),Custom label (SK
     
     csvContent += `${line}\n`;
   });
+  
+  // Show a single alert for all missing images
+  if (missingImageGroups.length > 0) {
+    const groupNumbers = missingImageGroups.map(idx => idx + 1).join(", ");
+    alert(`Warning: ${missingImageGroups.length} listings are missing valid image URLs (groups: ${groupNumbers}). The CSV may not work correctly on eBay.`);
+  }
   
   return csvContent;
 };
@@ -188,64 +187,35 @@ Action(SiteID=US|Country=US|Currency=USD|Version=1193|CC=UTF-8),Custom label (SK
     }
   };
 
-  const downloadSingleListing = (groupIndex, groupPrice, groupSku) => {
+ const downloadSingleListing = (groupIndex, groupPrice, groupSku) => {
   const listing = responseData[groupIndex];
   if (!listing || listing.error) {
     alert("No valid listing to download!");
     return;
   }
   
-  // Improved photo URL handling with better fallback logic
+  // Simplified photo URL handling - use S3ImageGroups directly
   let photoUrls = [];
   
-  // First try S3 URLs - our preferred source
+  // Look directly in the matching S3ImageGroup for this listing
   if (s3ImageGroups && 
       Array.isArray(s3ImageGroups) && 
       groupIndex < s3ImageGroups.length && 
       Array.isArray(s3ImageGroups[groupIndex])) {
     
-    const s3Urls = s3ImageGroups[groupIndex].filter(url => 
+    photoUrls = s3ImageGroups[groupIndex].filter(url => 
       url && 
       typeof url === 'string' && 
-      url.includes('amazonaws.com')
+      (url.includes('amazonaws.com') || url.startsWith('http'))
     );
     
-    if (s3Urls.length > 0) {
-      photoUrls = s3Urls;
-    }
+    console.log(`Found ${photoUrls.length} photo URLs for single listing ${groupIndex}`);
   }
   
-  // Fall back to non-base64 URLs from regular image groups
+  // If no valid URLs found, use a placeholder
   if (photoUrls.length === 0) {
-    console.warn(`No S3 URLs found for single listing ${groupIndex}, attempting fallback`);
-    
-    if (imageGroups && 
-        Array.isArray(imageGroups) && 
-        groupIndex < imageGroups.length && 
-        Array.isArray(imageGroups[groupIndex])) {
-      
-      const validUrls = imageGroups[groupIndex].filter(url => 
-        url && 
-        typeof url === 'string' && 
-        !url.startsWith('data:') && 
-        (url.startsWith('http') || url.startsWith('https'))
-      );
-      
-      if (validUrls.length > 0) {
-        photoUrls = validUrls;
-        console.log(`Found ${validUrls.length} alternative URLs for single listing ${groupIndex}`);
-      }
-    }
-  }
-  
-  // If we still have no valid URLs, create a placeholder
-  if (photoUrls.length === 0) {
-    console.warn(`No valid photo URLs at all for single listing ${groupIndex}`);
-    
-    // Notify the user about the missing image URLs
-    alert(`Warning: Listing in Group ${groupIndex+1} has no valid image URLs. The CSV may not work correctly on eBay. Please try re-uploading the images.`);
-    
-    // Create a placeholder URL
+    console.warn(`No valid photo URLs for single listing ${groupIndex}, using placeholder`);
+    alert(`Warning: Listing in Group ${groupIndex+1} has no valid image URLs. The CSV may not work correctly on eBay.`);
     photoUrls = ['https://via.placeholder.com/800x600?text=Image+Not+Available'];
   }
   

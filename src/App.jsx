@@ -59,7 +59,7 @@ function PreviewSection() {
     });
   };
 
-  const generateCSVContent = () => {
+ const generateCSVContent = () => {
   const validResponseIndices = responseData
     .map((response, index) => ({ response, index }))
     .filter(item => 
@@ -86,7 +86,7 @@ Action(SiteID=US|Country=US|Currency=USD|Version=1193|CC=UTF-8),Custom label (SK
   validResponseIndices.forEach(({ response, index }) => {
     const title = response.title ? response.title.replace(/\r?\n|\r/g, ' ').replace(/"/g, '""') : '';
     
-    // Improved photo URL handling - prioritize S3 URLs but handle more cases
+    // Improved photo URL handling - prioritize S3 URLs with better fallback handling
     let photoUrls = [];
     
     // First, try to get URLs from S3ImageGroups
@@ -99,8 +99,7 @@ Action(SiteID=US|Country=US|Currency=USD|Version=1193|CC=UTF-8),Custom label (SK
       const s3Urls = s3ImageGroups[index].filter(url => 
         url && 
         typeof url === 'string' && 
-        url.includes('amazonaws.com') && // Looks like an S3 URL
-        !url.startsWith('data:')
+        url.includes('amazonaws.com')
       );
       
       if (s3Urls.length > 0) {
@@ -108,35 +107,41 @@ Action(SiteID=US|Country=US|Currency=USD|Version=1193|CC=UTF-8),Custom label (SK
       }
     }
     
-    // If no valid S3 URLs found, try any valid URLs from imageGroups
-    if (photoUrls.length === 0 && 
-        imageGroups && 
-        Array.isArray(imageGroups) && 
-        index < imageGroups.length && 
-        Array.isArray(imageGroups[index])) {
+    // If no valid S3 URLs found, log a warning and try any non-base64 URLs from imageGroups
+    if (photoUrls.length === 0) {
+      console.warn(`No valid S3 photo URLs found for listing at index ${index}, attempting fallback`);
       
-      const validUrls = imageGroups[index].filter(url => 
-        url && 
-        typeof url === 'string' && 
-        !url.startsWith('data:') // Exclude base64 images
-      );
-      
-      if (validUrls.length > 0) {
-        photoUrls = validUrls;
+      if (imageGroups && 
+          Array.isArray(imageGroups) && 
+          index < imageGroups.length && 
+          Array.isArray(imageGroups[index])) {
+        
+        const validUrls = imageGroups[index].filter(url => 
+          url && 
+          typeof url === 'string' && 
+          !url.startsWith('data:') && // Exclude base64 images
+          (url.startsWith('http') || url.startsWith('https')) // Ensure it's a web URL
+        );
+        
+        if (validUrls.length > 0) {
+          photoUrls = validUrls;
+          console.log(`Found ${validUrls.length} alternative URLs for listing ${index}`);
+        }
       }
     }
     
-    // If we still have no valid URLs, log a warning for debugging
+    // If we still have no valid URLs, create placeholder URLs
+    // This is important because eBay requires image URLs for listings
     if (photoUrls.length === 0) {
-      console.warn(`No valid photo URLs found for listing at index ${index}`);
+      console.warn(`No valid photo URLs at all for listing at index ${index}, using placeholder`);
       
-      // Add a diagnostic message to help troubleshoot
-      console.debug(`Diagnostic info for listing ${index}:`, {
-        hasS3Group: s3ImageGroups && index < s3ImageGroups.length,
-        s3GroupLength: s3ImageGroups && index < s3ImageGroups.length ? s3ImageGroups[index].length : 'N/A',
-        hasImageGroup: imageGroups && index < imageGroups.length,
-        imageGroupLength: imageGroups && index < imageGroups.length ? imageGroups[index].length : 'N/A'
-      });
+      // Create an alert to notify the user about the missing image URLs
+      setTimeout(() => {
+        alert(`Warning: Listing "${title}" (Group ${index+1}) has no valid image URLs. The CSV may not work correctly on eBay. Please try re-uploading the images.`);
+      }, 500);
+      
+      // Create a placeholder URL
+      photoUrls = ['https://via.placeholder.com/800x600?text=Image+Not+Available'];
     }
     
     const formattedUrls = photoUrls.filter(url => url).join('||');
@@ -147,8 +152,8 @@ Action(SiteID=US|Country=US|Currency=USD|Version=1193|CC=UTF-8),Custom label (SK
       ? groupMetadata[index] 
       : { price: price, sku: sku };
     
-    const groupPrice = metadata.price || price;
-    const groupSku = metadata.sku || sku;
+    const groupPrice = metadata.price || price || '9.99';
+    const groupSku = metadata.sku || sku || `SKU-${index+1}`;
     
     const line = `Draft,${groupSku},${categoryID},"${title}",,${groupPrice},1,${formattedUrls},3000,"${description}",FixedPrice`;
     
@@ -190,10 +195,10 @@ Action(SiteID=US|Country=US|Currency=USD|Version=1193|CC=UTF-8),Custom label (SK
     return;
   }
   
-  // Improved photo URL handling - similar to the main function
+  // Improved photo URL handling with better fallback logic
   let photoUrls = [];
   
-  // First try S3 URLs
+  // First try S3 URLs - our preferred source
   if (s3ImageGroups && 
       Array.isArray(s3ImageGroups) && 
       groupIndex < s3ImageGroups.length && 
@@ -202,8 +207,7 @@ Action(SiteID=US|Country=US|Currency=USD|Version=1193|CC=UTF-8),Custom label (SK
     const s3Urls = s3ImageGroups[groupIndex].filter(url => 
       url && 
       typeof url === 'string' && 
-      url.includes('amazonaws.com') && 
-      !url.startsWith('data:')
+      url.includes('amazonaws.com')
     );
     
     if (s3Urls.length > 0) {
@@ -211,27 +215,38 @@ Action(SiteID=US|Country=US|Currency=USD|Version=1193|CC=UTF-8),Custom label (SK
     }
   }
   
-  // Fall back to any valid URLs
-  if (photoUrls.length === 0 && 
-      imageGroups && 
-      Array.isArray(imageGroups) && 
-      groupIndex < imageGroups.length && 
-      Array.isArray(imageGroups[groupIndex])) {
+  // Fall back to non-base64 URLs from regular image groups
+  if (photoUrls.length === 0) {
+    console.warn(`No S3 URLs found for single listing ${groupIndex}, attempting fallback`);
     
-    const validUrls = imageGroups[groupIndex].filter(url => 
-      url && 
-      typeof url === 'string' && 
-      !url.startsWith('data:')
-    );
-    
-    if (validUrls.length > 0) {
-      photoUrls = validUrls;
+    if (imageGroups && 
+        Array.isArray(imageGroups) && 
+        groupIndex < imageGroups.length && 
+        Array.isArray(imageGroups[groupIndex])) {
+      
+      const validUrls = imageGroups[groupIndex].filter(url => 
+        url && 
+        typeof url === 'string' && 
+        !url.startsWith('data:') && 
+        (url.startsWith('http') || url.startsWith('https'))
+      );
+      
+      if (validUrls.length > 0) {
+        photoUrls = validUrls;
+        console.log(`Found ${validUrls.length} alternative URLs for single listing ${groupIndex}`);
+      }
     }
   }
   
-  // Log warning if no URLs found
+  // If we still have no valid URLs, create a placeholder
   if (photoUrls.length === 0) {
-    console.warn(`No valid photo URLs found for single listing at index ${groupIndex}`);
+    console.warn(`No valid photo URLs at all for single listing ${groupIndex}`);
+    
+    // Notify the user about the missing image URLs
+    alert(`Warning: Listing in Group ${groupIndex+1} has no valid image URLs. The CSV may not work correctly on eBay. Please try re-uploading the images.`);
+    
+    // Create a placeholder URL
+    photoUrls = ['https://via.placeholder.com/800x600?text=Image+Not+Available'];
   }
   
   const header = `#INFO,Version=0.0.2,Template= eBay-draft-listings-template_US,,,,,,,,
@@ -245,7 +260,11 @@ Action(SiteID=US|Country=US|Currency=USD|Version=1193|CC=UTF-8),Custom label (SK
   const formattedUrls = photoUrls.filter(url => url).join('||');
   const description = listing.description ? listing.description.replace(/\r?\n|\r/g, ' ').replace(/"/g, '""') : '';
   
-  const line = `Draft,${groupSku},${categoryID},"${title}",,${groupPrice},1,${formattedUrls},3000,"${description}",FixedPrice`;
+  // Ensure we have valid price and SKU values
+  const finalGroupPrice = groupPrice || price || '9.99';
+  const finalGroupSku = groupSku || sku || `SKU-${groupIndex+1}`;
+  
+  const line = `Draft,${finalGroupSku},${categoryID},"${title}",,${finalGroupPrice},1,${formattedUrls},3000,"${description}",FixedPrice`;
   
   const csvContent = header + line + '\n';
   

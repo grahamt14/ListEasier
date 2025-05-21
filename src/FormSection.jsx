@@ -461,6 +461,9 @@ function FormSection({ onGenerateListing }) {
       }
       
      // Complete S3 upload process
+// Modified section in FormSection.jsx handleGenerateListingWithUpload function
+
+// Complete S3 upload process
 dispatch({ 
   type: 'SET_UPLOAD_STATUS', 
   payload: { 
@@ -471,63 +474,128 @@ dispatch({
 });
 
 // Create a more robust approach to manage S3 URLs
-// First, create a map of original images to S3 URLs
+// First, create a map of original images to S3 URLs with better identification methods
 const imageToS3UrlMap = new Map();
 
-// Map each original image to its S3 URL
-// For each raw file, map it to corresponding S3 URL
+// Create unique identifiers for each image
+// For raw files, we'll use name + size for more reliable identification
 if (rawFiles.length > 0 && s3UrlsList.length > 0) {
   rawFiles.forEach((file, index) => {
     if (index < s3UrlsList.length && s3UrlsList[index]) {
-      const fileId = file.name + '_' + file.size; // Create unique identifier
+      const fileId = `${file.name}_${file.size}`; // Unique identifier
       imageToS3UrlMap.set(fileId, s3UrlsList[index]);
+      
+      // Also store by preview to help match base64 images
+      const fileUrl = URL.createObjectURL(file);
+      const img = document.createElement('img');
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        canvas.width = 10; // Just enough to create a signature
+        canvas.height = 10;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, 10, 10);
+        const thumbnailData = canvas.toDataURL('image/jpeg', 0.1);
+        imageToS3UrlMap.set(thumbnailData, s3UrlsList[index]);
+        URL.revokeObjectURL(fileUrl);
+      };
+      img.src = fileUrl;
     }
   });
 }
 
-// For base64 images, map them directly to S3 URLs
+// For base64 images, we'll create more reliable identifiers
 if (filesBase64.length > 0 && s3UrlsList.length > 0) {
-  // Start after the raw files
   const startIndex = Math.min(rawFiles.length, s3UrlsList.length);
+  
   filesBase64.forEach((base64, index) => {
     const s3Index = startIndex + index;
     if (s3Index < s3UrlsList.length && s3UrlsList[s3Index]) {
-      // Create a hash of the base64 string as identifier
-      const base64Preview = base64.substring(0, 100); // First 100 chars as identifier
+      // Create multiple hash methods for the base64 string
+      const base64Preview = base64.substring(0, 100); // First 100 chars
       imageToS3UrlMap.set(base64Preview, s3UrlsList[s3Index]);
+      
+      // Add truncated version without metadata
+      if (base64.includes(';base64,')) {
+        const pureBase64 = base64.split(';base64,')[1].substring(0, 50);
+        imageToS3UrlMap.set(pureBase64, s3UrlsList[s3Index]);
+      }
+      
+      // Also store the full string
+      imageToS3UrlMap.set(base64, s3UrlsList[s3Index]);
     }
   });
 }
 
-// Update S3 URLs for existing groups
+// Enhanced logic to ensure every image in the existing groups gets an S3 URL
 const updatedS3ImageGroups = [];
+let unassignedS3Urls = [...s3UrlsList]; // Track unassigned URLs
 
-// Process each group
+// Process each existing group
 imageGroups.forEach((group, groupIndex) => {
   if (group.length === 0) {
     // Keep empty groups as empty
     updatedS3ImageGroups[groupIndex] = [];
   } else {
-    // For non-empty groups, try to map each image to its S3 URL
+    // For non-empty groups, map each image to its S3 URL
     const s3Urls = [];
     
     group.forEach(img => {
+      let foundUrl = null;
+      
       // Check if this is already an S3 URL
       if (typeof img === 'string' && img.includes('s3.amazonaws.com')) {
         s3Urls.push(img); // Keep existing S3 URLs
-      } else if (typeof img === 'string' && img.startsWith('data:')) {
-        // This is a base64 image, try to find its S3 URL
-        const imgPreview = img.substring(0, 100);
-        const s3Url = imageToS3UrlMap.get(imgPreview);
-        if (s3Url) {
-          s3Urls.push(s3Url);
-        } else {
-          console.warn(`No S3 URL found for base64 image in group ${groupIndex}`);
-          s3Urls.push(img); // Fall back to keeping base64
+        
+        // Remove from unassigned list if present
+        const urlIndex = unassignedS3Urls.indexOf(img);
+        if (urlIndex !== -1) {
+          unassignedS3Urls.splice(urlIndex, 1);
         }
-      } else {
-        // This is some other type of image URL, preserve it
+        
+        return;
+      } 
+      
+      // Check if we have a direct mapping for this image
+      if (typeof img === 'string') {
+        // Try direct lookup
+        if (imageToS3UrlMap.has(img)) {
+          foundUrl = imageToS3UrlMap.get(img);
+        } 
+        // Try lookup by base64 preview
+        else if (img.startsWith('data:') && img.includes(';base64,')) {
+          // Try various methods to match the base64 image
+          const preview = img.substring(0, 100);
+          if (imageToS3UrlMap.has(preview)) {
+            foundUrl = imageToS3UrlMap.get(preview);
+          } else {
+            const pureBase64 = img.split(';base64,')[1].substring(0, 50);
+            if (imageToS3UrlMap.has(pureBase64)) {
+              foundUrl = imageToS3UrlMap.get(pureBase64);
+            }
+          }
+        }
+      }
+
+      // If we found a matching S3 URL
+      if (foundUrl) {
+        s3Urls.push(foundUrl);
+        
+        // Remove from unassigned list
+        const urlIndex = unassignedS3Urls.indexOf(foundUrl);
+        if (urlIndex !== -1) {
+          unassignedS3Urls.splice(urlIndex, 1);
+        }
+      } 
+      // If no match was found, assign the next available S3 URL
+      else if (unassignedS3Urls.length > 0) {
+        const nextUrl = unassignedS3Urls.shift();
+        s3Urls.push(nextUrl);
+        console.log(`Assigned S3 URL to image without match: ${nextUrl}`);
+      } 
+      // Last resort: keep the original image
+      else {
         s3Urls.push(img);
+        console.log(`No S3 URL available for image in group ${groupIndex}`);
       }
     });
     
@@ -535,11 +603,9 @@ imageGroups.forEach((group, groupIndex) => {
   }
 });
 
-// Create new groups from filesBase64 if needed
-if (filesBase64.length > 0 && batchSize > 0) {
-  const unassignedS3Urls = s3UrlsList.filter(url => 
-    !updatedS3ImageGroups.some(group => group.includes(url))
-  );
+// Create new groups from any remaining S3 URLs if needed
+if (unassignedS3Urls.length > 0 && batchSize > 0) {
+  console.log(`${unassignedS3Urls.length} remaining S3 URLs to assign to new groups`);
   
   // Create batches from unassigned S3 URLs
   for (let i = 0; i < unassignedS3Urls.length; i += batchSize) {
@@ -555,7 +621,7 @@ if (updatedS3ImageGroups.length === 0 || updatedS3ImageGroups[updatedS3ImageGrou
   updatedS3ImageGroups.push([]);
 }
 
-// Create matching imageGroups for the S3 URLs
+// Create matching imageGroups for the S3 URLs to keep them in sync
 const updatedImageGroups = updatedS3ImageGroups.map(group => [...group]);
 
 // Update state with the new groups

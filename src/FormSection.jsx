@@ -775,7 +775,7 @@ const handleGenerateListingWithUpload = async () => {
     
     return (
       <div className="form-group">
-        <label>Update Group Price/SKU</label>
+        <label>Update Listing Price/SKU</label>
         <div className="group-metadata-form">
           <select 
             value={selectedGroupIndex}
@@ -791,22 +791,22 @@ const handleGenerateListingWithUpload = async () => {
           </select>
           
           <div className="field-row">
-            <label>Group Price ($)</label>
+            <label>Listing Price ($)</label>
             <input 
               type="text" 
               value={groupPrice} 
               onChange={(e) => setGroupPrice(e.target.value)}
-              placeholder="Enter price for this group" 
+              placeholder="Enter price for this listing" 
             />
           </div>
           
           <div className="field-row">
-            <label>Group SKU</label>
+            <label>Listing SKU</label>
             <input 
               type="text" 
               value={groupSku} 
               onChange={(e) => setGroupSku(e.target.value)}
-              placeholder="Enter SKU for this group" 
+              placeholder="Enter SKU for this listing" 
             />
           </div>
           
@@ -814,7 +814,7 @@ const handleGenerateListingWithUpload = async () => {
             className="primary small"
             onClick={handleUpdateGroupMetadata}
           >
-            Update Group Data
+            Update Listing Data
           </button>
         </div>
       </div>

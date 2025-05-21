@@ -66,8 +66,7 @@ function PreviewSection() {
     responseData: responseData,
     imageGroups: imageGroups,
     s3ImageGroups: s3ImageGroups,
-    groupMetadata: groupMetadata,
-    fieldSelections: fieldSelections
+    groupMetadata: groupMetadata
   });
   
   // Validate that we have processed data
@@ -92,6 +91,18 @@ function PreviewSection() {
     return null;
   }
   
+  // Gather all unique category field labels across all listings
+  const allCategoryFieldLabels = new Set();
+  validIndices.forEach(({ response }) => {
+    if (response.storedFieldSelections) {
+      Object.entries(response.storedFieldSelections)
+        .filter(([_, value]) => value && value !== "" && value !== "-- Select --")
+        .forEach(([label]) => {
+          allCategoryFieldLabels.add(label);
+        });
+    }
+  });
+  
   // Create header including standard fields and all category fields
   let header = `#INFO,Version=0.0.2,Template= eBay-draft-listings-template_US,,,,,,,,
 #INFO Action and Category ID are required fields. 1) Set Action to Draft 2) Please find the category ID for your listings here: https://pages.ebay.com/sellerinformation/news/categorychanges.html,,,,,,,,,,
@@ -99,13 +110,9 @@ function PreviewSection() {
 #INFO,,,,,,,,,,
 Action(SiteID=US|Country=US|Currency=USD|Version=1193|CC=UTF-8),Custom label (SKU),Category ID,Title,UPC,Price,Quantity,Item photo URL,Condition ID,Description,Format`;
 
-  // Add category fields to header if any are selected
-  const selectedFields = Object.entries(fieldSelections)
-    .filter(([_, value]) => value && value !== "" && value !== "-- Select --")
-    .map(([label]) => label);
-    
-  if (selectedFields.length > 0) {
-    selectedFields.forEach(field => {
+  // Add category fields to header
+  if (allCategoryFieldLabels.size > 0) {
+    allCategoryFieldLabels.forEach(field => {
       header += `,${field}`;
     });
   }
@@ -166,10 +173,12 @@ Action(SiteID=US|Country=US|Currency=USD|Version=1193|CC=UTF-8),Custom label (SK
     // Start with the standard fields
     let line = `Draft,${groupSku},${categoryID},"${title}",,${groupPrice},1,${formattedUrls},3000,"${description}",FixedPrice`;
     
-    // Add category fields to the line
-    if (selectedFields.length > 0) {
-      selectedFields.forEach(field => {
-        const fieldValue = fieldSelections[field] || '';
+    // Add category fields to the line using the stored selections for this listing
+    if (allCategoryFieldLabels.size > 0) {
+      const listingFieldSelections = response.storedFieldSelections || {};
+      
+      allCategoryFieldLabels.forEach(field => {
+        const fieldValue = listingFieldSelections[field] || '';
         line += `,"${fieldValue.replace(/"/g, '""')}"`;
       });
     }
@@ -209,12 +218,15 @@ Action(SiteID=US|Country=US|Currency=USD|Version=1193|CC=UTF-8),Custom label (SK
     }
   };
 
-  const downloadSingleListing = (groupIndex, groupPrice, groupSku) => {
+ const downloadSingleListing = (groupIndex, groupPrice, groupSku) => {
   const listing = responseData[groupIndex];
   if (!listing || listing.error) {
     alert("No valid listing to download!");
     return;
   }
+  
+  // Get the stored field selections for this listing
+  const listingFieldSelections = listing.storedFieldSelections || {};
   
   // Get the correct S3 image URLs for this specific group
   let photoUrls = [];
@@ -249,7 +261,7 @@ Action(SiteID=US|Country=US|Currency=USD|Version=1193|CC=UTF-8),Custom label (SK
   }
   
   // Add category fields to header if any are selected
-  const selectedFields = Object.entries(fieldSelections)
+  const selectedFields = Object.entries(listingFieldSelections)
     .filter(([_, value]) => value && value !== "" && value !== "-- Select --")
     .map(([label]) => label);
   
@@ -282,7 +294,7 @@ Action(SiteID=US|Country=US|Currency=USD|Version=1193|CC=UTF-8),Custom label (SK
   // Add category fields to the line
   if (selectedFields.length > 0) {
     selectedFields.forEach(field => {
-      const fieldValue = fieldSelections[field] || '';
+      const fieldValue = listingFieldSelections[field] || '';
       line += `,"${fieldValue.replace(/"/g, '""')}"`;
     });
   }
@@ -322,6 +334,9 @@ Action(SiteID=US|Country=US|Currency=USD|Version=1193|CC=UTF-8),Custom label (SK
   const groupPrice = metadata.price || price || '';
   const groupSku = metadata.sku || sku || '';
   
+  // Use stored field selections if available, otherwise fall back to current state
+  const listingFieldSelections = response.storedFieldSelections || fieldSelections;
+  
   if (response.error) {
     return (
       <div className="response-error">
@@ -349,20 +364,40 @@ Action(SiteID=US|Country=US|Currency=USD|Version=1193|CC=UTF-8),Custom label (SK
           </div>
         )}
         
-        {/* Add price and SKU information */}
-        <div className="response-field listing-metadata">
-          <strong style={{ color: '#000' }}>Price:</strong>
-          <span style={{ color: '#000' }}>${groupPrice}</span>
-        </div>
-        <div className="response-field listing-metadata">
-          <strong style={{ color: '#000' }}>SKU:</strong>
-          <span style={{ color: '#000' }}>{groupSku}</span>
-        </div>
+        {/* Add other response fields excluding title, description and stored fields */}
+        {Object.entries(response)
+          .filter(([key]) => 
+            key !== 'title' && 
+            key !== 'description' && 
+            key !== 'storedFieldSelections' && 
+            !key.startsWith('error') && 
+            !key.startsWith('raw_')
+          )
+          .map(([key, value]) => (
+            <div key={key} className="response-field">
+              <strong style={{ color: '#000' }}>
+                {key.replace(/_/g, ' ').replace(/^\w/, c => c.toUpperCase())}:
+              </strong>
+              <span style={{ color: '#000' }}>{value}</span>
+            </div>
+        ))}
         
-        {/* Add all selected category fields as metadata */}
+        {/* Add category fields as metadata, including price and SKU */}
         <div className="category-fields-metadata">
-          <h5 style={{ margin: '10px 0 5px 0', color: '#000' }}>Category Details</h5>
-          {Object.entries(fieldSelections).map(([label, value]) => {
+          <h5 style={{ margin: '10px 0 5px 0', color: '#000' }}>Item Details</h5>
+          
+          {/* Add price and SKU with the category fields */}
+          <div className="response-field listing-metadata">
+            <strong style={{ color: '#000' }}>Price:</strong>
+            <span style={{ color: '#000' }}>${groupPrice}</span>
+          </div>
+          <div className="response-field listing-metadata">
+            <strong style={{ color: '#000' }}>SKU:</strong>
+            <span style={{ color: '#000' }}>{groupSku}</span>
+          </div>
+          
+          {/* Add all selected category fields from the stored selections */}
+          {Object.entries(listingFieldSelections).map(([label, value]) => {
             // Only display fields that have a value selected
             if (value && value !== "" && value !== "-- Select --") {
               return (
@@ -375,18 +410,6 @@ Action(SiteID=US|Country=US|Currency=USD|Version=1193|CC=UTF-8),Custom label (SK
             return null;
           })}
         </div>
-        
-        {/* Add other response fields excluding title and description (already displayed) */}
-        {Object.entries(response)
-          .filter(([key]) => key !== 'title' && key !== 'description' && !key.startsWith('error') && !key.startsWith('raw_'))
-          .map(([key, value]) => (
-            <div key={key} className="response-field">
-              <strong style={{ color: '#000' }}>
-                {key.replace(/_/g, ' ').replace(/^\w/, c => c.toUpperCase())}:
-              </strong>
-              <span style={{ color: '#000' }}>{value}</span>
-            </div>
-        ))}
       </div>
     </div>
   );
@@ -531,7 +554,8 @@ function AppContent() {
 // Modified handleGenerateListing in App.jsx that doesn't depend on S3 URLs being set first
 const handleGenerateListing = async () => {
   try {
-    const { imageGroups, filesBase64, batchSize, processedGroupIndices } = state;
+     const { imageGroups, filesBase64, batchSize, processedGroupIndices, fieldSelections } = state;
+ 
     const nonEmptyGroups = imageGroups.filter(g => g.length > 0);
 
     if (nonEmptyGroups.length === 0 && filesBase64.length === 0) {
@@ -764,10 +788,17 @@ const handleGenerateListing = async () => {
       
       // Update UI with the results so far
       batchResults.forEach(({ index, result }) => {
-        // Update response data
+        // Update response data with field selections
         dispatch({
           type: 'UPDATE_RESPONSE_DATA',
-          payload: { index, value: result }
+          payload: { 
+            index, 
+            value: {
+              ...result,
+              // Store the field selections with the response
+              storedFieldSelections: currentFieldSelections
+            }
+          }
         });
         
         // Mark processing as complete for this group

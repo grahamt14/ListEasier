@@ -837,12 +837,6 @@ select {
   border-top: 1px solid #eee;
 }
 
-.category-fields-metadata h5 {
-  color: #333;
-  font-size: 0.95rem;
-  margin-bottom: 8px;
-}
-
 /* Better styling for primary fields (title and description) */
 .response-field.primary-field {
   padding-bottom: 8px;
@@ -870,15 +864,37 @@ select {
   transition: background-color 0.2s;
 }
 
-.listing-metadata:hover {
-  background-color: #f0f0f0;
+
+/* Updated styles for category fields metadata */
+.category-fields-metadata {
+  margin-top: 15px;
+  padding: 12px;
+  border-radius: 6px;
+  background-color: #f8f8f8;
+  border: 1px solid #eee;
 }
 
-.listing-metadata strong {
-  font-size: 0.8rem !important;
-  color: #555 !important;
+.category-fields-metadata h5 {
+  color: #333;
+  font-size: 0.95rem;
+  margin: 0 0 10px 0;
+  padding-bottom: 6px;
+  border-bottom: 1px solid #ddd;
 }
 
-.listing-metadata span {
-  font-size: 0.9rem;
+/* Better styling for listing metadata items */
+.listing-metadata {
+  background-color: #fff;
+  padding: 8px 12px;
+  border-radius: 4px;
+  margin-top: 6px;
+  border-left: 3px solid #2196F3;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+  transition: all 0.2s;
+}
+
+/* Special styling for price and SKU */
+.listing-metadata.price-field,
+.listing-metadata.sku-field {
+  border-left-color: #4CAF50;
 }

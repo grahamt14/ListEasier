@@ -547,14 +547,68 @@ const handleGenerateListing = async () => {
     // Track indices of groups being processed
     const processedIndices = [];
     
-    // IMPORTANT CHANGE: Use a more conservative approach with only 2 concurrent requests
-    // and add a delay between batches to prevent Gateway Timeout
-    const PROCESSING_BATCH_SIZE = 2; // Only process 2 groups at a time
-    const BATCH_DELAY_MS = 2000; // Add a 2-second delay between batches
+    // Increase batch size but with retry mechanism for failures
+    const PROCESSING_BATCH_SIZE = 20; // Increased to 20 concurrent requests
+    const MAX_RETRIES = 3; // Allow up to 3 retries for failed requests
+    const RETRY_DELAY_MS = 1000; // Wait 1 second between retries
     
-    // Process each group with the API using sequential batch processing
+    // Function to process a single group with retries
+    const processGroupWithRetry = async (group, actualIndex, retryCount = 0) => {
+      try {
+        const response = await fetch(
+          "https://7f26uyyjs5.execute-api.us-east-2.amazonaws.com/ListEasily/ListEasilyAPI",
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              category,
+              subCategory,
+              Base64Key: [group],
+              SelectedCategoryOptions: selectedCategoryOptions
+            })
+          }
+        );
+        
+        if (!response.ok) {
+          // If we get a 504 Gateway Timeout and have retries left, retry with backoff
+          if (response.status === 504 && retryCount < MAX_RETRIES) {
+            console.log(`Gateway timeout for group ${actualIndex}, retrying (${retryCount + 1}/${MAX_RETRIES})...`);
+            await new Promise(resolve => setTimeout(resolve, RETRY_DELAY_MS * (retryCount + 1)));
+            return processGroupWithRetry(group, actualIndex, retryCount + 1);
+          }
+          
+          throw new Error(`API error: ${response.status} ${response.statusText}`);
+        }
+        
+        const data = await response.json();
+        let parsed = data.body;
+        if (typeof parsed === "string") parsed = JSON.parse(parsed);
+        
+        return { 
+          index: actualIndex, 
+          result: Array.isArray(parsed) ? parsed[0] : parsed,
+          success: true
+        };
+      } catch (err) {
+        // If it's not a gateway timeout or we're out of retries, fail
+        console.error(`Error processing group ${actualIndex}:`, err);
+        return { 
+          index: actualIndex, 
+          error: true, 
+          result: { 
+            error: "Failed to fetch listing data", 
+            raw_content: err.message 
+          },
+          success: false
+        };
+      }
+    };
+    
+    // Split groups into more manageable chunks for parallel processing
+    // Process in batches of PROCESSING_BATCH_SIZE
+    const results = [];
+    
     for (let batchStart = 0; batchStart < allGroupsToProcess.length; batchStart += PROCESSING_BATCH_SIZE) {
-      // Get the current batch of groups to process
       const currentBatch = allGroupsToProcess.slice(batchStart, batchStart + PROCESSING_BATCH_SIZE);
       const batchIndices = [];
       
@@ -576,97 +630,49 @@ const handleGenerateListing = async () => {
         processedIndices.push(actualIndex);
       }
       
-      // Create promises for the current batch
-      const batchPromises = currentBatch.map((group, batchIdx) => {
-        const actualIndex = batchIndices[batchIdx];
-        
-        // Update processing status to show which group is being processed
-        processingStatus.currentGroup = batchStart + batchIdx + 1; // 1-based index for display
-        
-        dispatch({ 
-          type: 'SET_PROCESSING_STATUS', 
-          payload: {...processingStatus}
-        });
-        
-        return (async () => {
-          try {
-            // Make API call to generate listing
-            const response = await fetch(
-              "https://7f26uyyjs5.execute-api.us-east-2.amazonaws.com/ListEasily/ListEasilyAPI",
-              {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                  category,
-                  subCategory,
-                  Base64Key: [group],
-                  SelectedCategoryOptions: selectedCategoryOptions
-                })
-              }
-            );
-            
-            if (!response.ok) {
-              throw new Error(`API error: ${response.status} ${response.statusText}`);
-            }
-            
-            const data = await response.json();
-            let parsed = data.body;
-            if (typeof parsed === "string") parsed = JSON.parse(parsed);
-            
-            return { 
-              index: actualIndex, 
-              result: Array.isArray(parsed) ? parsed[0] : parsed 
-            };
-          } catch (err) {
-            console.error(`Error processing group ${actualIndex}:`, err);
-            return { 
-              index: actualIndex, 
-              error: true, 
-              result: { 
-                error: "Failed to fetch listing data", 
-                raw_content: err.message 
-              } 
-            };
-          }
-        })();
+      // Update status to show which batch is being processed
+      processingStatus.currentGroup = batchStart + 1; // Show the first group in the batch
+      dispatch({ 
+        type: 'SET_PROCESSING_STATUS', 
+        payload: { ...processingStatus }
       });
       
-      // Wait for all promises in this batch to complete
-      const batchResults = await Promise.all(batchPromises);
+      // Process batch in parallel with retries
+      const batchPromises = currentBatch.map((group, idx) => 
+        processGroupWithRetry(group, batchIndices[idx])
+      );
       
-      // Update state with batch results
-      batchResults.forEach(({ index, result, error }) => {
+      // Wait for all promises in this batch
+      const batchResults = await Promise.all(batchPromises);
+      results.push(...batchResults);
+      
+      // Update completed count
+      const completedCount = Math.min(batchStart + PROCESSING_BATCH_SIZE, allGroupsToProcess.length);
+      processingStatus.processCompleted = completedCount;
+      dispatch({ 
+        type: 'SET_PROCESSING_STATUS', 
+        payload: { ...processingStatus }
+      });
+      
+      // Update UI with the results so far
+      batchResults.forEach(({ index, result }) => {
         // Update response data
         dispatch({
           type: 'UPDATE_RESPONSE_DATA',
           payload: { index, value: result }
         });
         
-        // Update processing status
+        // Mark processing as complete for this group
         dispatch({
           type: 'UPDATE_PROCESSING_GROUP',
           payload: { index, value: false }
         });
       });
       
-      // Update completion count
-      const completedCount = Math.min(batchStart + PROCESSING_BATCH_SIZE, allGroupsToProcess.length);
-      processingStatus.processCompleted = completedCount;
-      
-      dispatch({ 
-        type: 'SET_PROCESSING_STATUS', 
-        payload: {...processingStatus}
-      });
-      
-      dispatch({ 
-        type: 'SET_COMPLETED_CHUNKS', 
-        payload: completedCount 
-      });
-      
-      // Add delay between batches to prevent API gateway timeout
-      // Skip delay for the last batch
+      // Introduce a small delay between batches to avoid overwhelming the server
       if (batchStart + PROCESSING_BATCH_SIZE < allGroupsToProcess.length) {
-        await new Promise(resolve => setTimeout(resolve, BATCH_DELAY_MS));
+        // Very small delay just to let the event loop breathe
+        await new Promise(resolve => setTimeout(resolve, 100));
       }
     }
     

@@ -353,17 +353,35 @@ const uploadGroupedImagesToS3 = async (selectedIndices) => {
       } 
     });
     
-    // Use Promise.all to upload files in parallel but in smaller batches to maintain control
-    // This balances performance with UI responsiveness
-    const UPLOAD_BATCH_SIZE = 5; // Adjust based on your network conditions
+    // Use Promise.all to upload files in parallel but in batches
+    // Increased batch size for faster processing
+    const UPLOAD_BATCH_SIZE = 20; // Increased to 20 concurrent uploads
     const s3Urls = [];
     
     for (let i = 0; i < selectedRawFiles.length; i += UPLOAD_BATCH_SIZE) {
       const batch = selectedRawFiles.slice(i, i + UPLOAD_BATCH_SIZE);
       
       // Upload current batch in parallel
-      const batchResults = await Promise.all(batch.map(file => uploadToS3(file)));
-      s3Urls.push(...batchResults.filter(url => url !== null));
+      const uploadPromises = batch.map(async (file, batchIndex) => {
+        try {
+          const url = await uploadToS3(file);
+          return { success: true, url };
+        } catch (error) {
+          console.error(`Error uploading file ${i + batchIndex}:`, error);
+          // Return null on error but don't fail the whole batch
+          return { success: false, error };
+        }
+      });
+      
+      // Wait for all uploads in this batch to complete
+      const batchResults = await Promise.all(uploadPromises);
+      
+      // Add successful URLs to the result list
+      batchResults.forEach(result => {
+        if (result.success && result.url) {
+          s3Urls.push(result.url);
+        }
+      });
       
       // Update progress
       const completedCount = Math.min(i + UPLOAD_BATCH_SIZE, selectedRawFiles.length);

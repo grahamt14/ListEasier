@@ -187,8 +187,8 @@ Action(SiteID=US|Country=US|Currency=USD|Version=1193|CC=UTF-8),Custom label (SK
       ? groupMetadata[index] 
       : { price: price, sku: sku };
     
-    const groupPrice = metadata.price || price || '9.99';
-    const groupSku = metadata.sku || sku || `SKU-${index+1}`;
+    const groupPrice = metadata.price || price || '';
+    const groupSku = metadata.sku || sku || ``;
     
     const line = `Draft,${groupSku},${categoryID},"${title}",,${groupPrice},1,${formattedUrls},3000,"${description}",FixedPrice`;
     

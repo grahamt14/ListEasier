@@ -59,7 +59,9 @@ function PreviewSection() {
     });
   };
 
- const generateCSVContent = () => {
+ // In App.jsx, replace the generateCSVContent function with this improved version:
+
+const generateCSVContent = () => {
   // Debug output to help diagnose data structure issues
   console.log("Generating CSV with data:", {
     responseData: responseData,
@@ -68,15 +70,15 @@ function PreviewSection() {
     groupMetadata: groupMetadata
   });
   
-  // Validate that we have s3ImageGroups data
-  if (!s3ImageGroups || !Array.isArray(s3ImageGroups) || s3ImageGroups.length === 0) {
-    console.error("Missing s3ImageGroups data");
-    alert("Error: Missing S3 image data. Please reload the page and try again.");
+  // Validate that we have processed data
+  if (!responseData || responseData.length === 0) {
+    console.error("Missing response data");
+    alert("Error: No listing data available. Please generate listings first.");
     return null;
   }
   
-  // Find valid listings - we'll use their indices to get the correct image groups
-  const validResponseIndices = responseData
+  // Find valid listings - groups that have been successfully processed
+  const validIndices = responseData
     .map((response, index) => ({ response, index }))
     .filter(item => 
       item.response && 
@@ -85,7 +87,7 @@ function PreviewSection() {
       imageGroups[item.index].length > 0
     );
   
-  if (validResponseIndices.length === 0) {
+  if (validIndices.length === 0) {
     alert("No valid listings to download!");
     return null;
   }
@@ -100,68 +102,22 @@ Action(SiteID=US|Country=US|Currency=USD|Version=1193|CC=UTF-8),Custom label (SK
   let csvContent = header;
   let missingImageGroups = [];
 
-  // Map of valid images to ensure we don't use the same image for multiple listings
-  const usedImageSets = new Map();
-
-  // First, create a mapping of image groups to ensure correct matching
-  const imageMapping = {};
-  imageGroups.forEach((group, groupIndex) => {
-    if (group && group.length > 0) {
-      // Create a signature of this group for matching
-      const groupSignature = group.map(img => {
-        // For base64 images, take a sample for identification
-        if (typeof img === 'string' && img.startsWith('data:')) {
-          return img.substr(0, 50); // Just use a prefix for matching
-        }
-        return img;
-      }).join('|').substr(0, 100); // Create a compact signature
-      
-      imageMapping[groupSignature] = groupIndex;
-    }
-  });
-  
-  // Ensure we have matching s3ImageGroups entries for each valid image group
-  imageGroups.forEach((group, idx) => {
-    if (group && group.length > 0) {
-      // Make sure s3ImageGroups has an entry for this group
-      if (!s3ImageGroups[idx] || !Array.isArray(s3ImageGroups[idx]) || s3ImageGroups[idx].length === 0) {
-        console.warn(`No S3 image group for image group ${idx} - creating placeholder`);
-        
-        // Create an entry with the same length as the image group, filled with placeholders
-        if (!s3ImageGroups[idx]) {
-          s3ImageGroups[idx] = [];
-        }
-        
-        // Fill with placeholders for all missing images
-        while (s3ImageGroups[idx].length < group.length) {
-          s3ImageGroups[idx].push(`https://via.placeholder.com/800x600?text=Image+Not+Available+${idx}-${s3ImageGroups[idx].length}`);
-        }
-      }
-    }
-  });
-
-  // Now process each valid listing with the correct images
-  validResponseIndices.forEach(({ response, index }) => {
+  // Process each valid listing with the correct images
+  validIndices.forEach(({ response, index }) => {
     const title = response.title ? response.title.replace(/\r?\n|\r/g, ' ').replace(/"/g, '""') : '';
+    const description = response.description ? response.description.replace(/\r?\n|\r/g, ' ').replace(/"/g, '""') : '';
     
-    // Get the image group that corresponds to this listing
-    const currentGroup = imageGroups[index];
-    const currentS3Group = s3ImageGroups[index];
-    
-    // Log what we're processing for this listing
-    console.log(`Processing listing ${index}:`, {
-      title: title.substring(0, 30) + '...',
-      imageGroup: currentGroup?.length,
-      s3ImageGroup: currentS3Group?.length,
-      responseData: response ? 'Present' : 'Missing'
-    });
-    
-    // Create the correct image URLs for this listing
+    // Get the S3 image URLs that correspond to this group
     let photoUrls = [];
     
-    if (currentS3Group && Array.isArray(currentS3Group) && currentS3Group.length > 0) {
+    // Check if we have valid S3 image URLs for this group
+    if (s3ImageGroups && 
+        s3ImageGroups[index] && 
+        Array.isArray(s3ImageGroups[index]) && 
+        s3ImageGroups[index].length > 0) {
+      
       // Filter to keep only valid URLs
-      photoUrls = currentS3Group.filter(url => 
+      photoUrls = s3ImageGroups[index].filter(url => 
         url && 
         typeof url === 'string' && 
         (url.includes('amazonaws.com') || url.startsWith('http'))
@@ -169,34 +125,34 @@ Action(SiteID=US|Country=US|Currency=USD|Version=1193|CC=UTF-8),Custom label (SK
       
       console.log(`Found ${photoUrls.length} photo URLs for listing ${index}`);
     } else {
-      console.warn(`No S3 image group found for listing ${index}`);
+      console.warn(`No S3 image group found for listing ${index}, using placeholders`);
     }
     
-    // If no valid URLs, use a placeholder
+    // If no valid URLs, use placeholders
     if (photoUrls.length === 0) {
       console.warn(`No valid photo URLs for listing ${index}, using placeholder`);
       missingImageGroups.push(index);
-      photoUrls = [`https://via.placeholder.com/800x600?text=Image+Not+Available+Group+${index+1}`];
+      
+      // Create placeholder URLs for each image in the group
+      photoUrls = Array.from(
+        { length: imageGroups[index].length }, 
+        (_, i) => `https://via.placeholder.com/800x600?text=Image+Not+Available+Group+${index+1}+Image+${i+1}`
+      );
     }
     
     const formattedUrls = photoUrls.filter(url => url).join('||');
-    const description = response.description ? response.description.replace(/\r?\n|\r/g, ' ').replace(/"/g, '""') : '';
     
     // Get metadata for this group, or fall back to global price/sku
     const metadata = groupMetadata && groupMetadata[index] 
       ? groupMetadata[index] 
       : { price: price, sku: sku };
     
-    const groupPrice = metadata.price || price || '';
-    const groupSku = metadata.sku || sku || ``;
+    const groupPrice = metadata.price || price || '9.99';
+    const groupSku = metadata.sku || sku || `SKU-${index+1}`;
     
     const line = `Draft,${groupSku},${categoryID},"${title}",,${groupPrice},1,${formattedUrls},3000,"${description}",FixedPrice`;
     
     csvContent += `${line}\n`;
-    
-    // Mark these images as used to prevent duplication
-    const imageKey = photoUrls.join('|');
-    usedImageSets.set(imageKey, index);
   });
   
   // Show a single alert for all missing images
@@ -206,6 +162,86 @@ Action(SiteID=US|Country=US|Currency=USD|Version=1193|CC=UTF-8),Custom label (SK
   }
   
   return csvContent;
+};
+
+// Also update downloadSingleListing function:
+
+const downloadSingleListing = (groupIndex, groupPrice, groupSku) => {
+  const listing = responseData[groupIndex];
+  if (!listing || listing.error) {
+    alert("No valid listing to download!");
+    return;
+  }
+  
+  // Get the correct S3 image URLs for this specific group
+  let photoUrls = [];
+  
+  // Check if we have valid S3 image URLs for this group
+  if (s3ImageGroups && 
+      s3ImageGroups[groupIndex] && 
+      Array.isArray(s3ImageGroups[groupIndex]) && 
+      s3ImageGroups[groupIndex].length > 0) {
+    
+    photoUrls = s3ImageGroups[groupIndex].filter(url => 
+      url && 
+      typeof url === 'string' && 
+      (url.includes('amazonaws.com') || url.startsWith('http'))
+    );
+    
+    console.log(`Found ${photoUrls.length} photo URLs for single listing ${groupIndex}:`, photoUrls);
+  } else {
+    console.warn(`No S3 image group found for listing ${groupIndex}, using placeholders`);
+  }
+  
+  // If no valid URLs found, use placeholders for each image in the group
+  if (photoUrls.length === 0) {
+    console.warn(`No valid photo URLs for listing ${groupIndex}, using placeholders`);
+    alert(`Warning: Listing in Group ${groupIndex+1} has no valid image URLs. The CSV may not work correctly on eBay.`);
+    
+    // Create placeholder URLs for each image in the group
+    photoUrls = Array.from(
+      { length: imageGroups[groupIndex].length }, 
+      (_, i) => `https://via.placeholder.com/800x600?text=Image+Not+Available+Group+${groupIndex+1}+Image+${i+1}`
+    );
+  }
+  
+  const header = `#INFO,Version=0.0.2,Template= eBay-draft-listings-template_US,,,,,,,,
+#INFO Action and Category ID are required fields. 1) Set Action to Draft 2) Please find the category ID for your listings here: https://pages.ebay.com/sellerinformation/news/categorychanges.html,,,,,,,,,,
+"#INFO After you've successfully uploaded your draft from the Seller Hub Reports tab, complete your drafts to active listings here: https://www.ebay.com/sh/lst/drafts",,,,,,,,,,
+#INFO,,,,,,,,,,
+Action(SiteID=US|Country=US|Currency=USD|Version=1193|CC=UTF-8),Custom label (SKU),Category ID,Title,UPC,Price,Quantity,Item photo URL,Condition ID,Description,Format
+`;
+
+  const title = listing.title ? listing.title.replace(/\r?\n|\r/g, ' ').replace(/"/g, '""') : '';
+  const formattedUrls = photoUrls.filter(url => url).join('||');
+  const description = listing.description ? listing.description.replace(/\r?\n|\r/g, ' ').replace(/"/g, '""') : '';
+  
+  // Ensure we have valid price and SKU values
+  const finalGroupPrice = groupPrice || price || '9.99';
+  const finalGroupSku = groupSku || sku || `SKU-${groupIndex+1}`;
+  
+  const line = `Draft,${finalGroupSku},${categoryID},"${title}",,${finalGroupPrice},1,${formattedUrls},3000,"${description}",FixedPrice`;
+  
+  const csvContent = header + line + '\n';
+  
+  // Create and download the CSV
+  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+  const csvFileName = `listing_group_${groupIndex+1}_${new Date().toISOString().split('T')[0]}.csv`;
+  
+  if (navigator.msSaveBlob) {
+    navigator.msSaveBlob(blob, csvFileName);
+  } else {
+    const link = document.createElement("a");
+    if (link.download !== undefined) {
+      const url = URL.createObjectURL(blob);
+      link.setAttribute("href", url);
+      link.setAttribute("download", csvFileName);
+      link.style.visibility = "hidden";
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    }
+  }
 };
 
   const downloadListingsAsCsv = () => {

@@ -427,6 +427,67 @@ const handleGenerateListingWithUpload = async () => {
     // Create a batching system for uploads to improve performance
     const BATCH_SIZE = 5; // Upload 5 files in parallel
     const s3UrlsList = [];
+	
+	    console.log("Successfully uploaded images to S3:", s3UrlsList.length);
+    
+    // First, map out which images are already in groups and which are in the pool
+    const totalExistingGroupImages = state.imageGroups.reduce((total, group) => 
+      total + (group ? group.length : 0), 0);
+    const poolImageCount = filesBase64.length;
+    
+    console.log(`Images in existing groups: ${totalExistingGroupImages}, Images in pool: ${poolImageCount}`);
+    
+    // Create or update S3 URL groups
+    let updatedS3Groups = [...(state.s3ImageGroups || [])];
+    
+    // Ensure S3 groups array has the same structure as image groups
+    while (updatedS3Groups.length < state.imageGroups.length) {
+      updatedS3Groups.push([]);
+    }
+    
+    // Process pool images if batch size is set
+    if (batchSize > 0 && poolImageCount > 0) {
+      // Create batches based on batch size
+      const numBatches = Math.ceil(poolImageCount / batchSize);
+      console.log(`Creating ${numBatches} batches of S3 URLs (batch size: ${batchSize})`);
+      
+      // Find first empty group index
+      let targetGroupIndex = updatedS3Groups.findIndex(g => !g || g.length === 0);
+      if (targetGroupIndex === -1) {
+        targetGroupIndex = updatedS3Groups.length;
+      }
+      
+      // Distribute S3 URLs into batches
+      let s3UrlIndex = 0;
+      for (let i = 0; i < numBatches && s3UrlIndex < s3UrlsList.length; i++) {
+        // Take up to batchSize URLs for this batch
+        const batchUrls = s3UrlsList.slice(s3UrlIndex, s3UrlIndex + batchSize);
+        s3UrlIndex += batchSize;
+        
+        // Store batch in S3 groups at the appropriate index
+        if (targetGroupIndex < updatedS3Groups.length) {
+          updatedS3Groups[targetGroupIndex] = batchUrls;
+        } else {
+          updatedS3Groups.push(batchUrls);
+        }
+        
+        targetGroupIndex++;
+      }
+    }
+    
+    // Ensure there's an empty group at the end
+    if (updatedS3Groups.length === 0 || 
+        (updatedS3Groups[updatedS3Groups.length - 1] && 
+         updatedS3Groups[updatedS3Groups.length - 1].length > 0)) {
+      updatedS3Groups.push([]);
+    }
+    
+    // Make sure all the indexes align properly
+    console.log("Image Groups:", state.imageGroups.map(g => g ? g.length : 0));
+    console.log("Updated S3 Groups:", updatedS3Groups.map(g => g ? g.length : 0));
+    
+    // Update S3 image groups in state
+    dispatch({ type: 'SET_S3_IMAGE_GROUPS', payload: updatedS3Groups });
     
     // Process files in batches
     for (let i = 0; i < allRawFiles.length; i += BATCH_SIZE) {

@@ -341,15 +341,149 @@ function appReducer(state, action) {
           groupMetadata: updatedMetadata,
           isDirty: true
         };
+      }// In the appReducer function, replace the GROUP_SELECTED_IMAGES case with this:
+    case 'GROUP_SELECTED_IMAGES':
+      const groupImgs = state.selectedImages.map(i => state.filesBase64[i]);
+      const groupRawFiles = state.selectedImages.map(i => state.rawFiles[i]);
+      
+      const remainingBase64 = state.filesBase64.filter((_, i) => 
+        !state.selectedImages.includes(i)
+      );
+      
+      const remainingRawFiles = state.rawFiles.filter((_, i) => 
+        !state.selectedImages.includes(i)
+      );
+      
+      // Update rotations
+      const newRotations = { ...state.imageRotations };
+      state.selectedImages.forEach(index => {
+        delete newRotations[index];
+      });
+      
+      // Reindex rotations
+      const finalRotations = {};
+      let newIndex = 0;
+      state.filesBase64.forEach((_, oldIndex) => {
+        if (!state.selectedImages.includes(oldIndex)) {
+          if (newRotations[oldIndex] !== undefined) {
+            finalRotations[newIndex] = newRotations[oldIndex];
+          }
+          newIndex++;
+        }
+      });
+      
+      // Create metadata for this new group
+      const newGroupMetadata = {
+        price: state.price,
+        sku: state.sku
+      };
+      
+      // Update image groups to include the selected images
+      let updatedGroups = [...state.imageGroups];
+      const firstEmptyIndex = updatedGroups.findIndex(g => g.length === 0);
+      
+      // Check for corresponding s3ImageGroups and update them too
+      let updatedS3Groups = [...state.s3ImageGroups || []];
+      
+      // Make sure the s3Groups array is at least as long as the imageGroups array
+      while (updatedS3Groups.length < updatedGroups.length) {
+        updatedS3Groups.push([]);
       }
       
+      if (firstEmptyIndex !== -1) {
+        updatedGroups[firstEmptyIndex] = [...updatedGroups[firstEmptyIndex], ...groupImgs];
+        
+        // Get corresponding S3 URLs if they exist
+        const s3Urls = state.selectedImages.map(i => {
+          // Check if there are s3ImageGroups for individual images in the pool
+          if (state.s3ImageGroups && state.s3ImageGroups[0] && state.s3ImageGroups[0][i]) {
+            return state.s3ImageGroups[0][i];
+          }
+          return null; // Use null as placeholder if no S3 URL exists
+        }).filter(url => url !== null);
+        
+        // Update S3 groups at the same index
+        updatedS3Groups[firstEmptyIndex] = [...(updatedS3Groups[firstEmptyIndex] || []), ...s3Urls];
+        
+        // Update group metadata at the same index
+        const updatedMetadata = [...state.groupMetadata];
+        while (updatedMetadata.length <= firstEmptyIndex) {
+          updatedMetadata.push(null);
+        }
+        updatedMetadata[firstEmptyIndex] = newGroupMetadata;
+        
+        if (updatedGroups[updatedGroups.length - 1].length > 0) {
+          updatedGroups.push([]);
+          updatedS3Groups.push([]);
+        }
+        
+        return {
+          ...state,
+          filesBase64: remainingBase64,
+          rawFiles: remainingRawFiles,
+          selectedImages: [],
+          imageRotations: finalRotations,
+          imageGroups: updatedGroups,
+          s3ImageGroups: updatedS3Groups,
+          groupMetadata: updatedMetadata,
+          isDirty: true
+        };
+      } else {
+        updatedGroups.push(groupImgs);
+        
+        // Get corresponding S3 URLs if they exist
+        const s3Urls = state.selectedImages.map(i => {
+          // Check if there are s3ImageGroups for individual images in the pool
+          if (state.s3ImageGroups && state.s3ImageGroups[0] && state.s3ImageGroups[0][i]) {
+            return state.s3ImageGroups[0][i];
+          }
+          return null; // Use null as placeholder if no S3 URL exists
+        }).filter(url => url !== null);
+        
+        // Add S3 URLs to a new group
+        updatedS3Groups.push(s3Urls);
+        
+        // Add metadata for the new group
+        const updatedMetadata = [...state.groupMetadata, newGroupMetadata];
+        
+        if (updatedGroups[updatedGroups.length - 1].length > 0) {
+          updatedGroups.push([]);
+          updatedS3Groups.push([]);
+        }
+        
+        return {
+          ...state,
+          filesBase64: remainingBase64,
+          rawFiles: remainingRawFiles,
+          selectedImages: [],
+          imageRotations: finalRotations,
+          imageGroups: updatedGroups,
+          s3ImageGroups: updatedS3Groups,
+          groupMetadata: updatedMetadata,
+          isDirty: true
+        };
+      }
+
+// Also update the HANDLE_GROUP_DROP case:
     case 'HANDLE_GROUP_DROP':
       const { dropGroupIdx, imgIdx, from, fromIndex } = action.payload;
       let newGroups = [...state.imageGroups];
+      let newS3Groups = [...(state.s3ImageGroups || [])];
+      
+      // Ensure s3ImageGroups has the same structure as imageGroups
+      while (newS3Groups.length < newGroups.length) {
+        newS3Groups.push([]);
+      }
       
       if (from === "pool") {
         const i = parseInt(fromIndex, 10);
         const img = state.filesBase64[i];
+        
+        // Get S3 URL if available
+        let s3Url = null;
+        if (state.s3ImageGroups && state.s3ImageGroups[0] && state.s3ImageGroups[0][i]) {
+          s3Url = state.s3ImageGroups[0][i];
+        }
         
         // Update filesBase64
         const newFilesBase64 = state.filesBase64.filter((_, j) => j !== i);
@@ -359,15 +493,24 @@ function appReducer(state, action) {
         imgIdx === null ? tgt.push(img) : tgt.splice(imgIdx, 0, img);
         newGroups[dropGroupIdx] = tgt;
         
+        // Update S3 URL group if there's a URL
+        if (s3Url) {
+          const s3Tgt = [...(newS3Groups[dropGroupIdx] || [])];
+          imgIdx === null ? s3Tgt.push(s3Url) : s3Tgt.splice(imgIdx, 0, s3Url);
+          newS3Groups[dropGroupIdx] = s3Tgt;
+        }
+        
         // Ensure empty group at end
         if (newGroups[newGroups.length - 1].length > 0) {
           newGroups.push([]);
+          newS3Groups.push([]);
         }
         
         return {
           ...state,
           filesBase64: newFilesBase64,
           imageGroups: newGroups,
+          s3ImageGroups: newS3Groups,
           selectedImages: [],
           isDirty: true
         };
@@ -377,19 +520,37 @@ function appReducer(state, action) {
         if (!(srcG === dropGroupIdx && srcI === imgIdx)) {
           const img = newGroups[srcG][srcI];
           newGroups[srcG] = newGroups[srcG].filter((_, j) => j !== srcI);
+          
           const tgt = [...newGroups[dropGroupIdx]];
           imgIdx === null ? tgt.push(img) : tgt.splice(imgIdx, 0, img);
           newGroups[dropGroupIdx] = tgt;
+          
+          // Also move S3 URL if available
+          if (newS3Groups[srcG] && newS3Groups[srcG][srcI]) {
+            const s3Url = newS3Groups[srcG][srcI];
+            newS3Groups[srcG] = newS3Groups[srcG].filter((_, j) => j !== srcI);
+            
+            // Make sure target S3 group exists
+            if (!newS3Groups[dropGroupIdx]) {
+              newS3Groups[dropGroupIdx] = [];
+            }
+            
+            const s3Tgt = [...newS3Groups[dropGroupIdx]];
+            imgIdx === null ? s3Tgt.push(s3Url) : s3Tgt.splice(imgIdx, 0, s3Url);
+            newS3Groups[dropGroupIdx] = s3Tgt;
+          }
         }
         
         // Ensure empty group at end
         if (newGroups[newGroups.length - 1].length > 0) {
           newGroups.push([]);
+          newS3Groups.push([]);
         }
         
         return {
           ...state,
           imageGroups: newGroups,
+          s3ImageGroups: newS3Groups,
           selectedImages: [],
           isDirty: true
         };

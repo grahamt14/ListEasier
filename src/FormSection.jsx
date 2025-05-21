@@ -563,45 +563,30 @@ const handleGenerateListingWithUpload = async () => {
     // Update metadata state
     dispatch({ type: 'UPDATE_GROUP_METADATA', payload: updatedMetadata });
 
-    // Use Promise for fetching eBay category ID instead of await
-    return fetchEbayCategoryID(selectedCategory, subCategory)
-      .then(ebayCategoryID => {
-        dispatch({ type: 'SET_CATEGORY_ID', payload: ebayCategoryID });
-        
-        // Clear raw files state
-        dispatch({ type: 'SET_RAW_FILES', payload: [] });
-        dispatch({ type: 'SET_IMAGE_ROTATIONS', payload: {} });
-        
-        // Update status before calling the listing generator
-        dispatch({ 
-          type: 'SET_UPLOAD_STATUS', 
-          payload: { 
-            uploadStage: 'Preparing to generate listings...',
-            isUploading: false
-          } 
-        });
-        
-        // Now call handleGenerateListing
-        return onGenerateListing();
-      })
-      .catch(error => {
-        console.error('Error fetching eBay category ID:', error);
-        
-        // Still continue with the rest of the process
-        dispatch({ type: 'SET_CATEGORY_ID', payload: null });
-        dispatch({ type: 'SET_RAW_FILES', payload: [] });
-        dispatch({ type: 'SET_IMAGE_ROTATIONS', payload: {} });
-        
-        dispatch({ 
-          type: 'SET_UPLOAD_STATUS', 
-          payload: { 
-            uploadStage: 'Preparing to generate listings...',
-            isUploading: false
-          } 
-        });
-        
-        return onGenerateListing();
-      });
+    // Fetch the eBay category ID and continue with the process
+    try {
+      const ebayCategoryID = await fetchEbayCategoryID(selectedCategory, subCategory);
+      dispatch({ type: 'SET_CATEGORY_ID', payload: ebayCategoryID });
+    } catch (error) {
+      console.error('Error fetching eBay category ID:', error);
+      dispatch({ type: 'SET_CATEGORY_ID', payload: null });
+    }
+    
+    // Clear raw files state
+    dispatch({ type: 'SET_RAW_FILES', payload: [] });
+    dispatch({ type: 'SET_IMAGE_ROTATIONS', payload: {} });
+    
+    // Update status before calling the listing generator
+    dispatch({ 
+      type: 'SET_UPLOAD_STATUS', 
+      payload: { 
+        uploadStage: 'Preparing to generate listings...',
+        isUploading: false
+      } 
+    });
+    
+    // Now call handleGenerateListing
+    await onGenerateListing();
     
   } catch (error) {
     console.error('Error during upload process:', error);

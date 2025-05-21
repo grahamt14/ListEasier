@@ -472,7 +472,7 @@ const fetchEbayCategoryID = async (category, subCategory) => {
   try {
     // Query the eBay category mapping from DynamoDB
     const command = new QueryCommand({
-      TableName: 'EbayCategoryMapping',
+      TableName: 'ListCategory',
       KeyConditionExpression: 'Category = :cat AND SubCategory = :sub',
       ExpressionAttributeValues: {
         ':cat': { S: category },
@@ -489,7 +489,7 @@ const fetchEbayCategoryID = async (category, subCategory) => {
     
     // If no direct match, try to get a default category for the main category
     const fallbackCommand = new QueryCommand({
-      TableName: 'EbayCategoryMapping',
+      TableName: 'ListCategory',
       KeyConditionExpression: 'Category = :cat',
       ExpressionAttributeValues: {
         ':cat': { S: category },
@@ -505,7 +505,7 @@ const fetchEbayCategoryID = async (category, subCategory) => {
     }
     
     // Fallback to a generic category if all else fails
-    return "11450"; // This is a generic eBay category ID (you can change this to whatever is appropriate)
+    return ""; // This is a generic eBay category ID (you can change this to whatever is appropriate)
   } catch (error) {
     console.error('Error in fetchEbayCategoryID:', error);
     throw error; // Rethrow to be handled by the caller

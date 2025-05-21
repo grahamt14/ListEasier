@@ -417,228 +417,220 @@ function AppContent() {
     }),
   });
 
-  const handleGenerateListing = async () => {
-    const { imageGroups, filesBase64, batchSize, processedGroupIndices } = state;
-    const nonEmptyGroups = imageGroups.filter(g => g.length > 0);
+ const handleGenerateListing = async () => {
+  const { imageGroups, filesBase64, batchSize, processedGroupIndices } = state;
+  const nonEmptyGroups = imageGroups.filter(g => g.length > 0);
 
-    if (nonEmptyGroups.length === 0 && filesBase64.length === 0) {
-      return;
+  if (nonEmptyGroups.length === 0 && filesBase64.length === 0) {
+    return;
+  }
+
+  // Only process groups that haven't been processed yet
+  const newGroupsToProcess = nonEmptyGroups.filter((group, idx) => {
+    const originalIndex = imageGroups.findIndex(g => g === group);
+    return !processedGroupIndices || !processedGroupIndices.includes(originalIndex);
+  });
+  
+  // Get indices of new groups to be processed
+  const newGroupIndices = newGroupsToProcess.map(group => {
+    return imageGroups.findIndex(g => g === group);
+  });
+  
+  let allGroupsToProcess = [...newGroupsToProcess];
+  let newGroups = [];
+  
+  // Get S3 groups for download
+  const s3GroupsForDownload = state.s3ImageGroups.filter(group => 
+    group.length > 0 && group.some(url => url && !url.startsWith('data:'))
+  );
+  
+  // If there are unprocessed images in the pool, use them based on batchSize
+  let newPoolGroupIndices = [];
+  if (filesBase64.length > 0 && batchSize > 0) {
+    const poolGroups = [];
+    for (let i = 0; i < filesBase64.length; i += batchSize) {
+      poolGroups.push(filesBase64.slice(i, i + batchSize));
     }
+    
+    allGroupsToProcess = [...newGroupsToProcess, ...poolGroups];
+    
+    // Update image groups in state
+    let updatedGroups = [...imageGroups];
+    
+    // Calculate the indices for the new pool groups
+    const firstEmptyGroupIndex = updatedGroups.findIndex(g => g.length === 0);
+    let insertIndex = firstEmptyGroupIndex !== -1 ? firstEmptyGroupIndex : updatedGroups.length;
+    
+    // Add the pool groups to the image groups and track their metadata
+    const updatedMetadata = [...state.groupMetadata || []];
+    
+    poolGroups.forEach(group => {
+      updatedGroups.splice(insertIndex, 0, group);
+      newPoolGroupIndices.push(insertIndex);
+      
+      // Add metadata for the new group using current price and SKU
+      while (updatedMetadata.length <= insertIndex) {
+        updatedMetadata.push(null);
+      }
+      updatedMetadata[insertIndex] = { price: state.price, sku: state.sku };
+      
+      insertIndex++;
+    });
+    
+    // Update the metadata in state
+    dispatch({ type: 'UPDATE_GROUP_METADATA', payload: updatedMetadata });
+    
+    // Ensure there's an empty group at the end
+    if (updatedGroups[updatedGroups.length - 1]?.length !== 0) {
+      updatedGroups.push([]);
+    }
+    
+    dispatch({ type: 'SET_IMAGE_GROUPS', payload: updatedGroups });
+    
+    newGroups = [...newGroupsToProcess, ...poolGroups];
+  } else {
+    newGroups = [...newGroupsToProcess];
+  }
 
-    // Only process groups that haven't been processed yet
-    const newGroupsToProcess = nonEmptyGroups.filter((group, idx) => {
-      const originalIndex = imageGroups.findIndex(g => g === group);
-      return !processedGroupIndices || !processedGroupIndices.includes(originalIndex);
-    });
+  // If no new groups to process, inform user and return
+  if (allGroupsToProcess.length === 0) {
+    alert("No new images to process. All existing groups have already been generated.");
+    return;
+  }
+
+  // Update state for processing - Only count the new groups
+  dispatch({ type: 'SET_PROCESSING_STATUS', payload: { 
+    isProcessing: true,
+    processTotal: allGroupsToProcess.length,
+    processCompleted: 0
+  }});
+  
+  // Legacy state updates
+  dispatch({ type: 'SET_TOTAL_CHUNKS', payload: allGroupsToProcess.length });
+  dispatch({ type: 'SET_COMPLETED_CHUNKS', payload: 0 });
+  
+  // Only initialize response data for new groups, keep existing responses
+  const updatedResponseData = [...state.responseData];
+  const updatedProcessingGroups = [...state.processingGroups];
+  
+  // Set initial state for new groups
+  [...newGroupIndices, ...newPoolGroupIndices].forEach(index => {
+    // Extend arrays if needed
+    while (updatedResponseData.length <= index) {
+      updatedResponseData.push(null);
+    }
     
-    // Get indices of new groups to be processed
-    const newGroupIndices = newGroupsToProcess.map(group => {
-      return imageGroups.findIndex(g => g === group);
-    });
+    while (updatedProcessingGroups.length <= index) {
+      updatedProcessingGroups.push(false);
+    }
     
-    let allGroupsToProcess = [...newGroupsToProcess];
-    let newGroups = [];
+    // Set initial values for new groups
+    updatedResponseData[index] = null;
+    updatedProcessingGroups[index] = true;
+  });
+  
+  dispatch({ type: 'SET_RESPONSE_DATA', payload: updatedResponseData });
+  dispatch({ type: 'SET_IS_DIRTY', payload: false });
+  dispatch({ type: 'SET_PROCESSING_GROUPS', payload: updatedProcessingGroups });
+
+  const selectedCategoryOptions = getSelectedCategoryOptionsJSON(fieldSelections, price, sku);
+
+  // Track indices of groups being processed
+  const processedIndices = [];
+  
+  // Track completed count for progress updates
+  let completedCount = 0;
+  
+  // Process each group with the API using sequential processing for better tracking
+  for (let arrayIndex = 0; arrayIndex < allGroupsToProcess.length; arrayIndex++) {
+    const group = allGroupsToProcess[arrayIndex];
     
-    // Get S3 groups for download
-    const s3GroupsForDownload = state.s3ImageGroups.filter(group => 
-      group.length > 0 && group.some(url => url && !url.startsWith('data:'))
-    );
-    
-    // If there are unprocessed images in the pool, use them based on batchSize
-    let newPoolGroupIndices = [];
-    if (filesBase64.length > 0 && batchSize > 0) {
-      const poolGroups = [];
-      for (let i = 0; i < filesBase64.length; i += batchSize) {
-        poolGroups.push(filesBase64.slice(i, i + batchSize));
-      }
-      
-      allGroupsToProcess = [...newGroupsToProcess, ...poolGroups];
-      
-      // Update image groups in state
-      let updatedGroups = [...imageGroups];
-      
-      // Calculate the indices for the new pool groups
-      const firstEmptyGroupIndex = updatedGroups.findIndex(g => g.length === 0);
-      let insertIndex = firstEmptyGroupIndex !== -1 ? firstEmptyGroupIndex : updatedGroups.length;
-      
-      // Add the pool groups to the image groups and track their metadata
-      const updatedMetadata = [...state.groupMetadata || []];
-      
-      poolGroups.forEach(group => {
-        updatedGroups.splice(insertIndex, 0, group);
-        newPoolGroupIndices.push(insertIndex);
-        
-        // Add metadata for the new group using current price and SKU
-        while (updatedMetadata.length <= insertIndex) {
-          updatedMetadata.push(null);
-        }
-        updatedMetadata[insertIndex] = { price: state.price, sku: state.sku };
-        
-        insertIndex++;
-      });
-      
-      // Update the metadata in state
-      dispatch({ type: 'UPDATE_GROUP_METADATA', payload: updatedMetadata });
-      
-      // Ensure there's an empty group at the end
-      if (updatedGroups[updatedGroups.length - 1]?.length !== 0) {
-        updatedGroups.push([]);
-      }
-      
-      dispatch({ type: 'SET_IMAGE_GROUPS', payload: updatedGroups });
-      
-      newGroups = [...newGroupsToProcess, ...poolGroups];
+    // Get the actual index in the imageGroups array
+    let actualIndex;
+    if (arrayIndex < newGroupIndices.length) {
+      // This is a group from imageGroups
+      actualIndex = newGroupIndices[arrayIndex];
     } else {
-      newGroups = [...newGroupsToProcess];
+      // This is a pool group
+      const poolArrayIndex = arrayIndex - newGroupIndices.length;
+      actualIndex = newPoolGroupIndices[poolArrayIndex];
     }
-
-    // If no new groups to process, inform user and return
-    if (allGroupsToProcess.length === 0) {
-      alert("No new images to process. All existing groups have already been generated.");
-      return;
-    }
-
-    // Update state for processing - Only count the new groups
-    dispatch({ type: 'SET_PROCESSING_STATUS', payload: { 
-      isProcessing: true,
-      processTotal: allGroupsToProcess.length,
-      processCompleted: 0
-    }});
     
-    // Legacy state updates
-    dispatch({ type: 'SET_TOTAL_CHUNKS', payload: allGroupsToProcess.length });
-    dispatch({ type: 'SET_COMPLETED_CHUNKS', payload: 0 });
+    processedIndices.push(actualIndex);
     
-    // Only initialize response data for new groups, keep existing responses
-    const updatedResponseData = [...state.responseData];
-    const updatedProcessingGroups = [...state.processingGroups];
-    
-    // Set initial state for new groups
-    [...newGroupIndices, ...newPoolGroupIndices].forEach(index => {
-      // Extend arrays if needed
-      while (updatedResponseData.length <= index) {
-        updatedResponseData.push(null);
-      }
-      
-      while (updatedProcessingGroups.length <= index) {
-        updatedProcessingGroups.push(false);
-      }
-      
-      // Set initial values for new groups
-      updatedResponseData[index] = null;
-      updatedProcessingGroups[index] = true;
-    });
-    
-    dispatch({ type: 'SET_RESPONSE_DATA', payload: updatedResponseData });
-    dispatch({ type: 'SET_IS_DIRTY', payload: false });
-    dispatch({ type: 'SET_PROCESSING_GROUPS', payload: updatedProcessingGroups });
-
-    const selectedCategoryOptions = getSelectedCategoryOptionsJSON(fieldSelections, price, sku);
-
-    // Track indices of groups being processed
-    const processedIndices = [];
-    
-    // Process each group with the API using promises for better tracking
-    const processingPromises = allGroupsToProcess.map((group, arrayIndex) => {
-      // Get the actual index in the imageGroups array
-      let actualIndex;
-      if (arrayIndex < newGroupIndices.length) {
-        // This is a group from imageGroups
-        actualIndex = newGroupIndices[arrayIndex];
-      } else {
-        // This is a pool group
-        const poolArrayIndex = arrayIndex - newGroupIndices.length;
-        actualIndex = newPoolGroupIndices[poolArrayIndex];
-      }
-      
-      processedIndices.push(actualIndex);
-      
-      return new Promise((resolve) => {
-        fetch(
-          "https://7f26uyyjs5.execute-api.us-east-2.amazonaws.com/ListEasily/ListEasilyAPI",
-          {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              category,
-              subCategory,
-              Base64Key: [group],
-              SelectedCategoryOptions: selectedCategoryOptions
-            })
-          }
-        )
-          .then(res => res.json())
-          .then(data => {
-            let parsed = data.body;
-            if (typeof parsed === "string") parsed = JSON.parse(parsed);
-
-            // Update response data at the correct index
-            dispatch({
-              type: 'UPDATE_RESPONSE_DATA',
-              payload: {
-                index: actualIndex,
-                value: Array.isArray(parsed) ? parsed[0] : parsed
-              }
-            });
-
-            // Update processing group
-            dispatch({
-              type: 'UPDATE_PROCESSING_GROUP',
-              payload: {
-                index: actualIndex,
-                value: false
-              }
-            });
+    try {
+      const response = await fetch(
+        "https://7f26uyyjs5.execute-api.us-east-2.amazonaws.com/ListEasily/ListEasilyAPI",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            category,
+            subCategory,
+            Base64Key: [group],
+            SelectedCategoryOptions: selectedCategoryOptions
           })
-          .catch(err => {
-            // Handle error
-            dispatch({
-              type: 'UPDATE_RESPONSE_DATA',
-              payload: {
-                index: actualIndex,
-                value: { error: "Failed to fetch listing data", raw_content: err.message }
-              }
-            });
+        }
+      );
+      
+      const data = await response.json();
+      let parsed = data.body;
+      if (typeof parsed === "string") parsed = JSON.parse(parsed);
 
-            dispatch({
-              type: 'UPDATE_PROCESSING_GROUP',
-              payload: {
-                index: actualIndex,
-                value: false
-              }
-            });
-          })
-          .finally(() => {
-            // Increment both new and legacy progress counters
-            dispatch({ 
-              type: 'SET_PROCESSING_STATUS', 
-              payload: { 
-                processCompleted: state.processingStatus.processCompleted + 1
-              } 
-            });
-            
-            dispatch({ type: 'SET_COMPLETED_CHUNKS', payload: state.completedChunks + 1 });
-            
-            resolve();
-          });
+      // Update response data at the correct index
+      dispatch({
+        type: 'UPDATE_RESPONSE_DATA',
+        payload: {
+          index: actualIndex,
+          value: Array.isArray(parsed) ? parsed[0] : parsed
+        }
       });
-    });
-    
-    // Wait for all processing to complete
-    await Promise.all(processingPromises);
-    
-    // Mark processed groups as completed
-    dispatch({ type: 'MARK_GROUPS_AS_PROCESSED', payload: processedIndices });
-    
-    // Clear the image pool
-    if (filesBase64.length > 0) {
-      dispatch({ type: 'SET_FILES_BASE64', payload: [] });
+    } catch (err) {
+      // Handle error
+      dispatch({
+        type: 'UPDATE_RESPONSE_DATA',
+        payload: {
+          index: actualIndex,
+          value: { error: "Failed to fetch listing data", raw_content: err.message }
+        }
+      });
+    } finally {
+      // Update processing group status
+      dispatch({
+        type: 'UPDATE_PROCESSING_GROUP',
+        payload: {
+          index: actualIndex,
+          value: false
+        }
+      });
+      
+      // Increment completion count
+      completedCount++;
+      
+      // Update progress for each individual group completion
+      dispatch({ 
+        type: 'SET_PROCESSING_STATUS', 
+        payload: { 
+          processCompleted: completedCount
+        } 
+      });
+      
+      dispatch({ type: 'SET_COMPLETED_CHUNKS', payload: completedCount });
     }
-    
-    // Reset status indicators
-    dispatch({ type: 'RESET_STATUS' });
-    dispatch({ type: 'SET_IS_LOADING', payload: false });
-  };
+  }
+  
+  // Mark processed groups as completed
+  dispatch({ type: 'MARK_GROUPS_AS_PROCESSED', payload: processedIndices });
+  
+  // Clear the image pool
+  if (filesBase64.length > 0) {
+    dispatch({ type: 'SET_FILES_BASE64', payload: [] });
+  }
+  
+  // Reset status indicators
+  dispatch({ type: 'RESET_STATUS' });
+  dispatch({ type: 'SET_IS_LOADING', payload: false });
+};
 
   return (
     <div className="app-container">

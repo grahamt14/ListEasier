@@ -355,7 +355,6 @@ function FormSection({ onGenerateListing }) {
     }
   };
   
-// Updated handleGenerateListingWithUpload function with improved S3 URL handling
 const handleGenerateListingWithUpload = async () => {
   try {
     // Reset status indicators
@@ -432,29 +431,36 @@ const handleGenerateListingWithUpload = async () => {
     for (let i = 0; i < allRawFiles.length; i += BATCH_SIZE) {
       const batch = allRawFiles.slice(i, i + BATCH_SIZE);
       
-      // Upload batch in parallel
+      // Upload batch in parallel with individual progress updates
       const batchResults = await Promise.all(
-        batch.map(file => uploadToS3(file).catch(error => {
-          console.error(`Error uploading file:`, error);
-          return null; // Return null for failed uploads
-        }))
+        batch.map(async (file, batchIndex) => {
+          try {
+            const result = await uploadToS3(file);
+            
+            // Update progress incrementally for each file
+            const currentProcessed = i + batchIndex + 1;
+            const progress = Math.round((currentProcessed / allRawFiles.length) * 100);
+            
+            // Update progress after each individual file instead of after batch
+            dispatch({ 
+              type: 'SET_UPLOAD_STATUS', 
+              payload: { 
+                uploadCompleted: currentProcessed,
+                uploadProgress: progress
+              } 
+            });
+            
+            return result;
+          } catch (error) {
+            console.error(`Error uploading file:`, error);
+            return null; // Return null for failed uploads
+          }
+        })
       );
       
       // Filter out failed uploads and add to results
       const validUrls = batchResults.filter(url => url !== null);
       s3UrlsList.push(...validUrls);
-      
-      // Update progress through global state
-      const currentProcessed = Math.min(i + BATCH_SIZE, allRawFiles.length);
-      const progress = Math.round((currentProcessed / allRawFiles.length) * 100);
-      
-      dispatch({ 
-        type: 'SET_UPLOAD_STATUS', 
-        payload: { 
-          uploadCompleted: currentProcessed,
-          uploadProgress: progress
-        } 
-      });
     }
     
     // Complete S3 upload process

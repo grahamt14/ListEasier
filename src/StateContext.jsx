@@ -257,91 +257,7 @@ function appReducer(state, action) {
         groupMetadata: [...state.groupMetadata, action.payload]
       };
       
-    case 'GROUP_SELECTED_IMAGES':
-      const groupImgs = state.selectedImages.map(i => state.filesBase64[i]);
-      const groupRawFiles = state.selectedImages.map(i => state.rawFiles[i]);
-      
-      const remainingBase64 = state.filesBase64.filter((_, i) => 
-        !state.selectedImages.includes(i)
-      );
-      
-      const remainingRawFiles = state.rawFiles.filter((_, i) => 
-        !state.selectedImages.includes(i)
-      );
-      
-      // Update rotations
-      const newRotations = { ...state.imageRotations };
-      state.selectedImages.forEach(index => {
-        delete newRotations[index];
-      });
-      
-      // Reindex rotations
-      const finalRotations = {};
-      let newIndex = 0;
-      state.filesBase64.forEach((_, oldIndex) => {
-        if (!state.selectedImages.includes(oldIndex)) {
-          if (newRotations[oldIndex] !== undefined) {
-            finalRotations[newIndex] = newRotations[oldIndex];
-          }
-          newIndex++;
-        }
-      });
-      
-      // Create metadata for this new group
-      const newGroupMetadata = {
-        price: state.price,
-        sku: state.sku
-      };
-      
-      // Update image groups to include the selected images
-      let updatedGroups = [...state.imageGroups];
-      const firstEmptyIndex = updatedGroups.findIndex(g => g.length === 0);
-      
-      if (firstEmptyIndex !== -1) {
-        updatedGroups[firstEmptyIndex] = [...updatedGroups[firstEmptyIndex], ...groupImgs];
-        
-        // Update group metadata at the same index
-        const updatedMetadata = [...state.groupMetadata];
-        while (updatedMetadata.length <= firstEmptyIndex) {
-          updatedMetadata.push(null);
-        }
-        updatedMetadata[firstEmptyIndex] = newGroupMetadata;
-        
-        if (updatedGroups[updatedGroups.length - 1].length > 0) {
-          updatedGroups.push([]);
-        }
-        
-        return {
-          ...state,
-          filesBase64: remainingBase64,
-          rawFiles: remainingRawFiles,
-          selectedImages: [],
-          imageRotations: finalRotations,
-          imageGroups: updatedGroups,
-          groupMetadata: updatedMetadata,
-          isDirty: true
-        };
-      } else {
-        updatedGroups.push(groupImgs);
-        
-        // Add metadata for the new group
-        const updatedMetadata = [...state.groupMetadata, newGroupMetadata];
-        
-        if (updatedGroups[updatedGroups.length - 1].length > 0) {
-          updatedGroups.push([]);
-        }
-        
-        return {
-          ...state,
-          filesBase64: remainingBase64,
-          rawFiles: remainingRawFiles,
-          selectedImages: [],
-          imageRotations: finalRotations,
-          imageGroups: updatedGroups,
-          groupMetadata: updatedMetadata,
-          isDirty: true
-        };
-      }// In the appReducer function, replace the GROUP_SELECTED_IMAGES case with this:
+    // UPDATED: Modified GROUP_SELECTED_IMAGES case to handle S3 URLs properly
     case 'GROUP_SELECTED_IMAGES':
       const groupImgs = state.selectedImages.map(i => state.filesBase64[i]);
       const groupRawFiles = state.selectedImages.map(i => state.rawFiles[i]);
@@ -463,8 +379,8 @@ function appReducer(state, action) {
           isDirty: true
         };
       }
-
-// Also update the HANDLE_GROUP_DROP case:
+      
+    // UPDATED: Modified HANDLE_GROUP_DROP case to handle S3 URLs properly    
     case 'HANDLE_GROUP_DROP':
       const { dropGroupIdx, imgIdx, from, fromIndex } = action.payload;
       let newGroups = [...state.imageGroups];

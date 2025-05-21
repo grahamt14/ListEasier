@@ -355,7 +355,7 @@ function FormSection({ onGenerateListing }) {
     }
   };
   
-// Updated handleGenerateListingWithUpload function in FormSection.jsx
+// Updated handleGenerateListingWithUpload function with improved S3 URL handling
 const handleGenerateListingWithUpload = async () => {
   try {
     // Reset status indicators
@@ -427,8 +427,48 @@ const handleGenerateListingWithUpload = async () => {
     // Create a batching system for uploads to improve performance
     const BATCH_SIZE = 5; // Upload 5 files in parallel
     const s3UrlsList = [];
-	
-	    console.log("Successfully uploaded images to S3:", s3UrlsList.length);
+    
+    // Process files in batches
+    for (let i = 0; i < allRawFiles.length; i += BATCH_SIZE) {
+      const batch = allRawFiles.slice(i, i + BATCH_SIZE);
+      
+      // Upload batch in parallel
+      const batchResults = await Promise.all(
+        batch.map(file => uploadToS3(file).catch(error => {
+          console.error(`Error uploading file:`, error);
+          return null; // Return null for failed uploads
+        }))
+      );
+      
+      // Filter out failed uploads and add to results
+      const validUrls = batchResults.filter(url => url !== null);
+      s3UrlsList.push(...validUrls);
+      
+      // Update progress through global state
+      const currentProcessed = Math.min(i + BATCH_SIZE, allRawFiles.length);
+      const progress = Math.round((currentProcessed / allRawFiles.length) * 100);
+      
+      dispatch({ 
+        type: 'SET_UPLOAD_STATUS', 
+        payload: { 
+          uploadCompleted: currentProcessed,
+          uploadProgress: progress
+        } 
+      });
+    }
+    
+    // Complete S3 upload process
+    dispatch({ 
+      type: 'SET_UPLOAD_STATUS', 
+      payload: { 
+        uploadProgress: 100,
+        uploadCompleted: allRawFiles.length,
+        uploadStage: 'Upload complete! Organizing images...'
+      } 
+    });
+
+    // Synchronize S3 URLs with image groups - NEWLY ADDED CODE
+    console.log("Successfully uploaded images to S3:", s3UrlsList.length);
     
     // First, map out which images are already in groups and which are in the pool
     const totalExistingGroupImages = state.imageGroups.reduce((total, group) => 
@@ -475,6 +515,21 @@ const handleGenerateListingWithUpload = async () => {
       }
     }
     
+    // For individual image uploads without batching
+    if (batchSize === 0 && poolImageCount > 0 && s3UrlsList.length > 0) {
+      // Store S3 URLs in the first group of s3ImageGroups
+      // This allows them to be accessed when using Group Selected
+      const poolS3Urls = [...(updatedS3Groups[0] || [])];
+      
+      // Add new S3 URLs to the pool
+      for (let i = 0; i < Math.min(poolImageCount, s3UrlsList.length); i++) {
+        poolS3Urls[i] = s3UrlsList[i];
+      }
+      
+      // Update the first group with the pool's S3 URLs
+      updatedS3Groups[0] = poolS3Urls;
+    }
+    
     // Ensure there's an empty group at the end
     if (updatedS3Groups.length === 0 || 
         (updatedS3Groups[updatedS3Groups.length - 1] && 
@@ -488,45 +543,7 @@ const handleGenerateListingWithUpload = async () => {
     
     // Update S3 image groups in state
     dispatch({ type: 'SET_S3_IMAGE_GROUPS', payload: updatedS3Groups });
-    
-    // Process files in batches
-    for (let i = 0; i < allRawFiles.length; i += BATCH_SIZE) {
-      const batch = allRawFiles.slice(i, i + BATCH_SIZE);
-      
-      // Upload batch in parallel
-      const batchResults = await Promise.all(
-        batch.map(file => uploadToS3(file).catch(error => {
-          console.error(`Error uploading file:`, error);
-          return null; // Return null for failed uploads
-        }))
-      );
-      
-      // Filter out failed uploads and add to results
-      const validUrls = batchResults.filter(url => url !== null);
-      s3UrlsList.push(...validUrls);
-      
-      // Update progress through global state
-      const currentProcessed = Math.min(i + BATCH_SIZE, allRawFiles.length);
-      const progress = Math.round((currentProcessed / allRawFiles.length) * 100);
-      
-      dispatch({ 
-        type: 'SET_UPLOAD_STATUS', 
-        payload: { 
-          uploadCompleted: currentProcessed,
-          uploadProgress: progress
-        } 
-      });
-    }
-    
-    // Complete S3 upload process
-    dispatch({ 
-      type: 'SET_UPLOAD_STATUS', 
-      payload: { 
-        uploadProgress: 100,
-        uploadCompleted: allRawFiles.length,
-        uploadStage: 'Upload complete! Organizing images...'
-      } 
-    });
+    // END OF NEWLY ADDED CODE
 
     // Log all the S3 URLs we received
     console.log("All uploaded S3 URLs:", s3UrlsList);
@@ -741,7 +758,7 @@ const handleGenerateListingWithUpload = async () => {
       <div className="spinner-circle"></div>
     </div>
   );
-
+  
   // Group selector component for metadata editing
   const renderGroupSelector = () => {
     // Only render if there are non-empty groups

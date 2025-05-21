@@ -121,7 +121,6 @@ function FormSection({ onGenerateListing }) {
   };
 
   // Handle update group metadata
-  // Handle update group metadata
   const handleUpdateGroupMetadata = () => {
     // Create updated metadata array
     const updatedMetadata = [...(groupMetadata || [])];
@@ -356,416 +355,221 @@ function FormSection({ onGenerateListing }) {
     }
   };
   
-// Handle generate listing with upload
-const handleGenerateListingWithUpload = async () => {
-  try {
-    // Reset status indicators
-    dispatch({ type: 'RESET_STATUS' });
-    
-    // Collect all raw files that need uploading
-    let allRawFiles = [...rawFiles];
-    
-    // If no files to upload, just generate listings
-    if (allRawFiles.length === 0) {
-      if (filesBase64.length > 0) {
-        // Convert base64 images to files if needed
-        const convertedFiles = await Promise.all(filesBase64.map(async (base64, i) => {
-          try {
-            const matches = base64.match(/^data:([A-Za-z-+\/]+);base64,(.+)$/);
-            
-            if (!matches || matches.length !== 3) return null;
-            
-            const contentType = matches[1];
-            const base64Data = matches[2];
-            const byteCharacters = atob(base64Data);
-            const byteArrays = [];
-            
-            for (let offset = 0; offset < byteCharacters.length; offset += 512) {
-              const slice = byteCharacters.slice(offset, offset + 512);
-              const byteNumbers = new Array(slice.length);
-              for (let i = 0; i < slice.length; i++) {
-                byteNumbers[i] = slice.charCodeAt(i);
+  // Handle generate listing with upload
+  const handleGenerateListingWithUpload = async () => {
+    try {
+      // Reset status indicators
+      dispatch({ type: 'RESET_STATUS' });
+      
+      // Collect all raw files that need uploading
+      let allRawFiles = [...rawFiles];
+      
+      // If no files to upload, just generate listings
+      if (allRawFiles.length === 0) {
+        if (filesBase64.length > 0) {
+          // Convert base64 images to files if needed
+          const convertedFiles = await Promise.all(filesBase64.map(async (base64, i) => {
+            try {
+              const matches = base64.match(/^data:([A-Za-z-+\/]+);base64,(.+)$/);
+              
+              if (!matches || matches.length !== 3) return null;
+              
+              const contentType = matches[1];
+              const base64Data = matches[2];
+              const byteCharacters = atob(base64Data);
+              const byteArrays = [];
+              
+              for (let offset = 0; offset < byteCharacters.length; offset += 512) {
+                const slice = byteCharacters.slice(offset, offset + 512);
+                const byteNumbers = new Array(slice.length);
+                for (let i = 0; i < slice.length; i++) {
+                  byteNumbers[i] = slice.charCodeAt(i);
+                }
+                const byteArray = new Uint8Array(byteNumbers);
+                byteArrays.push(byteArray);
               }
-              const byteArray = new Uint8Array(byteNumbers);
-              byteArrays.push(byteArray);
+              
+              const blob = new Blob(byteArrays, {type: contentType});
+              const fileName = `image_${Date.now()}_${i}.${contentType.split('/')[1] || 'jpg'}`;
+              return new File([blob], fileName, {type: contentType});
+            } catch (error) {
+              console.error(`Error converting base64 to file:`, error);
+              return null;
             }
-            
-            const blob = new Blob(byteArrays, {type: contentType});
-            const fileName = `image_${Date.now()}_${i}.${contentType.split('/')[1] || 'jpg'}`;
-            return new File([blob], fileName, {type: contentType});
-          } catch (error) {
-            console.error(`Error converting base64 to file:`, error);
-            return null;
+          }));
+          
+          const validFiles = convertedFiles.filter(file => file !== null);
+          
+          if (validFiles.length > 0) {
+            allRawFiles = validFiles;
+          } else {
+            await onGenerateListing();
+            return;
           }
-        }));
-        
-        const validFiles = convertedFiles.filter(file => file !== null);
-        
-        if (validFiles.length > 0) {
-          allRawFiles = validFiles;
         } else {
           await onGenerateListing();
           return;
         }
-      } else {
-        await onGenerateListing();
-        return;
       }
-    }
-    
-    // Start uploading - update global state
-    dispatch({ 
-      type: 'SET_UPLOAD_STATUS', 
-      payload: { 
-        isUploading: true, 
-        uploadTotal: allRawFiles.length,
-        uploadCompleted: 0,
-        uploadProgress: 0,
-        uploadStage: 'Uploading images to S3...'
-      } 
-    });
-    
-    // Create a batching system for uploads to improve performance
-    const BATCH_SIZE = 5; // Upload 5 files in parallel
-    const s3UrlsList = [];
-    
-    // Process files in batches
-    for (let i = 0; i < allRawFiles.length; i += BATCH_SIZE) {
-      const batch = allRawFiles.slice(i, i + BATCH_SIZE);
       
-      // Upload batch in parallel
-      const batchResults = await Promise.all(
-        batch.map(file => uploadToS3(file).catch(error => {
-          console.error(`Error uploading file:`, error);
-          return null; // Return null for failed uploads
-        }))
-      );
-      
-      // Filter out failed uploads and add to results
-      const validUrls = batchResults.filter(url => url !== null);
-      s3UrlsList.push(...validUrls);
-      
-      // Update progress through global state
-      const currentProcessed = Math.min(i + BATCH_SIZE, allRawFiles.length);
-      const progress = Math.round((currentProcessed / allRawFiles.length) * 100);
-      
+      // Start uploading - update global state
       dispatch({ 
         type: 'SET_UPLOAD_STATUS', 
         payload: { 
-          uploadCompleted: currentProcessed,
-          uploadProgress: progress
+          isUploading: true, 
+          uploadTotal: allRawFiles.length,
+          uploadCompleted: 0,
+          uploadProgress: 0,
+          uploadStage: 'Uploading images to S3...'
         } 
       });
-    }
-    
-    // Complete S3 upload process
-    dispatch({ 
-      type: 'SET_UPLOAD_STATUS', 
-      payload: { 
-        uploadProgress: 100,
-        uploadCompleted: allRawFiles.length,
-        uploadStage: 'Upload complete! Organizing images...'
-      } 
-    });
-
-    // Log all the S3 URLs we received
-    console.log("All uploaded S3 URLs:", s3UrlsList);
-
-    // Step 1: Understand what we have:
-    console.log("Files uploaded:", rawFiles.length);
-    console.log("Base64 files:", filesBase64.length);
-    console.log("S3 URLs generated:", s3UrlsList.length);
-    console.log("Current image groups:", imageGroups.map(g => g.length));
-
-    // Step 2: Figure out which images are already in groups and which are in the pool
-    const imagesInGroups = imageGroups.reduce((total, group) => total + group.filter(img => img).length, 0);
-    console.log(`Images in groups: ${imagesInGroups}, Images in pool: ${filesBase64.length}`);
-
-    // Step 3: Build brand new S3 image groups in the correct order
-    const newS3ImageGroups = [];
-    let s3UrlIndex = 0; // Keep track of which S3 URLs we've used
-
-    // First, process any existing groups
-    imageGroups.forEach((group, groupIndex) => {
-      if (group.length === 0) {
-        // Keep empty groups empty
-        newS3ImageGroups.push([]);
-      } else {
-        // Create a new S3 URL array for this group
-        const groupS3Urls = [];
+      
+      // Create a batching system for uploads to improve performance
+      const BATCH_SIZE = 5; // Upload 5 files in parallel
+      const s3UrlsList = [];
+      
+      // Process files in batches
+      for (let i = 0; i < allRawFiles.length; i += BATCH_SIZE) {
+        const batch = allRawFiles.slice(i, i + BATCH_SIZE);
         
-        // For each image in this group
-        for (let imgIndex = 0; imgIndex < group.length; imgIndex++) {
-          // If we've used all available S3 URLs, use a placeholder
-          if (s3UrlIndex >= s3UrlsList.length) {
-            groupS3Urls.push(`https://via.placeholder.com/800x600?text=Missing+Image+${groupIndex}-${imgIndex}`);
-            console.warn(`Not enough S3 URLs for group ${groupIndex}, image ${imgIndex}`);
-            continue;
+        // Upload batch in parallel
+        const batchResults = await Promise.all(
+          batch.map(file => uploadToS3(file).catch(error => {
+            console.error(`Error uploading file:`, error);
+            return null; // Return null for failed uploads
+          }))
+        );
+        
+        // Filter out failed uploads and add to results
+        const validUrls = batchResults.filter(url => url !== null);
+        s3UrlsList.push(...validUrls);
+        
+        // Update progress through global state
+        const currentProcessed = Math.min(i + BATCH_SIZE, allRawFiles.length);
+        const progress = Math.round((currentProcessed / allRawFiles.length) * 100);
+        
+        dispatch({ 
+          type: 'SET_UPLOAD_STATUS', 
+          payload: { 
+            uploadCompleted: currentProcessed,
+            uploadProgress: progress
+          } 
+        });
+      }
+      
+      // Complete S3 upload process
+      dispatch({ 
+        type: 'SET_UPLOAD_STATUS', 
+        payload: { 
+          uploadProgress: 100,
+          uploadCompleted: allRawFiles.length,
+          uploadStage: 'Upload complete! Organizing images...'
+        } 
+      });
+
+      // Log all the S3 URLs we received
+      console.log("All uploaded S3 URLs:", s3UrlsList);
+
+      // Step 1: Understand what we have:
+      console.log("Files uploaded:", rawFiles.length);
+      console.log("Base64 files:", filesBase64.length);
+      console.log("S3 URLs generated:", s3UrlsList.length);
+      console.log("Current image groups:", imageGroups.map(g => g.length));
+
+      // Step 2: Figure out which images are already in groups and which are in the pool
+      const imagesInGroups = imageGroups.reduce((total, group) => total + group.filter(img => img).length, 0);
+      console.log(`Images in groups: ${imagesInGroups}, Images in pool: ${filesBase64.length}`);
+
+      // Step 3: Build brand new S3 image groups in the correct order
+      const newS3ImageGroups = [];
+      let s3UrlIndex = 0; // Keep track of which S3 URLs we've used
+
+      // First, process any existing groups
+      imageGroups.forEach((group, groupIndex) => {
+        if (group.length === 0) {
+          // Keep empty groups empty
+          newS3ImageGroups.push([]);
+        } else {
+          // Create a new S3 URL array for this group
+          const groupS3Urls = [];
+          
+          // For each image in this group
+          for (let imgIndex = 0; imgIndex < group.length; imgIndex++) {
+            // If we've used all available S3 URLs, use a placeholder
+            if (s3UrlIndex >= s3UrlsList.length) {
+              groupS3Urls.push(`https://via.placeholder.com/800x600?text=Missing+Image+${groupIndex}-${imgIndex}`);
+              console.warn(`Not enough S3 URLs for group ${groupIndex}, image ${imgIndex}`);
+              continue;
+            }
+            
+            // Otherwise, use the next S3 URL in sequence
+            groupS3Urls.push(s3UrlsList[s3UrlIndex]);
+            s3UrlIndex++;
           }
           
-          // Otherwise, use the next S3 URL in sequence
-          groupS3Urls.push(s3UrlsList[s3UrlIndex]);
-          s3UrlIndex++;
+          newS3ImageGroups.push(groupS3Urls);
         }
+      });
+
+      // If we have any remaining S3 URLs and images in the pool, create new groups
+      if (s3UrlIndex < s3UrlsList.length && batchSize > 0) {
+        const remainingUrls = s3UrlsList.slice(s3UrlIndex);
+        console.log(`Creating new groups from ${remainingUrls.length} remaining S3 URLs`);
         
-        newS3ImageGroups.push(groupS3Urls);
-      }
-    });
-
-    // If we have any remaining S3 URLs and images in the pool, create new groups
-    if (s3UrlIndex < s3UrlsList.length && batchSize > 0) {
-      const remainingUrls = s3UrlsList.slice(s3UrlIndex);
-      console.log(`Creating new groups from ${remainingUrls.length} remaining S3 URLs`);
-      
-      // Create batches of the specified size
-      for (let i = 0; i < remainingUrls.length; i += batchSize) {
-        const groupUrls = remainingUrls.slice(i, i + batchSize);
-        if (groupUrls.length > 0) {
-          newS3ImageGroups.push(groupUrls);
-        }
-      }
-    }
-
-    // Ensure we have an empty group at the end for future uploads
-    if (newS3ImageGroups.length === 0 || newS3ImageGroups[newS3ImageGroups.length - 1].length > 0) {
-      newS3ImageGroups.push([]);
-    }
-
-    // Log the new groups we're creating
-    console.log("New S3 image groups:", newS3ImageGroups.map(g => g.length));
-
-    // Create matching imageGroups that exactly mirror the S3ImageGroups
-    const newImageGroups = newS3ImageGroups.map(group => [...group]);
-
-    // Update state with the new groups
-    dispatch({ type: 'SET_IMAGE_GROUPS', payload: newImageGroups });
-    dispatch({ type: 'SET_S3_IMAGE_GROUPS', payload: newS3ImageGroups });
-    dispatch({ type: 'SET_FILES_BASE64', payload: [] });
-
-    // Update group metadata if needed
-    const updatedMetadata = [];
-    newS3ImageGroups.forEach((group, index) => {
-      if (group.length > 0) {
-        // If we have existing metadata for this group index, keep it
-        if (groupMetadata && groupMetadata[index]) {
-          updatedMetadata[index] = groupMetadata[index];
-        } 
-        // Otherwise create new metadata with default price/sku
-        else {
-          updatedMetadata[index] = { price: price || '', sku: sku || '' };
-        }
-      } else {
-        // Keep empty groups as null
-        updatedMetadata[index] = null;
-      }
-    });
-
-    // Update metadata state
-    dispatch({ type: 'UPDATE_GROUP_METADATA', payload: updatedMetadata });
-
-    // Fetch the eBay category ID and continue with the process
-    try {
-      const ebayCategoryID = await fetchEbayCategoryID(selectedCategory, subCategory);
-      dispatch({ type: 'SET_CATEGORY_ID', payload: ebayCategoryID });
-    } catch (error) {
-      console.error('Error fetching eBay category ID:', error);
-      dispatch({ type: 'SET_CATEGORY_ID', payload: null });
-    }
-    
-    // Clear raw files state
-    dispatch({ type: 'SET_RAW_FILES', payload: [] });
-    dispatch({ type: 'SET_IMAGE_ROTATIONS', payload: {} });
-    
-    // Update status before calling the listing generator
-    dispatch({ 
-      type: 'SET_UPLOAD_STATUS', 
-      payload: { 
-        uploadStage: 'Preparing to generate listings...',
-        isUploading: false
-      } 
-    });
-    
-    // Now call handleGenerateListing
-    await onGenerateListing();
-    
-  } catch (error) {
-    console.error('Error during upload process:', error);
-    
-    // Show error in upload status
-    dispatch({ 
-      type: 'SET_UPLOAD_STATUS', 
-      payload: { 
-        uploadStage: `Error: ${error.message}`,
-        isUploading: false
-      } 
-    });
-    
-    // Reset status after a delay
-    setTimeout(() => {
-      dispatch({ type: 'RESET_STATUS' });
-    }, 3000);
-  }
-};
-
-// Create a more robust approach to manage S3 URLs
-// First, create a map of original images to S3 URLs with better identification methods
-const imageToS3UrlMap = new Map();
-
-// Create unique identifiers for each image
-// For raw files, we'll use name + size for more reliable identification
-if (rawFiles.length > 0 && s3UrlsList.length > 0) {
-  rawFiles.forEach((file, index) => {
-    if (index < s3UrlsList.length && s3UrlsList[index]) {
-      const fileId = `${file.name}_${file.size}`; // Unique identifier
-      imageToS3UrlMap.set(fileId, s3UrlsList[index]);
-      
-      // Also store by preview to help match base64 images
-      const fileUrl = URL.createObjectURL(file);
-      const img = document.createElement('img');
-      img.onload = () => {
-        const canvas = document.createElement('canvas');
-        canvas.width = 10; // Just enough to create a signature
-        canvas.height = 10;
-        const ctx = canvas.getContext('2d');
-        ctx.drawImage(img, 0, 0, 10, 10);
-        const thumbnailData = canvas.toDataURL('image/jpeg', 0.1);
-        imageToS3UrlMap.set(thumbnailData, s3UrlsList[index]);
-        URL.revokeObjectURL(fileUrl);
-      };
-      img.src = fileUrl;
-    }
-  });
-}
-
-// For base64 images, we'll create more reliable identifiers
-if (filesBase64.length > 0 && s3UrlsList.length > 0) {
-  const startIndex = Math.min(rawFiles.length, s3UrlsList.length);
-  
-  filesBase64.forEach((base64, index) => {
-    const s3Index = startIndex + index;
-    if (s3Index < s3UrlsList.length && s3UrlsList[s3Index]) {
-      // Create multiple hash methods for the base64 string
-      const base64Preview = base64.substring(0, 100); // First 100 chars
-      imageToS3UrlMap.set(base64Preview, s3UrlsList[s3Index]);
-      
-      // Add truncated version without metadata
-      if (base64.includes(';base64,')) {
-        const pureBase64 = base64.split(';base64,')[1].substring(0, 50);
-        imageToS3UrlMap.set(pureBase64, s3UrlsList[s3Index]);
-      }
-      
-      // Also store the full string
-      imageToS3UrlMap.set(base64, s3UrlsList[s3Index]);
-    }
-  });
-}
-
-// Enhanced logic to ensure every image in the existing groups gets an S3 URL
-const updatedS3ImageGroups = [];
-let unassignedS3Urls = [...s3UrlsList]; // Track unassigned URLs
-
-// Process each existing group
-imageGroups.forEach((group, groupIndex) => {
-  if (group.length === 0) {
-    // Keep empty groups as empty
-    updatedS3ImageGroups[groupIndex] = [];
-  } else {
-    // For non-empty groups, map each image to its S3 URL
-    const s3Urls = [];
-    
-    group.forEach(img => {
-      let foundUrl = null;
-      
-      // Check if this is already an S3 URL
-      if (typeof img === 'string' && img.includes('s3.amazonaws.com')) {
-        s3Urls.push(img); // Keep existing S3 URLs
-        
-        // Remove from unassigned list if present
-        const urlIndex = unassignedS3Urls.indexOf(img);
-        if (urlIndex !== -1) {
-          unassignedS3Urls.splice(urlIndex, 1);
-        }
-        
-        return;
-      } 
-      
-      // Check if we have a direct mapping for this image
-      if (typeof img === 'string') {
-        // Try direct lookup
-        if (imageToS3UrlMap.has(img)) {
-          foundUrl = imageToS3UrlMap.get(img);
-        } 
-        // Try lookup by base64 preview
-        else if (img.startsWith('data:') && img.includes(';base64,')) {
-          // Try various methods to match the base64 image
-          const preview = img.substring(0, 100);
-          if (imageToS3UrlMap.has(preview)) {
-            foundUrl = imageToS3UrlMap.get(preview);
-          } else {
-            const pureBase64 = img.split(';base64,')[1].substring(0, 50);
-            if (imageToS3UrlMap.has(pureBase64)) {
-              foundUrl = imageToS3UrlMap.get(pureBase64);
-            }
+        // Create batches of the specified size
+        for (let i = 0; i < remainingUrls.length; i += batchSize) {
+          const groupUrls = remainingUrls.slice(i, i + batchSize);
+          if (groupUrls.length > 0) {
+            newS3ImageGroups.push(groupUrls);
           }
         }
       }
 
-      // If we found a matching S3 URL
-      if (foundUrl) {
-        s3Urls.push(foundUrl);
-        
-        // Remove from unassigned list
-        const urlIndex = unassignedS3Urls.indexOf(foundUrl);
-        if (urlIndex !== -1) {
-          unassignedS3Urls.splice(urlIndex, 1);
-        }
-      } 
-      // If no match was found, assign the next available S3 URL
-      else if (unassignedS3Urls.length > 0) {
-        const nextUrl = unassignedS3Urls.shift();
-        s3Urls.push(nextUrl);
-        console.log(`Assigned S3 URL to image without match: ${nextUrl}`);
-      } 
-      // Last resort: keep the original image
-      else {
-        s3Urls.push(img);
-        console.log(`No S3 URL available for image in group ${groupIndex}`);
+      // Ensure we have an empty group at the end for future uploads
+      if (newS3ImageGroups.length === 0 || newS3ImageGroups[newS3ImageGroups.length - 1].length > 0) {
+        newS3ImageGroups.push([]);
       }
-    });
-    
-    updatedS3ImageGroups[groupIndex] = s3Urls;
-  }
-});
 
-// Create new groups from any remaining S3 URLs if needed
-if (unassignedS3Urls.length > 0 && batchSize > 0) {
-  console.log(`${unassignedS3Urls.length} remaining S3 URLs to assign to new groups`);
-  
-  // Create batches from unassigned S3 URLs
-  for (let i = 0; i < unassignedS3Urls.length; i += batchSize) {
-    const groupUrls = unassignedS3Urls.slice(i, i + batchSize);
-    if (groupUrls.length > 0) {
-      updatedS3ImageGroups.push(groupUrls);
-    }
-  }
-}
+      // Log the new groups we're creating
+      console.log("New S3 image groups:", newS3ImageGroups.map(g => g.length));
 
-// Ensure we have an empty group at the end
-if (updatedS3ImageGroups.length === 0 || updatedS3ImageGroups[updatedS3ImageGroups.length - 1].length > 0) {
-  updatedS3ImageGroups.push([]);
-}
+      // Create matching imageGroups that exactly mirror the S3ImageGroups
+      const newImageGroups = newS3ImageGroups.map(group => [...group]);
 
-// Create matching imageGroups for the S3 URLs to keep them in sync
-const updatedImageGroups = updatedS3ImageGroups.map(group => [...group]);
+      // Update state with the new groups
+      dispatch({ type: 'SET_IMAGE_GROUPS', payload: newImageGroups });
+      dispatch({ type: 'SET_S3_IMAGE_GROUPS', payload: newS3ImageGroups });
+      dispatch({ type: 'SET_FILES_BASE64', payload: [] });
 
-// Update state with the new groups
-dispatch({ type: 'SET_IMAGE_GROUPS', payload: updatedImageGroups });
-dispatch({ type: 'SET_S3_IMAGE_GROUPS', payload: updatedS3ImageGroups });
-dispatch({ type: 'SET_FILES_BASE64', payload: [] });
-      
-      // Fetch the eBay category ID
-      const ebayCategoryID = await fetchEbayCategoryID(selectedCategory, subCategory);
-      dispatch({ type: 'SET_CATEGORY_ID', payload: ebayCategoryID });
+      // Update group metadata if needed
+      const updatedMetadata = [];
+      newS3ImageGroups.forEach((group, index) => {
+        if (group.length > 0) {
+          // If we have existing metadata for this group index, keep it
+          if (groupMetadata && groupMetadata[index]) {
+            updatedMetadata[index] = groupMetadata[index];
+          } 
+          // Otherwise create new metadata with default price/sku
+          else {
+            updatedMetadata[index] = { price: price || '', sku: sku || '' };
+          }
+        } else {
+          // Keep empty groups as null
+          updatedMetadata[index] = null;
+        }
+      });
+
+      // Update metadata state
+      dispatch({ type: 'UPDATE_GROUP_METADATA', payload: updatedMetadata });
+
+      // Fetch the eBay category ID and continue with the process
+      try {
+        const ebayCategoryID = await fetchEbayCategoryID(selectedCategory, subCategory);
+        dispatch({ type: 'SET_CATEGORY_ID', payload: ebayCategoryID });
+      } catch (error) {
+        console.error('Error fetching eBay category ID:', error);
+        dispatch({ type: 'SET_CATEGORY_ID', payload: null });
+      }
       
       // Clear raw files state
       dispatch({ type: 'SET_RAW_FILES', payload: [] });

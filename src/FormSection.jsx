@@ -1107,7 +1107,11 @@ const handleGenerateListingWithUpload = async () => {
 >
   {isLoading || processingStatus.isProcessing ? (
     <span className="loading-button">
-      <Spinner /> {processingStatus.processStage || `Generating... (${completedChunks}/${totalChunks})`}
+      <Spinner /> 
+      {processingStatus.isProcessing ? 
+        `Processing group ${processingStatus.currentGroup || 0} of ${processingStatus.processTotal || 0}...` : 
+        `Generating... (${completedChunks}/${totalChunks})`
+      }
     </span>
   ) : uploadStatus.isUploading ? (
     <span className="loading-button">

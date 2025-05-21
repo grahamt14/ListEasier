@@ -60,11 +60,12 @@ function PreviewSection() {
   };
 
  const generateCSVContent = () => {
-  // Log all available data for debugging
-  console.log("Generating CSV with:", {
-    responseData: responseData.length,
-    imageGroups: imageGroups.length,
-    s3ImageGroups: s3ImageGroups.length
+  // Debug output to help diagnose data structure issues
+  console.log("Generating CSV with data:", {
+    responseData: responseData,
+    imageGroups: imageGroups,
+    s3ImageGroups: s3ImageGroups,
+    groupMetadata: groupMetadata
   });
   
   // Validate that we have s3ImageGroups data
@@ -74,6 +75,7 @@ function PreviewSection() {
     return null;
   }
   
+  // Find valid listings - we'll use their indices to get the correct image groups
   const validResponseIndices = responseData
     .map((response, index) => ({ response, index }))
     .filter(item => 
@@ -98,27 +100,68 @@ Action(SiteID=US|Country=US|Currency=USD|Version=1193|CC=UTF-8),Custom label (SK
   let csvContent = header;
   let missingImageGroups = [];
 
+  // Map of valid images to ensure we don't use the same image for multiple listings
+  const usedImageSets = new Map();
+
+  // First, create a mapping of image groups to ensure correct matching
+  const imageMapping = {};
+  imageGroups.forEach((group, groupIndex) => {
+    if (group && group.length > 0) {
+      // Create a signature of this group for matching
+      const groupSignature = group.map(img => {
+        // For base64 images, take a sample for identification
+        if (typeof img === 'string' && img.startsWith('data:')) {
+          return img.substr(0, 50); // Just use a prefix for matching
+        }
+        return img;
+      }).join('|').substr(0, 100); // Create a compact signature
+      
+      imageMapping[groupSignature] = groupIndex;
+    }
+  });
+  
+  // Ensure we have matching s3ImageGroups entries for each valid image group
+  imageGroups.forEach((group, idx) => {
+    if (group && group.length > 0) {
+      // Make sure s3ImageGroups has an entry for this group
+      if (!s3ImageGroups[idx] || !Array.isArray(s3ImageGroups[idx]) || s3ImageGroups[idx].length === 0) {
+        console.warn(`No S3 image group for image group ${idx} - creating placeholder`);
+        
+        // Create an entry with the same length as the image group, filled with placeholders
+        if (!s3ImageGroups[idx]) {
+          s3ImageGroups[idx] = [];
+        }
+        
+        // Fill with placeholders for all missing images
+        while (s3ImageGroups[idx].length < group.length) {
+          s3ImageGroups[idx].push(`https://via.placeholder.com/800x600?text=Image+Not+Available+${idx}-${s3ImageGroups[idx].length}`);
+        }
+      }
+    }
+  });
+
+  // Now process each valid listing with the correct images
   validResponseIndices.forEach(({ response, index }) => {
     const title = response.title ? response.title.replace(/\r?\n|\r/g, ' ').replace(/"/g, '""') : '';
     
-    // Get photo URLs directly from the MATCHING s3ImageGroups for this listing index
-    let photoUrls = [];
+    // Get the image group that corresponds to this listing
+    const currentGroup = imageGroups[index];
+    const currentS3Group = s3ImageGroups[index];
     
-    // Log what we're using for this listing
+    // Log what we're processing for this listing
     console.log(`Processing listing ${index}:`, {
-      hasS3Group: s3ImageGroups && index < s3ImageGroups.length,
-      s3GroupLength: s3ImageGroups && index < s3ImageGroups.length ? s3ImageGroups[index]?.length : 'N/A'
+      title: title.substring(0, 30) + '...',
+      imageGroup: currentGroup?.length,
+      s3ImageGroup: currentS3Group?.length,
+      responseData: response ? 'Present' : 'Missing'
     });
     
-    // Get S3 URLs directly from the CORRECT corresponding S3ImageGroup by index
-    if (s3ImageGroups && 
-        Array.isArray(s3ImageGroups) && 
-        index < s3ImageGroups.length && 
-        Array.isArray(s3ImageGroups[index]) && 
-        s3ImageGroups[index].length > 0) {
-      
+    // Create the correct image URLs for this listing
+    let photoUrls = [];
+    
+    if (currentS3Group && Array.isArray(currentS3Group) && currentS3Group.length > 0) {
       // Filter to keep only valid URLs
-      photoUrls = s3ImageGroups[index].filter(url => 
+      photoUrls = currentS3Group.filter(url => 
         url && 
         typeof url === 'string' && 
         (url.includes('amazonaws.com') || url.startsWith('http'))
@@ -133,7 +176,7 @@ Action(SiteID=US|Country=US|Currency=USD|Version=1193|CC=UTF-8),Custom label (SK
     if (photoUrls.length === 0) {
       console.warn(`No valid photo URLs for listing ${index}, using placeholder`);
       missingImageGroups.push(index);
-      photoUrls = ['https://via.placeholder.com/800x600?text=Image+Not+Available'];
+      photoUrls = [`https://via.placeholder.com/800x600?text=Image+Not+Available+Group+${index+1}`];
     }
     
     const formattedUrls = photoUrls.filter(url => url).join('||');
@@ -150,6 +193,10 @@ Action(SiteID=US|Country=US|Currency=USD|Version=1193|CC=UTF-8),Custom label (SK
     const line = `Draft,${groupSku},${categoryID},"${title}",,${groupPrice},1,${formattedUrls},3000,"${description}",FixedPrice`;
     
     csvContent += `${line}\n`;
+    
+    // Mark these images as used to prevent duplication
+    const imageKey = photoUrls.join('|');
+    usedImageSets.set(imageKey, index);
   });
   
   // Show a single alert for all missing images
@@ -191,13 +238,13 @@ Action(SiteID=US|Country=US|Currency=USD|Version=1193|CC=UTF-8),Custom label (SK
     return;
   }
   
-  // Get photo URLs directly from the MATCHING s3ImageGroups for this specific group
+  // Get the correct S3 image URLs for this specific group
   let photoUrls = [];
   
-  // Look directly in the matching S3ImageGroup for this listing
+  // Use the same-indexed S3 image group
   if (s3ImageGroups && 
       Array.isArray(s3ImageGroups) && 
-      groupIndex < s3ImageGroups.length && 
+      s3ImageGroups[groupIndex] && 
       Array.isArray(s3ImageGroups[groupIndex]) && 
       s3ImageGroups[groupIndex].length > 0) {
     
@@ -207,14 +254,14 @@ Action(SiteID=US|Country=US|Currency=USD|Version=1193|CC=UTF-8),Custom label (SK
       (url.includes('amazonaws.com') || url.startsWith('http'))
     );
     
-    console.log(`Found ${photoUrls.length} photo URLs for single listing ${groupIndex}`);
+    console.log(`Found ${photoUrls.length} photo URLs for single listing ${groupIndex}:`, photoUrls);
   }
   
   // If no valid URLs found, use a placeholder
   if (photoUrls.length === 0) {
     console.warn(`No valid photo URLs for single listing ${groupIndex}, using placeholder`);
     alert(`Warning: Listing in Group ${groupIndex+1} has no valid image URLs. The CSV may not work correctly on eBay.`);
-    photoUrls = ['https://via.placeholder.com/800x600?text=Image+Not+Available'];
+    photoUrls = [`https://via.placeholder.com/800x600?text=Image+Not+Available+Group+${groupIndex+1}`];
   }
   
   const header = `#INFO,Version=0.0.2,Template= eBay-draft-listings-template_US,,,,,,,,

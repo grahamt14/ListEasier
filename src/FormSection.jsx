@@ -355,7 +355,7 @@ function FormSection({ onGenerateListing }) {
     }
   };
   
- // Updated handleGenerateListingWithUpload function in FormSection.jsx
+// Updated handleGenerateListingWithUpload function in FormSection.jsx
 const handleGenerateListingWithUpload = async () => {
   try {
     // Reset status indicators
@@ -474,16 +474,16 @@ const handleGenerateListingWithUpload = async () => {
     console.log("Files uploaded:", rawFiles.length);
     console.log("Base64 files:", filesBase64.length);
     console.log("S3 URLs generated:", s3UrlsList.length);
-    console.log("Current image groups:", imageGroups.map(g => g.length));
-    console.log("Current S3 image groups:", s3ImageGroups.map(g => g.length));
+    console.log("Current image groups:", state.imageGroups.map(g => g.length));
+    console.log("Current S3 image groups:", state.s3ImageGroups?.map(g => g?.length || 0) || []);
 
     // Step 2: Figure out which images are already in groups and which are in the pool
-    const imagesInGroups = imageGroups.reduce((total, group) => total + group.filter(img => img).length, 0);
+    const imagesInGroups = state.imageGroups.reduce((total, group) => total + group.filter(img => img).length, 0);
     console.log(`Images in groups: ${imagesInGroups}, Images in pool: ${filesBase64.length}`);
 
     // Step 3: Preserve existing S3 image groups and add new ones
-    // Clone the existing S3 image groups to avoid direct state mutation
-    const newS3ImageGroups = [...s3ImageGroups.map(group => [...(group || [])])];
+    // Clone the existing S3 image groups from state to avoid direct state mutation
+    const newS3ImageGroups = [...(state.s3ImageGroups || []).map(group => [...(group || [])])];
     let s3UrlIndex = 0; // Keep track of which S3 URLs we've used
 
     // Create new S3 URL groups for images in the pool
@@ -523,7 +523,7 @@ const handleGenerateListingWithUpload = async () => {
 
     // Create matching imageGroups for the newly added S3ImageGroups
     // Preserve the existing image groups and add new ones that match the newly added S3 groups
-    const newImageGroups = [...imageGroups];
+    const newImageGroups = [...state.imageGroups];
     
     // Replace empty groups or add new ones
     let emptyGroupIndex = newImageGroups.findIndex(g => !g || g.length === 0);
@@ -560,7 +560,7 @@ const handleGenerateListingWithUpload = async () => {
     dispatch({ type: 'SET_FILES_BASE64', payload: [] });
 
     // Update group metadata for newly added groups
-    const updatedMetadata = [...(groupMetadata || [])];
+    const updatedMetadata = [...(state.groupMetadata || [])];
     
     // Extend metadata array if needed
     while (updatedMetadata.length < newImageGroups.length) {

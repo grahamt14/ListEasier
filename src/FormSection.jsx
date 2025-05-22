@@ -58,22 +58,6 @@ function FormSection({ onGenerateListing, onCategoryFieldsChange }) {
   const [categories, setCategories] = useState({});
   const [categoriesLoading, setCategoriesLoading] = useState(true);
   const [autoRotateEnabled, setAutoRotateEnabled] = useState(false);
-  
-  // Group metadata form state
-  const [selectedGroupIndex, setSelectedGroupIndex] = useState(0);
-  const [groupPrice, setGroupPrice] = useState('');
-  const [groupSku, setGroupSku] = useState('');
-  
-  // Update fields when selected group changes
-  useEffect(() => {
-    if (groupMetadata && groupMetadata[selectedGroupIndex]) {
-      setGroupPrice(groupMetadata[selectedGroupIndex].price || '');
-      setGroupSku(groupMetadata[selectedGroupIndex].sku || '');
-    } else {
-      setGroupPrice('');
-      setGroupSku('');
-    }
-  }, [selectedGroupIndex, groupMetadata]);
 
   // Pass categoryFields to parent when they change
   useEffect(() => {
@@ -117,9 +101,6 @@ function FormSection({ onGenerateListing, onCategoryFieldsChange }) {
     setSubcategories(categories["--"] || ["--"]);
     setCategoryFields([]);
     setAutoRotateEnabled(false);
-    setSelectedGroupIndex(0);
-    setGroupPrice('');
-    setGroupSku('');
     
     // Reset global state and clear processed groups tracking
     dispatch({ type: 'CLEAR_ALL' });
@@ -127,26 +108,6 @@ function FormSection({ onGenerateListing, onCategoryFieldsChange }) {
     
     // Also clear group metadata
     dispatch({ type: 'UPDATE_GROUP_METADATA', payload: [] });
-  };
-
-  // Handle update group metadata
-  const handleUpdateGroupMetadata = () => {
-    // Create updated metadata array
-    const updatedMetadata = [...(groupMetadata || [])];
-    
-    // Ensure array is long enough
-    while (updatedMetadata.length <= selectedGroupIndex) {
-      updatedMetadata.push(null);
-    }
-    
-    // Update metadata for the selected group
-    updatedMetadata[selectedGroupIndex] = {
-      price: groupPrice,
-      sku: groupSku
-    };
-    
-    // Update global state
-    dispatch({ type: 'UPDATE_GROUP_METADATA', payload: updatedMetadata });
   };
 
   // Fetch categories on component mount
@@ -968,64 +929,6 @@ const uploadToS3 = async (file) => {
       <div className="spinner-circle"></div>
     </div>
   );
-  
-  // Group selector component for metadata editing
-  const renderGroupSelector = () => {
-    // Only render if there are non-empty groups
-    const nonEmptyGroups = imageGroups.filter(g => g.length > 0);
-    if (nonEmptyGroups.length === 0) {
-      return null;
-    }
-    
-    return (
-      <div className="form-group">
-        <label>Update Listing Price/SKU</label>
-        <div className="group-metadata-form">
-          <select 
-            value={selectedGroupIndex}
-            onChange={(e) => setSelectedGroupIndex(Number(e.target.value))}
-          >
-            {imageGroups.map((group, index) => 
-              group.length > 0 ? (
-                <option key={index} value={index}>
-                  Group {index + 1} ({group.length} images)
-                </option>
-              ) : null
-            )}
-          </select>
-          
-          <div className="field-row">
-            <label>Listing Price ($)</label>
-            <input 
-              type="text" 
-              value={groupPrice} 
-              onChange={(e) => setGroupPrice(e.target.value)}
-              placeholder="Enter price for this listing" 
-            />
-          </div>
-          
-          <div className="field-row">
-            <label>Listing SKU</label>
-            <input 
-              type="text" 
-              value={groupSku} 
-              onChange={(e) => setGroupSku(e.target.value)}
-              placeholder="Enter SKU for this listing" 
-            />
-          </div>
-          
-          <button 
-            className="primary small"
-            onClick={handleUpdateGroupMetadata}
-          >
-            Update Listing Data
-          </button>
-        </div>
-      </div>
-    );
-  };
-  
-  
 
   return (
     <section className="form-section">
@@ -1056,36 +959,82 @@ const uploadToS3 = async (file) => {
         <label>SKU</label>
         <input type="text" value={sku} onChange={handleSkuChange} placeholder="Enter SKU" className="form-control" />
       </div>
-      
-      {/* Add the group selector component */}
-      {renderGroupSelector()}
 
       <div className="form-group">
         <label>Category Fields</label>
         <div className="scrollable-fields">
           {categoryFields.map((field, index) => {
             const options = field.CategoryOptions ? field.CategoryOptions.split(';').map(opt => opt.trim()) : [];
+            const currentValue = fieldSelections[field.FieldLabel] || "";
+            const displayValue = currentValue === "-- Select --" ? "" : currentValue;
+            
             return (
               <div key={index} className="field-row">
                 <label>{field.FieldLabel || `Field ${index + 1}`}</label>
-                <select
-                  className="uniform-select"
-                  value={fieldSelections[field.FieldLabel] || ""}
-                  onChange={(e) => 
-                    dispatch({ 
-                      type: 'UPDATE_FIELD_SELECTION', 
-                      payload: { 
-                        field: field.FieldLabel,
-                        value: e.target.value 
-                      } 
-                    })
-                  }
-                >
-                  <option value="">-- Select --</option>
-                  {options.map((opt, idx) => (
-                    <option key={idx} value={opt}>{opt}</option>
-                  ))}
-                </select>
+                {options.length > 0 ? (
+                  // Use datalist input for fields with options
+                  <div style={{ position: 'relative' }}>
+                    <input
+                      type="text"
+                      value={displayValue}
+                      onChange={(e) => 
+                        dispatch({ 
+                          type: 'UPDATE_FIELD_SELECTION', 
+                          payload: { 
+                            field: field.FieldLabel,
+                            value: e.target.value 
+                          } 
+                        })
+                      }
+                      placeholder="Enter value or select from dropdown"
+                      list={`${field.FieldLabel}-${index}-options`}
+                      style={{
+                        width: '100%',
+                        padding: '0.5rem',
+                        border: '1px solid #ccc',
+                        borderRadius: '4px',
+                        fontSize: '1rem',
+                        backgroundColor: '#3b3b3b',
+                        color: 'white',
+                        backgroundImage: 'url("data:image/svg+xml;utf8,<svg xmlns=\\"http://www.w3.org/2000/svg\\" width=\\"12\\" height=\\"12\\" viewBox=\\"0 0 12 12\\"><path fill=\\"white\\" d=\\"M2 4l4 4 4-4z\\"/></svg>")',
+                        backgroundRepeat: 'no-repeat',
+                        backgroundPosition: 'right 8px center',
+                        backgroundSize: '12px',
+                        paddingRight: '30px'
+                      }}
+                    />
+                    <datalist id={`${field.FieldLabel}-${index}-options`}>
+                      {options.map((opt, idx) => (
+                        <option key={idx} value={opt}>{opt}</option>
+                      ))}
+                    </datalist>
+                  </div>
+                ) : (
+                  // Use regular text input for fields without predefined options
+                  <input
+                    type="text"
+                    value={displayValue}
+                    onChange={(e) => 
+                      dispatch({ 
+                        type: 'UPDATE_FIELD_SELECTION', 
+                        payload: { 
+                          field: field.FieldLabel,
+                          value: e.target.value 
+                        } 
+                      })
+                    }
+                    placeholder="Enter value"
+                    style={{
+                      width: '100%',
+                      padding: '0.5rem',
+                      border: '1px solid #ccc',
+                      borderRadius: '4px',
+                      fontSize: '1rem',
+                      backgroundColor: '#3b3b3b',
+                      color: 'white'
+                    }}
+                  />
+                )}
               </div>
             );
           })}

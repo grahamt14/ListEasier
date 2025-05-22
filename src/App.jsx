@@ -746,11 +746,11 @@ function AppContent() {
       
       dispatch({ type: 'SET_RESPONSE_DATA', payload: updatedResponseData });
       dispatch({ type: 'SET_IS_DIRTY', payload: false });
-      dispatch({ type: 'SET_PROCESSING_GROUPS', payload: updatedProcessingGroups });
+dispatch({ type: 'SET_PROCESSING_GROUPS', payload: updatedProcessingGroups });
 
-      // Prepare options for API call - include ALL field selections
-      const selectedCategoryOptions = getSelectedCategoryOptionsJSON(fieldSelections, price, sku);
-	  // Save current field selections to use in listings (including all fields with default values)
+     // Prepare options for API call - include ALL field selections
+     const selectedCategoryOptions = getSelectedCategoryOptionsJSON(fieldSelections, price, sku);   
+     // Save current field selections to use in listings (including all fields with default values)
      const currentFieldSelections = {...fieldSelections};
 
      // Track indices of groups being processed
@@ -958,6 +958,15 @@ function AppContent() {
        <p>© 2025 ListEasier</p>
      </footer>
    </div>
+ );
+}
+
+// Main App with Provider - THIS IS THE MISSING PART!
+function App() {
+ return (
+   <AppStateProvider>
+     <AppContent />
+   </AppStateProvider>
  );
 }
 

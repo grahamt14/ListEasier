@@ -30,6 +30,7 @@
   cursor: pointer;
   font-size: 14px;
 }
+
 /* Updated image controls to span full height */
 .image-controls {
   position: absolute;
@@ -85,10 +86,12 @@
   margin: 0 auto;
   width: 100%;
 }
+
 .header .logo {
   height: 4rem;
   width: auto;
 }
+
 .header h1 {
   font-size: 2rem;
   color: #333;
@@ -170,16 +173,17 @@
   gap: 1.5rem;
   height: fit-content;
 }
+
 .form-group {
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
 }
+
 .form-group label {
   font-weight: 500;
   color: #555;
 }
-
 
 /* New scrollable fields section */
 .scrollable-fields {
@@ -193,6 +197,7 @@
   flex-direction: column;
   gap: 1.5rem;
 }
+
 .scanner-selection{
   max-height: 300px;
   overflow-y: auto;
@@ -230,6 +235,7 @@
   cursor: pointer;
   transition: background-color 0.2s;
 }
+
 .upload-area:hover {
   background-color: #f0f0f0;
 }
@@ -244,6 +250,7 @@
   display: flex;
   gap: 1rem;
 }
+
 .button-group .primary,
 .generate-area .primary {
   background-color: #007bff;
@@ -255,15 +262,18 @@
   cursor: pointer;
   transition: background-color 0.2s;
 }
+
 .button-group .primary:disabled,
 .generate-area .primary:disabled {
   background-color: #ccc;
   cursor: not-allowed;
 }
+
 .button-group .primary:hover:not(:disabled),
 .generate-area .primary:hover:not(:disabled) {
   background-color: #0056b3;
 }
+
 .button-group .danger {
   background-color: #dc3545;
   color: #fff;
@@ -274,6 +284,7 @@
   cursor: pointer;
   transition: background-color 0.2s;
 }
+
 .button-group .danger:hover {
   background-color: #b02a37;
 }
@@ -282,6 +293,7 @@
   position: relative;
   align-self: start;
 }
+
 .generate-area .tooltip {
   position: absolute;
   top: -1.5rem;
@@ -345,6 +357,7 @@
   flex-direction: column;
   position: relative;
 }
+
 .thumbs {
   display: flex;
   flex-wrap: wrap;
@@ -352,11 +365,13 @@
   padding: 1rem;
   border-bottom: 1px solid #eee;
 }
+
 .thumbs img {
   width: 100%;
   object-fit: cover;
   border-radius: 4px;
 }
+
 .listing {
   padding: 1rem;
   color: #444;
@@ -376,7 +391,6 @@
   margin-right: auto;
   width: 100%;
 }
-
 
 .spinner {
   display: inline-block;
@@ -477,8 +491,6 @@
   padding: 20px;
 }
 
-/* Add these CSS rules to your App.css file */
-
 /* Fix for dropdown text color consistency */
 .field-row select {
   padding: 0.5rem;
@@ -498,20 +510,6 @@
   font-size: 1rem;
   color: white; /* Explicitly setting text color for light backgrounds */
 }
-
-/* Optional: If you want all selects to have the same styling */
-/* 
-select {
-  padding: 0.5rem;
-  border-radius: 4px;
-  border: 1px solid #ccc;
-  font-size: 1rem;
-  background-color: #3b3b3b;
-  color: white;
-  height: 38px;
-  appearance: auto;
-}
-*/
 
 /* For consistency, make sure your .uniform-select also has an explicit text color */
 .uniform-select {
@@ -579,8 +577,6 @@ select {
   z-index: 10;
 }
 
-/* Add these styles to your App.css file */
-
 /* Styles for group metadata management in FormSection */
 .group-metadata-form {
   background: #f8f8f8;
@@ -642,66 +638,6 @@ select {
   border: 1px solid #ddd;
 }
 
-/* Update existing group-card to allow for the metadata header */
-.group-card {
-  background: #fff;
-  border-radius: 8px;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-  overflow: hidden;
-  display: flex;
-  flex-direction: column;
-  position: relative;
-}
-
-/* Status indicator icons/badges */
-.group-card.processed::before {
-  content: "✓";
-  position: absolute;
-  top: 10px;
-  right: 10px;
-  width: 24px;
-  height: 24px;
-  background-color: #4CAF50;
-  color: white;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-weight: bold;
-  z-index: 10;
-}
-
-.group-card.processing::before {
-  content: "⋯";
-  position: absolute;
-  top: 10px;
-  right: 10px;
-  width: 24px;
-  height: 24px;
-  background-color: #2196F3;
-  color: white;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-weight: bold;
-  z-index: 10;
-}
-
-.group-card.new::before {
-  content: "NEW";
-  position: absolute;
-  top: 10px;
-  right: 10px;
-  padding: 4px 8px;
-  background-color: #FF9800;
-  color: white;
-  border-radius: 12px;
-  font-size: 12px;
-  font-weight: bold;
-  z-index: 10;
-}
-
 /* Ensure thumbs section appears below metadata */
 .thumbs {
   display: flex;
@@ -728,50 +664,6 @@ select {
 
 .download-single-button:hover {
   background-color: #0b7dda;
-}
-
-/* Responsive adjustments for mobile */
-@media (max-width: 600px) {
-  #root, .app-container {
-    padding: 1rem;
-  }
-  
-  .header {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 0.5rem;
-  }
-  
-  .header .logo {
-    height: 2.5rem;
-  }
-  
-  .button-group {
-    flex-direction: column;
-    width: 100%;
-  }
-  
-  .section-header {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 0.5rem;
-  }
-  
-  .download-button {
-    margin-left: 0;
-    width: 100%;
-  }
-  
-  .metadata-details {
-    flex-direction: column;
-    gap: 5px;
-  }
-  
-  .group-metadata {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 5px;
-  }
 }
 
 /* New styles for group header (replacing metadata header) */
@@ -828,8 +720,6 @@ select {
   font-weight: 500;
 }
 
-/* Add these styles to your App.css */
-
 /* Category fields metadata section */
 .category-fields-metadata {
   margin-top: 15px;
@@ -853,17 +743,6 @@ select {
   font-weight: 500;
   line-height: 1.4;
 }
-
-/* Styling for category field metadata items */
-.listing-metadata {
-  background-color: #f9f9f9;
-  padding: 6px 10px;
-  border-radius: 4px;
-  margin-top: 6px;
-  border-left: 3px solid #2196F3;
-  transition: background-color 0.2s;
-}
-
 
 /* Updated styles for category fields metadata */
 .category-fields-metadata {
@@ -897,67 +776,6 @@ select {
 .listing-metadata.price-field,
 .listing-metadata.sku-field {
   border-left-color: #4CAF50;
-}
-
-/* Styles for editable category fields in listings */
-.editable-field {
-  display: flex !important;
-  align-items: center;
-  justify-content: space-between;
-  padding: 6px 12px;
-  background-color: #fff;
-  border: 1px solid #e0e0e0;
-  border-radius: 4px;
-  margin-top: 4px;
-  transition: border-color 0.2s, box-shadow 0.2s;
-}
-
-.editable-field:hover {
-  border-color: #2196F3;
-  box-shadow: 0 0 0 2px rgba(33, 150, 243, 0.1);
-}
-
-.editable-field strong {
-  flex-shrink: 0;
-  min-width: 120px;
-}
-
-.editable-field select,
-.editable-field input {
-  flex-grow: 1;
-  margin-left: 8px !important;
-  max-width: 200px;
-}
-
-/* Override the default listing-metadata styles for editable fields */
-.listing-metadata.editable-field {
-  background-color: #fff;
-  border-left: 3px solid #4CAF50;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.05);
-}
-
-.listing-metadata.editable-field:hover {
-  border-left-color: #2196F3;
-}
-
-/* Responsive adjustments for mobile */
-@media (max-width: 600px) {
-  .editable-field {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 4px;
-  }
-  
-  .editable-field strong {
-    min-width: auto;
-  }
-  
-  .editable-field select,
-  .editable-field input {
-    margin-left: 0 !important;
-    width: 100%;
-    max-width: 100%;
-  }
 }
 
 /* Enhanced styles for editable category fields in listings */
@@ -1019,25 +837,6 @@ select {
 
 .listing-metadata.editable-field:hover {
   border-left-color: #2196F3;
-}
-
-/* Responsive adjustments for mobile */
-@media (max-width: 600px) {
-  .editable-field {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 4px;
-  }
-  
-  .editable-field strong {
-    min-width: auto;
-  }
-  
-  .editable-field input[type="text"] {
-    margin-left: 0 !important;
-    width: 100%;
-    max-width: 100%;
-  }
 }
 
 /* Additional styling for better datalist UX */
@@ -1113,8 +912,8 @@ select {
 .row-view-table {
   display: flex;
   flex-direction: column;
-  min-width: 100%; /* Changed to ensure full width coverage */
-  background: #fff; /* Added background to ensure it extends with content */
+  min-width: 100%;
+  background: #fff;
 }
 
 /* Row View Header - Dynamic grid with inline styles */
@@ -1124,11 +923,11 @@ select {
   background-color: #f8f9fa;
   border-bottom: 2px solid #dee2e6;
   font-weight: bold;
-  color: #000; /* Ensure header text is black */
+  color: #000 !important;
   position: sticky;
   top: 0;
   z-index: 5;
-  width: 100%; /* Ensure full width */
+  width: 100%;
 }
 
 .row-header-cell {
@@ -1139,8 +938,8 @@ select {
   font-size: 0.9rem;
   text-transform: uppercase;
   letter-spacing: 0.5px;
-  color: #000; /* Ensure header cell text is black */
-  background-color: #f8f9fa; /* Ensure background extends */
+  color: #000 !important;
+  background-color: #f8f9fa;
 }
 
 .row-header-cell:last-child {
@@ -1150,48 +949,54 @@ select {
 /* Header-specific styling */
 .images-header {
   justify-content: center;
-  color: #000;
+  color: #000 !important;
 }
 
-/* Row View Row - Dynamic grid with inline styles and alternating colors */
+/* Row View Row - UPDATED with better alternating colors */
 .row-view-row {
   display: grid;
   /* Grid template columns will be set via inline styles */
   border-bottom: 1px solid #e9ecef;
   transition: background-color 0.2s;
   position: relative;
-  background-color: #fff; /* Default white background */
-  width: 100%; /* Ensure full width */
-  color: #000; /* Ensure all text is black */
+  width: 100%;
+  color: #000 !important;
+  min-height: 60px; /* Ensure consistent row height */
 }
 
-/* Alternating row colors */
-.row-view-row:nth-child(even) {
-  background-color: #f8f9fa; /* Light gray for even rows */
-}
-
+/* UPDATED: More visible alternating row colors */
 .row-view-row:nth-child(odd) {
-  background-color: #fff; /* White for odd rows */
+  background-color: #ffffff !important; /* Pure white for odd rows */
 }
 
+.row-view-row:nth-child(even) {
+  background-color: #f8f9fa !important; /* Light gray for even rows */
+}
+
+/* Hover state - more prominent */
 .row-view-row:hover {
   background-color: #e3f2fd !important; /* Light blue on hover, override alternating colors */
+  transform: translateY(-1px); /* Subtle lift effect */
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
 }
 
 /* Status-based backgrounds (these override alternating colors when active) */
 .row-view-row.processing {
   background-color: #e3f2fd !important; /* Light blue for processing */
+  border-left: 4px solid #2196F3; /* Add colored border for status */
 }
 
 .row-view-row.processed {
   background-color: #e8f5e8 !important; /* Light green for processed */
+  border-left: 4px solid #4CAF50; /* Add colored border for status */
 }
 
 .row-view-row.new {
   background-color: #fff3cd !important; /* Light yellow for new */
+  border-left: 4px solid #FF9800; /* Add colored border for status */
 }
 
-/* Row Cells - Ensure all text is black */
+/* Row Cells - Ensure all text is black and inherit background */
 .row-cell {
   padding: 12px 8px;
   border-right: 1px solid #e9ecef;
@@ -1199,8 +1004,8 @@ select {
   align-items: center;
   font-size: 0.9rem;
   overflow: hidden;
-  color: #000; /* Ensure all cell text is black */
-  background-color: inherit; /* Inherit background from row */
+  color: #000 !important;
+  background-color: inherit; /* Inherit background from parent row */
 }
 
 .row-cell:last-child {
@@ -1212,7 +1017,8 @@ select {
   flex-direction: column;
   align-items: center;
   padding: 8px;
-  color: #000;
+  color: #000 !important;
+  background-color: inherit;
 }
 
 .row-images-container {
@@ -1301,7 +1107,8 @@ select {
   align-items: flex-start;
   flex-direction: column;
   justify-content: center;
-  color: #000;
+  color: #000 !important;
+  background-color: inherit;
 }
 
 .row-title {
@@ -1313,7 +1120,7 @@ select {
   overflow: hidden;
   text-overflow: ellipsis;
   word-break: break-word;
-  color: #000 !important; /* Force black text */
+  color: #000 !important;
 }
 
 /* Description Cell */
@@ -1321,7 +1128,8 @@ select {
   align-items: flex-start;
   flex-direction: column;
   justify-content: center;
-  color: #000;
+  color: #000 !important;
+  background-color: inherit;
 }
 
 .row-description {
@@ -1332,7 +1140,7 @@ select {
   overflow: hidden;
   text-overflow: ellipsis;
   word-break: break-word;
-  color: #000 !important; /* Force black text instead of #666 */
+  color: #000 !important;
 }
 
 /* Input Cells */
@@ -1340,7 +1148,8 @@ select {
 .sku-cell,
 .field-cell {
   padding: 8px 6px;
-  color: #000;
+  color: #000 !important;
+  background-color: inherit;
 }
 
 .row-input {
@@ -1349,8 +1158,8 @@ select {
   border: 1px solid #ccc;
   border-radius: 4px;
   font-size: 0.85rem;
-  background-color: #fff;
-  color: #000 !important; /* Force black text */
+  background-color: #fff !important; /* Force white background for inputs */
+  color: #000 !important;
   transition: border-color 0.2s, box-shadow 0.2s;
 }
 
@@ -1359,6 +1168,7 @@ select {
   border-color: #007bff;
   box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.1);
   color: #000 !important;
+  background-color: #fff !important;
 }
 
 .price-input {
@@ -1371,6 +1181,7 @@ select {
   background-repeat: no-repeat;
   background-position: right 6px center;
   background-size: 10px;
+  background-color: #fff !important;
   padding-right: 24px;
   color: #000 !important;
 }
@@ -1380,7 +1191,7 @@ select {
   display: flex;
   align-items: center;
   gap: 8px;
-  color: #000 !important; /* Changed from #666 to black */
+  color: #000 !important;
   font-style: italic;
 }
 
@@ -1396,12 +1207,12 @@ select {
 }
 
 .row-loading span {
-  color: #000 !important; /* Ensure loading text is black */
+  color: #000 !important;
 }
 
 /* Error states */
 .row-error {
-  color: #dc3545 !important; /* Keep error text red but ensure it's visible */
+  color: #dc3545 !important;
   font-style: italic;
   display: -webkit-box;
   -webkit-line-clamp: 2;
@@ -1411,8 +1222,68 @@ select {
 
 /* Placeholder states */
 .row-placeholder {
-  color: #000 !important; /* Changed from #999 to black */
+  color: #666 !important; /* Slightly gray for placeholders to distinguish from content */
   font-style: italic;
+}
+
+/* Responsive adjustments for mobile */
+@media (max-width: 600px) {
+  #root, .app-container {
+    padding: 1rem;
+  }
+  
+  .header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.5rem;
+  }
+  
+  .header .logo {
+    height: 2.5rem;
+  }
+  
+  .button-group {
+    flex-direction: column;
+    width: 100%;
+  }
+  
+  .section-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.5rem;
+  }
+  
+  .download-button {
+    margin-left: 0;
+    width: 100%;
+  }
+  
+  .metadata-details {
+    flex-direction: column;
+    gap: 5px;
+  }
+  
+  .group-metadata {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 5px;
+  }
+  
+  .editable-field {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+  }
+  
+  .editable-field strong {
+    min-width: auto;
+  }
+  
+  .editable-field input[type="text"] {
+    margin-left: 0 !important;
+    width: 100%;
+    max-width: 100%;
+  }
 }
 
 /* Responsive adjustments for row view */

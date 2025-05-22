@@ -24,7 +24,7 @@ export const getSelectedCategoryOptionsJSON = (fieldSelections, price, sku) => {
   return output;
 };
 
-function FormSection({ onGenerateListing }) {
+function FormSection({ onGenerateListing, onCategoryFieldsChange }) {
   // Get state from context
   const { state, dispatch } = useAppState();
   const {
@@ -74,6 +74,13 @@ function FormSection({ onGenerateListing }) {
       setGroupSku('');
     }
   }, [selectedGroupIndex, groupMetadata]);
+
+  // Pass categoryFields to parent when they change
+  useEffect(() => {
+    if (onCategoryFieldsChange) {
+      onCategoryFieldsChange(categoryFields);
+    }
+  }, [categoryFields, onCategoryFieldsChange]);
   
   // AWS Configuration
   const REGION = "us-east-2";

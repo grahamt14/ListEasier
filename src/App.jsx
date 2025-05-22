@@ -733,203 +733,209 @@ Action(SiteID=US|Country=US|Currency=USD|Version=1193|CC=UTF-8),Custom label (SK
                 {/* REMOVED Actions header */}
               </div>
               
- // Updated section of PreviewSection component - specifically the row view rendering part
-
-{/* Table Rows with dynamic grid template */}
-{imageGroups.map((group, gi) => {
-  // Skip empty groups
-  if (group.length === 0) return null;
-  
-  const response = responseData[gi];
-  const metadata = groupMetadata && groupMetadata[gi] 
-    ? groupMetadata[gi] 
-    : { price: price || '', sku: sku || '' };
-  
-  const groupPrice = metadata.price || price || '';
-  const groupSku = metadata.sku || sku || '';
-  const listingFieldSelections = response?.storedFieldSelections || fieldSelections;
-  
-  // Determine the class based on processing state
-  let groupClass = "";
-  if (processingGroups[gi]) {
-    groupClass = "processing";
-  } else if (processedGroupIndices && processedGroupIndices.includes(gi)) {
-    groupClass = "processed";
-  } else if (group.length > 0 && !responseData[gi]) {
-    groupClass = "new";
-  }
-  
-  // Add alternating row class based on the actual rendered row index
-  const nonEmptyGroupsBefore = imageGroups.slice(0, gi).filter(g => g.length > 0).length;
-  const isEvenRow = nonEmptyGroupsBefore % 2 === 0;
-  const alternatingClass = isEvenRow ? "row-even" : "row-odd";
-  
-  // Function to update price for this specific listing
-  const updateListingPrice = (newPrice) => {
-    const updatedMetadata = [...(groupMetadata || [])];
-    while (updatedMetadata.length <= gi) {
-      updatedMetadata.push(null);
-    }
-    updatedMetadata[gi] = {
-      ...(updatedMetadata[gi] || {}),
-      price: newPrice
-    };
-    dispatch({ type: 'UPDATE_GROUP_METADATA', payload: updatedMetadata });
-  };
-  
-  // Function to update SKU for this specific listing
-  const updateListingSku = (newSku) => {
-    const updatedMetadata = [...(groupMetadata || [])];
-    while (updatedMetadata.length <= gi) {
-      updatedMetadata.push(null);
-    }
-    updatedMetadata[gi] = {
-      ...(updatedMetadata[gi] || {}),
-      sku: newSku
-    };
-    dispatch({ type: 'UPDATE_GROUP_METADATA', payload: updatedMetadata });
-  };
-  
-  return (
-    <div
-      key={gi}
-      className={`row-view-row ${groupClass} ${alternatingClass}`}
-      style={{ gridTemplateColumns: generateGridTemplate(allFieldLabels.length) }}
-      onDrop={e => handleGroupDrop(e, gi)}
-      onDragOver={e => e.preventDefault()}
-    >
-      {/* Rest of the row content remains the same */}
-      {/* Images Column */}
-      <div className="row-cell images-cell">
-        <div className="row-images-container">
-          <div className="group-header-with-status">
-            <div className="group-number-badge">Group {gi + 1}</div>
-            {/* Status indicator moved to images column */}
-            {processingGroups[gi] ? (
-              <div className="status-indicator processing">⋯</div>
-            ) : (processedGroupIndices && processedGroupIndices.includes(gi)) ? (
-              <div className="status-indicator processed">✓</div>
-            ) : (group.length > 0 && !responseData[gi]) ? (
-              <div className="status-indicator new">NEW</div>
-            ) : null}
-          </div>
-          <div className="row-thumbs">
-            {group.map((src, xi) => (
-              <img 
-                key={xi} 
-                src={src} 
-                alt={`group-${gi}-img-${xi}`} 
-                className="row-thumb"
-                draggable 
-                onDragStart={e => {
-                  e.dataTransfer.setData("from", "group");
-                  e.dataTransfer.setData("index", `${gi}-${xi}`);
-                }} 
-              />
-            ))}
-          </div>
+              {/* Table Rows with dynamic grid template */}
+              {imageGroups.map((group, gi) => {
+                // Skip empty groups
+                if (group.length === 0) return null;
+                
+                const response = responseData[gi];
+                const metadata = groupMetadata && groupMetadata[gi] 
+                  ? groupMetadata[gi] 
+                  : { price: price || '', sku: sku || '' };
+                
+                const groupPrice = metadata.price || price || '';
+                const groupSku = metadata.sku || sku || '';
+                const listingFieldSelections = response?.storedFieldSelections || fieldSelections;
+                
+                // Determine the class based on processing state
+                let groupClass = "";
+                if (processingGroups[gi]) {
+                  groupClass = "processing";
+                } else if (processedGroupIndices && processedGroupIndices.includes(gi)) {
+                  groupClass = "processed";
+                } else if (group.length > 0 && !responseData[gi]) {
+                  groupClass = "new";
+                }
+                
+                // Add alternating row class based on the actual rendered row index
+                const nonEmptyGroupsBefore = imageGroups.slice(0, gi).filter(g => g.length > 0).length;
+                const isEvenRow = nonEmptyGroupsBefore % 2 === 0;
+                const alternatingClass = isEvenRow ? "row-even" : "row-odd";
+                
+                // Function to update price for this specific listing
+                const updateListingPrice = (newPrice) => {
+                  const updatedMetadata = [...(groupMetadata || [])];
+                  while (updatedMetadata.length <= gi) {
+                    updatedMetadata.push(null);
+                  }
+                  updatedMetadata[gi] = {
+                    ...(updatedMetadata[gi] || {}),
+                    price: newPrice
+                  };
+                  dispatch({ type: 'UPDATE_GROUP_METADATA', payload: updatedMetadata });
+                };
+                
+                // Function to update SKU for this specific listing
+                const updateListingSku = (newSku) => {
+                  const updatedMetadata = [...(groupMetadata || [])];
+                  while (updatedMetadata.length <= gi) {
+                    updatedMetadata.push(null);
+                  }
+                  updatedMetadata[gi] = {
+                    ...(updatedMetadata[gi] || {}),
+                    sku: newSku
+                  };
+                  dispatch({ type: 'UPDATE_GROUP_METADATA', payload: updatedMetadata });
+                };
+                
+                return (
+                  <div
+                    key={gi}
+                    className={`row-view-row ${groupClass} ${alternatingClass}`}
+                    style={{ gridTemplateColumns: generateGridTemplate(allFieldLabels.length) }}
+                    onDrop={e => handleGroupDrop(e, gi)}
+                    onDragOver={e => e.preventDefault()}
+                  >
+                    {/* Images Column */}
+                    <div className="row-cell images-cell">
+                      <div className="row-images-container">
+                        <div className="group-header-with-status">
+                          <div className="group-number-badge">Group {gi + 1}</div>
+                          {/* Status indicator moved to images column */}
+                          {processingGroups[gi] ? (
+                            <div className="status-indicator processing">⋯</div>
+                          ) : (processedGroupIndices && processedGroupIndices.includes(gi)) ? (
+                            <div className="status-indicator processed">✓</div>
+                          ) : (group.length > 0 && !responseData[gi]) ? (
+                            <div className="status-indicator new">NEW</div>
+                          ) : null}
+                        </div>
+                        <div className="row-thumbs">
+                          {group.map((src, xi) => (
+                            <img 
+                              key={xi} 
+                              src={src} 
+                              alt={`group-${gi}-img-${xi}`} 
+                              className="row-thumb"
+                              draggable 
+                              onDragStart={e => {
+                                e.dataTransfer.setData("from", "group");
+                                e.dataTransfer.setData("index", `${gi}-${xi}`);
+                              }} 
+                            />
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                    
+                    {/* Title Column */}
+                    <div className="row-cell title-cell">
+                      {processingGroups[gi] ? (
+                        <div className="row-loading">
+                          <Spinner />
+                          <span style={{ color: '#000' }}>Generating...</span>
+                        </div>
+                      ) : response && !response.error ? (
+                        <div className="row-title" style={{ color: '#000' }}>{response.title || 'No title generated'}</div>
+                      ) : response && response.error ? (
+                        <div className="row-error" style={{ color: '#dc3545' }}>Error: {response.error}</div>
+                      ) : (
+                        <div className="row-placeholder" style={{ color: '#000' }}>Click "Generate Listing"</div>
+                      )}
+                    </div>
+                    
+                    {/* Description Column */}
+                    <div className="row-cell description-cell">
+                      {processingGroups[gi] ? (
+                        <div className="row-loading">
+                          <Spinner />
+                          <span style={{ color: '#000' }}>Generating...</span>
+                        </div>
+                      ) : response && !response.error ? (
+                        <div className="row-description" style={{ color: '#000' }}>{response.description || 'No description generated'}</div>
+                      ) : response && response.error ? (
+                        <div className="row-error" style={{ color: '#dc3545' }}>Error generating description</div>
+                      ) : (
+                        <div className="row-placeholder" style={{ color: '#000' }}>Click "Generate Listing"</div>
+                      )}
+                    </div>
+                    
+                    {/* Price Column */}
+                    <div className="row-cell price-cell">
+                      <input
+                        type="text"
+                        value={groupPrice}
+                        onChange={(e) => updateListingPrice(e.target.value)}
+                        placeholder="Enter price"
+                        className="row-input price-input"
+                        style={{ color: '#000' }}
+                      />
+                    </div>
+                    
+                    {/* SKU Column */}
+                    <div className="row-cell sku-cell">
+                      <input
+                        type="text"
+                        value={groupSku}
+                        onChange={(e) => updateListingSku(e.target.value)}
+                        placeholder="Enter SKU"
+                        className="row-input sku-input"
+                        style={{ color: '#000' }}
+                      />
+                    </div>
+                    
+                    {/* Category Fields Columns */}
+                    {allFieldLabels.map(label => {
+                      const fieldDefinition = categoryFields.find(field => field.FieldLabel === label);
+                      const options = fieldDefinition?.CategoryOptions ? 
+                        fieldDefinition.CategoryOptions.split(';').map(opt => opt.trim()) : [];
+                      const displayValue = (listingFieldSelections[label] === "-- Select --" || !listingFieldSelections[label]) ? 
+                        "" : listingFieldSelections[label];
+                      
+                      return (
+                        <div key={label} className="row-cell field-cell">
+                          {options.length > 0 ? (
+                            <div style={{ position: 'relative' }}>
+                              <input
+                                type="text"
+                                value={displayValue}
+                                onChange={(e) => updateListingFieldSelection(gi, label, e.target.value)}
+                                placeholder="Select or enter"
+                                list={`${label}-${gi}-row-options`}
+                                className="row-input field-input"
+                                style={{ color: '#000' }}
+                              />
+                              <datalist id={`${label}-${gi}-row-options`}>
+                                {options.map((opt, idx) => (
+                                  <option key={idx} value={opt}>{opt}</option>
+                                ))}
+                              </datalist>
+                            </div>
+                          ) : (
+                            <input
+                              type="text"
+                              value={displayValue}
+                              onChange={(e) => updateListingFieldSelection(gi, label, e.target.value)}
+                              placeholder="Enter value"
+                              className="row-input field-input"
+                              style={{ color: '#000' }}
+                            />
+                          )}
+                        </div>
+                      );
+                    })}
+                    
+                    {/* REMOVED Actions Column */}
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
-      </div>
-      
-      {/* Title Column */}
-      <div className="row-cell title-cell">
-        {processingGroups[gi] ? (
-          <div className="row-loading">
-            <Spinner />
-            <span style={{ color: '#000' }}>Generating...</span>
-          </div>
-        ) : response && !response.error ? (
-          <div className="row-title" style={{ color: '#000' }}>{response.title || 'No title generated'}</div>
-        ) : response && response.error ? (
-          <div className="row-error" style={{ color: '#dc3545' }}>Error: {response.error}</div>
-        ) : (
-          <div className="row-placeholder" style={{ color: '#000' }}>Click "Generate Listing"</div>
-        )}
-      </div>
-      
-      {/* Description Column */}
-      <div className="row-cell description-cell">
-        {processingGroups[gi] ? (
-          <div className="row-loading">
-            <Spinner />
-            <span style={{ color: '#000' }}>Generating...</span>
-          </div>
-        ) : response && !response.error ? (
-          <div className="row-description" style={{ color: '#000' }}>{response.description || 'No description generated'}</div>
-        ) : response && response.error ? (
-          <div className="row-error" style={{ color: '#dc3545' }}>Error generating description</div>
-        ) : (
-          <div className="row-placeholder" style={{ color: '#000' }}>Click "Generate Listing"</div>
-        )}
-      </div>
-      
-      {/* Price Column */}
-      <div className="row-cell price-cell">
-        <input
-          type="text"
-          value={groupPrice}
-          onChange={(e) => updateListingPrice(e.target.value)}
-          placeholder="Enter price"
-          className="row-input price-input"
-          style={{ color: '#000' }}
-        />
-      </div>
-      
-      {/* SKU Column */}
-      <div className="row-cell sku-cell">
-        <input
-          type="text"
-          value={groupSku}
-          onChange={(e) => updateListingSku(e.target.value)}
-          placeholder="Enter SKU"
-          className="row-input sku-input"
-          style={{ color: '#000' }}
-        />
-      </div>
-      
-      {/* Category Fields Columns */}
-      {allFieldLabels.map(label => {
-        const fieldDefinition = categoryFields.find(field => field.FieldLabel === label);
-        const options = fieldDefinition?.CategoryOptions ? 
-          fieldDefinition.CategoryOptions.split(';').map(opt => opt.trim()) : [];
-        const displayValue = (listingFieldSelections[label] === "-- Select --" || !listingFieldSelections[label]) ? 
-          "" : listingFieldSelections[label];
-        
-        return (
-          <div key={label} className="row-cell field-cell">
-            {options.length > 0 ? (
-              <div style={{ position: 'relative' }}>
-                <input
-                  type="text"
-                  value={displayValue}
-                  onChange={(e) => updateListingFieldSelection(gi, label, e.target.value)}
-                  placeholder="Select or enter"
-                  list={`${label}-${gi}-row-options`}
-                  className="row-input field-input"
-                  style={{ color: '#000' }}
-                />
-                <datalist id={`${label}-${gi}-row-options`}>
-                  {options.map((opt, idx) => (
-                    <option key={idx} value={opt}>{opt}</option>
-                  ))}
-                </datalist>
-              </div>
-            ) : (
-              <input
-                type="text"
-                value={displayValue}
-                onChange={(e) => updateListingFieldSelection(gi, label, e.target.value)}
-                placeholder="Enter value"
-                className="row-input field-input"
-                style={{ color: '#000' }}
-              />
-            )}
-          </div>
-        );
-      })}
-    </div>
+      )}
+    </section>
   );
-})}
+}
 
 // Main App Component
 function AppContent() {
@@ -1077,7 +1083,7 @@ function AppContent() {
       
       dispatch({ type: 'SET_RESPONSE_DATA', payload: updatedResponseData });
       dispatch({ type: 'SET_IS_DIRTY', payload: false });
-dispatch({ type: 'SET_PROCESSING_GROUPS', payload: updatedProcessingGroups });
+      dispatch({ type: 'SET_PROCESSING_GROUPS', payload: updatedProcessingGroups });
 
      // Prepare options for API call - include ALL field selections
      const selectedCategoryOptions = getSelectedCategoryOptionsJSON(fieldSelections, price, sku);   

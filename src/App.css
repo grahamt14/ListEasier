@@ -118,6 +118,38 @@
   }
 }
 
+/* Image Preview Popup Styles */
+.image-preview-popup {
+  background: rgba(0, 0, 0, 0.9);
+  border-radius: 8px;
+  padding: 8px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  max-width: 400px;
+  max-height: 400px;
+  overflow: hidden;
+  transition: opacity 0.2s ease-in-out;
+}
+
+.preview-image {
+  max-width: 100%;
+  max-height: 100%;
+  width: auto;
+  height: auto;
+  object-fit: contain;
+  border-radius: 4px;
+  display: block;
+}
+
+/* Ensure the preview doesn't go off screen */
+@media (max-width: 768px) {
+  .image-preview-popup {
+    max-width: 200px;
+    max-height: 200px;
+  }
+}
+
 .download-button {
   background-color: #4CAF50;
   color: white;

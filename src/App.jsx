@@ -40,10 +40,30 @@ function PreviewSection({ categoryFields = [] }) {
   // Add view mode state
   const [viewMode, setViewMode] = useState('grid'); // 'grid' or 'row'
 
+  // Add image preview state
+  const [previewImage, setPreviewImage] = useState(null);
+  const [previewPosition, setPreviewPosition] = useState({ x: 0, y: 0 });
+
   // AWS Configuration
   const REGION = "us-east-2";
   const BUCKET_NAME = "listeasier";
   const IDENTITY_POOL_ID = "us-east-2:f81d1240-32a8-4aff-87e8-940effdf5908";
+
+  // Handle image hover
+  const handleImageHover = (src, event) => {
+    if (viewMode === 'row') {
+      const rect = event.target.getBoundingClientRect();
+      setPreviewPosition({
+        x: rect.right + 10,
+        y: rect.top
+      });
+      setPreviewImage(src);
+    }
+  };
+
+  const handleImageLeave = () => {
+    setPreviewImage(null);
+  };
 
   // Add the updateListingFieldSelection function here
   const updateListingFieldSelection = (listingIndex, fieldLabel, newValue) => {
@@ -659,6 +679,26 @@ Action(SiteID=US|Country=US|Currency=USD|Version=1193|CC=UTF-8),Custom label (SK
         </div>
       )}
 
+      {/* Image Preview Popup for Row View */}
+      {previewImage && viewMode === 'row' && (
+        <div 
+          className="image-preview-popup"
+          style={{
+            position: 'fixed',
+            left: previewPosition.x,
+            top: previewPosition.y,
+            zIndex: 1000,
+            pointerEvents: 'none'
+          }}
+        >
+          <img 
+            src={previewImage} 
+            alt="Preview" 
+            className="preview-image"
+          />
+        </div>
+      )}
+
       {/* Conditional rendering based on view mode */}
       {viewMode === 'grid' ? (
         <div className="groups-container">
@@ -821,7 +861,9 @@ Action(SiteID=US|Country=US|Currency=USD|Version=1193|CC=UTF-8),Custom label (SK
                               onDragStart={e => {
                                 e.dataTransfer.setData("from", "group");
                                 e.dataTransfer.setData("index", `${gi}-${xi}`);
-                              }} 
+                              }}
+                              onMouseEnter={(e) => handleImageHover(src, e)}
+                              onMouseLeave={handleImageLeave}
                             />
                           ))}
                         </div>

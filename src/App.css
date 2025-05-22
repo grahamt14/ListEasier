@@ -962,15 +962,16 @@
   width: 100%;
   color: #000 !important;
   min-height: 60px; /* Ensure consistent row height */
+  background-color: #ffffff; /* Default white background */
 }
 
-/* UPDATED: More visible alternating row colors */
-.row-view-row:nth-child(odd) {
-  background-color: #ffffff !important; /* Pure white for odd rows */
+/* JavaScript-controlled alternating row colors */
+.row-view-row.row-even {
+  background-color: #ffffff !important; /* White for even rows */
 }
 
-.row-view-row:nth-child(even) {
-  background-color: #f8f9fa !important; /* Light gray for even rows */
+.row-view-row.row-odd {
+  background-color: #f1f3f5 !important; /* Light gray for odd rows */
 }
 
 /* Hover state - more prominent */

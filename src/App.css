@@ -1051,9 +1051,16 @@ select {
   border-left-color: #FF9800;
 }
 
-/* View Toggle Styles */
-.view-toggle {
+/* Header layout update */
+.header-left {
   display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+/* View Toggle Styles - Fixed to be exactly as wide as buttons */
+.view-toggle {
+  display: inline-flex; /* Changed from flex to inline-flex */
   border-radius: 6px;
   border: 1px solid #ddd;
   overflow: hidden;
@@ -1071,6 +1078,7 @@ select {
   color: #666;
   transition: all 0.2s;
   border-right: 1px solid #ddd;
+  flex-shrink: 0; /* Prevent buttons from shrinking */
 }
 
 .view-toggle-btn:last-child {
@@ -1145,36 +1153,43 @@ select {
   color: #000;
 }
 
-/* Row View Row - Dynamic grid with inline styles */
+/* Row View Row - Dynamic grid with inline styles and alternating colors */
 .row-view-row {
   display: grid;
   /* Grid template columns will be set via inline styles */
   border-bottom: 1px solid #e9ecef;
   transition: background-color 0.2s;
   position: relative;
-  background-color: #fff; /* Ensure white background */
+  background-color: #fff; /* Default white background */
   width: 100%; /* Ensure full width */
   color: #000; /* Ensure all text is black */
 }
 
-.row-view-row:hover {
-  background-color: #f8f9fa;
+/* Alternating row colors */
+.row-view-row:nth-child(even) {
+  background-color: #f8f9fa; /* Light gray for even rows */
 }
 
+.row-view-row:nth-child(odd) {
+  background-color: #fff; /* White for odd rows */
+}
+
+.row-view-row:hover {
+  background-color: #e3f2fd !important; /* Light blue on hover, override alternating colors */
+}
+
+/* Status-based backgrounds (these override alternating colors when active) */
 .row-view-row.processing {
-  background-color: #e3f2fd;
+  background-color: #e3f2fd !important; /* Light blue for processing */
 }
 
 .row-view-row.processed {
-  background-color: #e8f5e8;
+  background-color: #e8f5e8 !important; /* Light green for processed */
 }
 
 .row-view-row.new {
-  background-color: #fff3cd;
+  background-color: #fff3cd !important; /* Light yellow for new */
 }
-
-/* Status indicators for row view - REMOVED since moved to images column */
-/* These styles are no longer needed as status is now in images column */
 
 /* Row Cells - Ensure all text is black */
 .row-cell {
@@ -1186,7 +1201,6 @@ select {
   overflow: hidden;
   color: #000; /* Ensure all cell text is black */
   background-color: inherit; /* Inherit background from row */
-  position: relative; /* Remove relative positioning since status moved */
 }
 
 .row-cell:last-child {

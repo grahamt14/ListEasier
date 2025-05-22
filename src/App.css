@@ -977,7 +977,7 @@
 /* Hover state - more prominent */
 .row-view-row:hover {
   background-color: #e3f2fd !important; /* Light blue on hover, override alternating colors */
-  transform: translateY(-1px); /* Subtle lift effect */
+  //transform: translateY(-1px); /* Subtle lift effect */
   box-shadow: 0 2px 4px rgba(0,0,0,0.1);
 }
 

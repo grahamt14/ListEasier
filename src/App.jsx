@@ -685,14 +685,6 @@ Action(SiteID=US|Country=US|Currency=USD|Version=1193|CC=UTF-8),Custom label (SK
                   ) : (
                     <div>
                       {renderResponseData(gi) || <p>No data. Click "Generate Listing".</p>}
-                      {responseData[gi] && !responseData[gi].error && (
-                        <button 
-                          className="download-single-button"
-                          onClick={() => downloadSingleListing(gi)}
-                        >
-                          Download This Listing
-                        </button>
-                      )}
                     </div>
                   )}
                 </div>

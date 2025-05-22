@@ -351,146 +351,151 @@ Action(SiteID=US|Country=US|Currency=USD|Version=1193|CC=UTF-8),Custom label (SK
     }
   };
 
-  const renderResponseData = (index) => {
-    const response = responseData[index];
-    if (!response) return null;
-    
-    // Get group metadata for this listing
-    const metadata = groupMetadata && groupMetadata[index] 
-      ? groupMetadata[index] 
-      : { price: price || '', sku: sku || '' };
-    
-    // Group-specific price and SKU or fall back to global settings
-    const groupPrice = metadata.price || price || '';
-    const groupSku = metadata.sku || sku || '';
-    
-    // Use stored field selections if available, otherwise fall back to current state
-    const listingFieldSelections = response.storedFieldSelections || fieldSelections;
-    
-    if (response.error) {
-      return (
-        <div className="response-error">
-          <p style={{ color: '#000' }}>Error: {response.error}</p>
-          {response.raw_content && <p style={{ color: '#000' }}>Raw content: {response.raw_content}</p>}
-        </div>
-      );
-    }
-    
+ const renderResponseData = (index) => {
+  const response = responseData[index];
+  if (!response) return null;
+  
+  // Get group metadata for this listing
+  const metadata = groupMetadata && groupMetadata[index] 
+    ? groupMetadata[index] 
+    : { price: price || '', sku: sku || '' };
+  
+  // Group-specific price and SKU or fall back to global settings
+  const groupPrice = metadata.price || price || '';
+  const groupSku = metadata.sku || sku || '';
+  
+  // Use stored field selections if available, otherwise fall back to current state
+  const listingFieldSelections = response.storedFieldSelections || fieldSelections;
+  
+  if (response.error) {
     return (
-      <div className="response-data">
-        <h4 style={{ color: '#000' }}>Generated Listing</h4>
-        <div className="response-fields">
-          {/* Display title and description first */}
-          {response.title && (
-            <div className="response-field primary-field">
-              <strong style={{ color: '#000' }}>Title:</strong>
-              <span style={{ color: '#000' }}>{response.title}</span>
+      <div className="response-error">
+        <p style={{ color: '#000' }}>Error: {response.error}</p>
+        {response.raw_content && <p style={{ color: '#000' }}>Raw content: {response.raw_content}</p>}
+      </div>
+    );
+  }
+  
+  return (
+    <div className="response-data">
+      <h4 style={{ color: '#000' }}>Generated Listing</h4>
+      <div className="response-fields">
+        {/* Display title and description first */}
+        {response.title && (
+          <div className="response-field primary-field">
+            <strong style={{ color: '#000' }}>Title:</strong>
+            <span style={{ color: '#000' }}>{response.title}</span>
+          </div>
+        )}
+        {response.description && (
+          <div className="response-field primary-field">
+            <strong style={{ color: '#000' }}>Description:</strong>
+            <span style={{ color: '#000' }}>{response.description}</span>
+          </div>
+        )}
+        
+        {/* Add other response fields excluding title, description and stored fields */}
+        {Object.entries(response)
+          .filter(([key]) => 
+            key !== 'title' && 
+            key !== 'description' && 
+            key !== 'storedFieldSelections' && 
+            !key.startsWith('error') && 
+            !key.startsWith('raw_')
+          )
+          .map(([key, value]) => (
+            <div key={key} className="response-field">
+              <strong style={{ color: '#000' }}>
+                {key.replace(/_/g, ' ').replace(/^\w/, c => c.toUpperCase())}:
+              </strong>
+              <span style={{ color: '#000' }}>{value}</span>
             </div>
-          )}
-          {response.description && (
-            <div className="response-field primary-field">
-              <strong style={{ color: '#000' }}>Description:</strong>
-              <span style={{ color: '#000' }}>{response.description}</span>
-            </div>
-          )}
+        ))}
+        
+        {/* Add category fields as editable metadata, including price and SKU */}
+        <div className="category-fields-metadata">
+          <h5 style={{ margin: '10px 0 5px 0', color: '#000' }}>Item Details</h5>
           
-          {/* Add other response fields excluding title, description and stored fields */}
-          {Object.entries(response)
-            .filter(([key]) => 
-              key !== 'title' && 
-              key !== 'description' && 
-              key !== 'storedFieldSelections' && 
-              !key.startsWith('error') && 
-              !key.startsWith('raw_')
-            )
-            .map(([key, value]) => (
-              <div key={key} className="response-field">
-                <strong style={{ color: '#000' }}>
-                  {key.replace(/_/g, ' ').replace(/^\w/, c => c.toUpperCase())}:
-                </strong>
-                <span style={{ color: '#000' }}>{value}</span>
-              </div>
-          ))}
+          {/* Add price and SKU with the category fields */}
+          <div className="response-field listing-metadata">
+            <strong style={{ color: '#000' }}>Price:</strong>
+            <span style={{ color: '#000' }}>${groupPrice}</span>
+          </div>
+          <div className="response-field listing-metadata">
+            <strong style={{ color: '#000' }}>SKU:</strong>
+            <span style={{ color: '#000' }}>{groupSku}</span>
+          </div>
           
-          {/* Add category fields as editable metadata, including price and SKU */}
-          <div className="category-fields-metadata">
-            <h5 style={{ margin: '10px 0 5px 0', color: '#000' }}>Item Details</h5>
-            
-            {/* Add price and SKU with the category fields */}
-            <div className="response-field listing-metadata">
-              <strong style={{ color: '#000' }}>Price:</strong>
-              <span style={{ color: '#000' }}>${groupPrice}</span>
-            </div>
-            <div className="response-field listing-metadata">
-              <strong style={{ color: '#000' }}>SKU:</strong>
-              <span style={{ color: '#000' }}>{groupSku}</span>
-            </div>
-            
-            {/* Add ALL category fields from the stored selections as editable fields */}
-            {Object.entries(listingFieldSelections).map(([label, value]) => {
-              // Display ALL fields, including those with default values, but make them editable
-              if (label !== 'price' && label !== 'sku') {
-                // Get the original field definition to show options
-                const fieldDefinition = categoryFields.find(field => field.FieldLabel === label);
-                const options = fieldDefinition?.CategoryOptions ? 
-                  fieldDefinition.CategoryOptions.split(';').map(opt => opt.trim()) : [];
-                
-                // Display empty string instead of "-- Select --" for default values
-                const displayValue = (value === "-- Select --" || !value) ? "" : value;
-                
-                return (
-                  <div key={label} className="response-field listing-metadata editable-field">
-                    <strong style={{ color: '#000' }}>{label}:</strong>
-                    {options.length > 0 ? (
-                      // If we have options, show a dropdown
-                      <select
-                        value={displayValue}
-                        onChange={(e) => updateListingFieldSelection(index, label, e.target.value)}
-                        style={{
-                          marginLeft: '8px',
-                          padding: '4px 8px',
-                          border: '1px solid #ccc',
-                          borderRadius: '4px',
-                          backgroundColor: '#fff',
-                          color: '#000',
-                          fontSize: '0.9rem'
-                        }}
-                      >
-                        <option value="">-- Select --</option>
-                        {options.map((opt, idx) => (
-                          <option key={idx} value={opt}>{opt}</option>
-                        ))}
-                      </select>
-                    ) : (
-                      // If no options, show a text input
+          {/* Add ALL category fields from the stored selections as editable fields */}
+          {Object.entries(listingFieldSelections).map(([label, value]) => {
+            // Display ALL fields, including those with default values, but make them editable
+            if (label !== 'price' && label !== 'sku') {
+              // Get the original field definition to show options
+              const fieldDefinition = categoryFields.find(field => field.FieldLabel === label);
+              const options = fieldDefinition?.CategoryOptions ? 
+                fieldDefinition.CategoryOptions.split(';').map(opt => opt.trim()) : [];
+              
+              // Display empty string instead of "-- Select --" for default values
+              const displayValue = (value === "-- Select --" || !value) ? "" : value;
+              
+              return (
+                <div key={label} className="response-field listing-metadata editable-field">
+                  <strong style={{ color: '#000' }}>{label}:</strong>
+                  {options.length > 0 ? (
+                    // If we have options, show an editable dropdown using datalist
+                    <div style={{ position: 'relative', marginLeft: '8px' }}>
                       <input
                         type="text"
                         value={displayValue}
                         onChange={(e) => updateListingFieldSelection(index, label, e.target.value)}
-                        placeholder="Enter value"
+                        placeholder="Enter value or select from dropdown"
+                        list={`${label}-${index}-options`}
                         style={{
-                          marginLeft: '8px',
                           padding: '4px 8px',
                           border: '1px solid #ccc',
                           borderRadius: '4px',
                           backgroundColor: '#fff',
                           color: '#000',
                           fontSize: '0.9rem',
-                          minWidth: '150px'
+                          minWidth: '200px'
                         }}
                       />
-                    )}
-                  </div>
-                );
-              }
-              
-              return null;
-            })}
-          </div>
+                      <datalist id={`${label}-${index}-options`}>
+                        {options.map((opt, idx) => (
+                          <option key={idx} value={opt}>{opt}</option>
+                        ))}
+                      </datalist>
+                    </div>
+                  ) : (
+                    // If no options, show a regular text input
+                    <input
+                      type="text"
+                      value={displayValue}
+                      onChange={(e) => updateListingFieldSelection(index, label, e.target.value)}
+                      placeholder="Enter value"
+                      style={{
+                        marginLeft: '8px',
+                        padding: '4px 8px',
+                        border: '1px solid #ccc',
+                        borderRadius: '4px',
+                        backgroundColor: '#fff',
+                        color: '#000',
+                        fontSize: '0.9rem',
+                        minWidth: '150px'
+                      }}
+                    />
+                  )}
+                </div>
+              );
+            }
+            
+            return null;
+          })}
         </div>
       </div>
-    );
-  };
+    </div>
+  );
+};
 
   // Spinner component
   const Spinner = () => (

@@ -1051,15 +1051,6 @@ select {
   border-left-color: #FF9800;
 }
 
-/* Add these styles to your App.css file */
-
-/* Header layout update */
-.header-left {
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-}
-
 /* View Toggle Styles */
 .view-toggle {
   display: flex;
@@ -1117,10 +1108,10 @@ select {
   min-width: 1200px; /* Minimum width to prevent cramping */
 }
 
-/* Row View Header - Base grid with fixed columns */
+/* Row View Header - Dynamic grid with inline styles */
 .row-view-header {
   display: grid;
-  grid-template-columns: 200px 250px 300px 100px 120px 80px; /* Base columns without category fields */
+  /* Grid template columns will be set via inline styles */
   background-color: #f8f9fa;
   border-bottom: 2px solid #dee2e6;
   font-weight: bold;
@@ -1128,52 +1119,6 @@ select {
   position: sticky;
   top: 0;
   z-index: 5;
-}
-
-/* Dynamic grid template that adds columns for each category field */
-.row-view-header[data-field-count="1"] {
-  grid-template-columns: 200px 250px 300px 100px 120px 150px 80px;
-}
-
-.row-view-header[data-field-count="2"] {
-  grid-template-columns: 200px 250px 300px 100px 120px 150px 150px 80px;
-}
-
-.row-view-header[data-field-count="3"] {
-  grid-template-columns: 200px 250px 300px 100px 120px 150px 150px 150px 80px;
-}
-
-.row-view-header[data-field-count="4"] {
-  grid-template-columns: 200px 250px 300px 100px 120px 150px 150px 150px 150px 80px;
-}
-
-.row-view-header[data-field-count="5"] {
-  grid-template-columns: 200px 250px 300px 100px 120px 150px 150px 150px 150px 150px 80px;
-}
-
-.row-view-header[data-field-count="6"] {
-  grid-template-columns: 200px 250px 300px 100px 120px 150px 150px 150px 150px 150px 150px 80px;
-}
-
-.row-view-header[data-field-count="7"] {
-  grid-template-columns: 200px 250px 300px 100px 120px 150px 150px 150px 150px 150px 150px 150px 80px;
-}
-
-.row-view-header[data-field-count="8"] {
-  grid-template-columns: 200px 250px 300px 100px 120px 150px 150px 150px 150px 150px 150px 150px 150px 80px;
-}
-
-.row-view-header[data-field-count="9"] {
-  grid-template-columns: 200px 250px 300px 100px 120px 150px 150px 150px 150px 150px 150px 150px 150px 150px 80px;
-}
-
-.row-view-header[data-field-count="10"] {
-  grid-template-columns: 200px 250px 300px 100px 120px 150px 150px 150px 150px 150px 150px 150px 150px 150px 150px 80px;
-}
-
-/* For more than 10 fields, use a fallback with repeat */
-.row-view-header[data-field-count]:not([data-field-count="0"]):not([data-field-count="1"]):not([data-field-count="2"]):not([data-field-count="3"]):not([data-field-count="4"]):not([data-field-count="5"]):not([data-field-count="6"]):not([data-field-count="7"]):not([data-field-count="8"]):not([data-field-count="9"]):not([data-field-count="10"]) {
-  grid-template-columns: 200px 250px 300px 100px 120px repeat(var(--field-count, 1), 150px) 80px;
 }
 
 .row-header-cell {
@@ -1199,59 +1144,13 @@ select {
   justify-content: center;
 }
 
-/* Row View Row - Base grid matching header */
+/* Row View Row - Dynamic grid with inline styles */
 .row-view-row {
   display: grid;
-  grid-template-columns: 200px 250px 300px 100px 120px 80px; /* Base columns without category fields */
+  /* Grid template columns will be set via inline styles */
   border-bottom: 1px solid #e9ecef;
   transition: background-color 0.2s;
   position: relative;
-}
-
-/* Dynamic grid template for rows that matches the header */
-.row-view-row[data-field-count="1"] {
-  grid-template-columns: 200px 250px 300px 100px 120px 150px 80px;
-}
-
-.row-view-row[data-field-count="2"] {
-  grid-template-columns: 200px 250px 300px 100px 120px 150px 150px 80px;
-}
-
-.row-view-row[data-field-count="3"] {
-  grid-template-columns: 200px 250px 300px 100px 120px 150px 150px 150px 80px;
-}
-
-.row-view-row[data-field-count="4"] {
-  grid-template-columns: 200px 250px 300px 100px 120px 150px 150px 150px 150px 80px;
-}
-
-.row-view-row[data-field-count="5"] {
-  grid-template-columns: 200px 250px 300px 100px 120px 150px 150px 150px 150px 150px 80px;
-}
-
-.row-view-row[data-field-count="6"] {
-  grid-template-columns: 200px 250px 300px 100px 120px 150px 150px 150px 150px 150px 150px 80px;
-}
-
-.row-view-row[data-field-count="7"] {
-  grid-template-columns: 200px 250px 300px 100px 120px 150px 150px 150px 150px 150px 150px 150px 80px;
-}
-
-.row-view-row[data-field-count="8"] {
-  grid-template-columns: 200px 250px 300px 100px 120px 150px 150px 150px 150px 150px 150px 150px 150px 80px;
-}
-
-.row-view-row[data-field-count="9"] {
-  grid-template-columns: 200px 250px 300px 100px 120px 150px 150px 150px 150px 150px 150px 150px 150px 150px 80px;
-}
-
-.row-view-row[data-field-count="10"] {
-  grid-template-columns: 200px 250px 300px 100px 120px 150px 150px 150px 150px 150px 150px 150px 150px 150px 150px 80px;
-}
-
-/* For more than 10 fields, use a fallback with repeat */
-.row-view-row[data-field-count]:not([data-field-count="0"]):not([data-field-count="1"]):not([data-field-count="2"]):not([data-field-count="3"]):not([data-field-count="4"]):not([data-field-count="5"]):not([data-field-count="6"]):not([data-field-count="7"]):not([data-field-count="8"]):not([data-field-count="9"]):not([data-field-count="10"]) {
-  grid-template-columns: 200px 250px 300px 100px 120px repeat(var(--field-count, 1), 150px) 80px;
 }
 
 .row-view-row:hover {
@@ -1520,72 +1419,15 @@ select {
     min-width: 1000px;
   }
   
-  .row-view-header,
-  .row-view-row {
-    grid-template-columns: 160px 200px 250px 90px 100px 70px;
-  }
-  
-  .row-view-header[data-field-count="1"],
-  .row-view-row[data-field-count="1"] {
-    grid-template-columns: 160px 200px 250px 90px 100px 120px 70px;
-  }
-  
-  .row-view-header[data-field-count="2"],
-  .row-view-row[data-field-count="2"] {
-    grid-template-columns: 160px 200px 250px 90px 100px 120px 120px 70px;
-  }
-  
-  .row-view-header[data-field-count="3"],
-  .row-view-row[data-field-count="3"] {
-    grid-template-columns: 160px 200px 250px 90px 100px 120px 120px 120px 70px;
-  }
-  
-  .row-view-header[data-field-count="4"],
-  .row-view-row[data-field-count="4"] {
-    grid-template-columns: 160px 200px 250px 90px 100px 120px 120px 120px 120px 70px;
-  }
-  
-  .row-view-header[data-field-count="5"],
-  .row-view-row[data-field-count="5"] {
-    grid-template-columns: 160px 200px 250px 90px 100px 120px 120px 120px 120px 120px 70px;
-  }
-  
-  /* Continue pattern for more fields */
-  .row-view-header[data-field-count]:not([data-field-count="0"]):not([data-field-count="1"]):not([data-field-count="2"]):not([data-field-count="3"]):not([data-field-count="4"]):not([data-field-count="5"]),
-  .row-view-row[data-field-count]:not([data-field-count="0"]):not([data-field-count="1"]):not([data-field-count="2"]):not([data-field-count="3"]):not([data-field-count="4"]):not([data-field-count="5"]) {
-    grid-template-columns: 160px 200px 250px 90px 100px repeat(var(--field-count, 1), 120px) 70px;
+  .row-thumb {
+    width: 30px;
+    height: 30px;
   }
 }
 
 @media (max-width: 1200px) {
   .row-view-table {
     min-width: 800px;
-  }
-  
-  .row-view-header,
-  .row-view-row {
-    grid-template-columns: 140px 180px 200px 80px 90px 60px;
-  }
-  
-  .row-view-header[data-field-count="1"],
-  .row-view-row[data-field-count="1"] {
-    grid-template-columns: 140px 180px 200px 80px 90px 100px 60px;
-  }
-  
-  .row-view-header[data-field-count="2"],
-  .row-view-row[data-field-count="2"] {
-    grid-template-columns: 140px 180px 200px 80px 90px 100px 100px 60px;
-  }
-  
-  .row-view-header[data-field-count="3"],
-  .row-view-row[data-field-count="3"] {
-    grid-template-columns: 140px 180px 200px 80px 90px 100px 100px 100px 60px;
-  }
-  
-  /* Continue pattern for more fields */
-  .row-view-header[data-field-count]:not([data-field-count="0"]):not([data-field-count="1"]):not([data-field-count="2"]):not([data-field-count="3"]),
-  .row-view-row[data-field-count]:not([data-field-count="0"]):not([data-field-count="1"]):not([data-field-count="2"]):not([data-field-count="3"]) {
-    grid-template-columns: 140px 180px 200px 80px 90px repeat(var(--field-count, 1), 100px) 60px;
   }
   
   .row-thumb {

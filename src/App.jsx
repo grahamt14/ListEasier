@@ -573,6 +573,8 @@ Action(SiteID=US|Country=US|Currency=USD|Version=1193|CC=UTF-8),Custom label (SK
   // Get all unique category field labels for table headers in row view
   const getAllCategoryFieldLabels = () => {
     const allLabels = new Set();
+    
+    // First, add labels from any existing response data
     responseData.forEach(response => {
       if (response && response.storedFieldSelections) {
         Object.keys(response.storedFieldSelections).forEach(label => {
@@ -582,10 +584,29 @@ Action(SiteID=US|Country=US|Currency=USD|Version=1193|CC=UTF-8),Custom label (SK
         });
       }
     });
+    
+    // If no response data yet, use the current form's category fields
+    if (allLabels.size === 0 && categoryFields.length > 0) {
+      categoryFields.forEach(field => {
+        if (field.FieldLabel) {
+          allLabels.add(field.FieldLabel);
+        }
+      });
+    }
+    
     return Array.from(allLabels);
   };
 
   const allFieldLabels = getAllCategoryFieldLabels();
+
+  // Generate dynamic grid template based on number of fields
+  const generateGridTemplate = (fieldCount) => {
+    const baseColumns = '200px 250px 300px 100px 120px'; // Images, Title, Description, Price, SKU
+    const fieldColumns = fieldCount > 0 ? ` repeat(${fieldCount}, 150px)` : '';
+    const actionsColumn = ' 80px'; // Actions column
+    
+    return baseColumns + fieldColumns + actionsColumn;
+  };
 
   return (
     <section className="preview-section">
@@ -696,8 +717,11 @@ Action(SiteID=US|Country=US|Currency=USD|Version=1193|CC=UTF-8),Custom label (SK
         <div className="row-view-container">
           {imageGroups.some(group => group.length > 0) && (
             <div className="row-view-table">
-              {/* Table Header with dynamic field count */}
-              <div className="row-view-header" data-field-count={allFieldLabels.length}>
+              {/* Table Header with dynamic grid template */}
+              <div 
+                className="row-view-header" 
+                style={{ gridTemplateColumns: generateGridTemplate(allFieldLabels.length) }}
+              >
                 <div className="row-header-cell images-header">Images</div>
                 <div className="row-header-cell title-header">Title</div>
                 <div className="row-header-cell description-header">Description</div>
@@ -709,7 +733,7 @@ Action(SiteID=US|Country=US|Currency=USD|Version=1193|CC=UTF-8),Custom label (SK
                 <div className="row-header-cell actions-header">Actions</div>
               </div>
               
-              {/* Table Rows with dynamic field count */}
+              {/* Table Rows with dynamic grid template */}
               {imageGroups.map((group, gi) => {
                 // Skip empty groups
                 if (group.length === 0) return null;
@@ -763,7 +787,7 @@ Action(SiteID=US|Country=US|Currency=USD|Version=1193|CC=UTF-8),Custom label (SK
                   <div
                     key={gi}
                     className={`row-view-row ${groupClass}`}
-                    data-field-count={allFieldLabels.length}
+                    style={{ gridTemplateColumns: generateGridTemplate(allFieldLabels.length) }}
                     onDrop={e => handleGroupDrop(e, gi)}
                     onDragOver={e => e.preventDefault()}
                   >

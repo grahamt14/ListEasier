@@ -228,6 +228,7 @@ function FormSection({ onGenerateListing, onCategoryFieldsChange }) {
     }
   }, [category, categories, selectedCategory]);
 
+
   // Synchronize with parent component
   useEffect(() => {
     if (rawFiles.length > 0 && filesBase64.length === 0) {

@@ -22,10 +22,10 @@ class EbayOAuthService {
     
     // Your eBay app credentials (these should be stored securely)
     this.credentials = {
-      clientId: process.env.REACT_APP_EBAY_CLIENT_ID || 'YOUR_EBAY_CLIENT_ID',
+      clientId: process.env.REACT_APP_EBAY_CLIENT_ID || 'DavidJac-ListEasi-SBX-50e7167ce-0d788b93',
       clientSecret: process.env.REACT_APP_EBAY_CLIENT_SECRET || 'YOUR_EBAY_CLIENT_SECRET',
-      redirectUri: process.env.REACT_APP_EBAY_REDIRECT_URI || 'http://localhost:3000/ebay/callback',
-      ruName: process.env.REACT_APP_EBAY_RU_NAME || 'YOUR_EBAY_RU_NAME'
+      redirectUri: process.env.REACT_APP_EBAY_REDIRECT_URI || 'http://main.dhpq8vit86dyp.amplifyapp.com/ebay/callback',
+      ruName: process.env.REACT_APP_EBAY_RU_NAME || 'David_Jacobs-DavidJac-ListEa-axnzczn'
     };
     
     // Required scopes for business policies

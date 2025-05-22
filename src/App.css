@@ -1050,3 +1050,434 @@ select {
 .editable-field.custom-value {
   border-left-color: #FF9800;
 }
+
+/* Add these styles to your App.css file */
+
+/* Header layout update */
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+/* View Toggle Styles */
+.view-toggle {
+  display: flex;
+  border-radius: 6px;
+  border: 1px solid #ddd;
+  overflow: hidden;
+  background-color: #fff;
+}
+
+.view-toggle-btn {
+  background: none;
+  border: none;
+  padding: 8px 12px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #666;
+  transition: all 0.2s;
+  border-right: 1px solid #ddd;
+}
+
+.view-toggle-btn:last-child {
+  border-right: none;
+}
+
+.view-toggle-btn:hover {
+  background-color: #f5f5f5;
+  color: #333;
+}
+
+.view-toggle-btn.active {
+  background-color: #007bff;
+  color: white;
+}
+
+.view-toggle-btn svg {
+  width: 16px;
+  height: 16px;
+}
+
+/* Row View Container */
+.row-view-container {
+  width: 100%;
+  overflow-x: auto;
+  background: #fff;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+
+/* Row View Table */
+.row-view-table {
+  display: flex;
+  flex-direction: column;
+  min-width: 1200px; /* Minimum width to prevent cramping */
+}
+
+/* Row View Header */
+.row-view-header {
+  display: grid;
+  grid-template-columns: 200px 250px 300px 100px 120px 1fr 80px;
+  background-color: #f8f9fa;
+  border-bottom: 2px solid #dee2e6;
+  font-weight: bold;
+  color: #495057;
+  position: sticky;
+  top: 0;
+  z-index: 5;
+}
+
+/* Adjust grid template when there are category fields */
+.row-view-header:has(+ .row-view-row .field-cell) {
+  grid-template-columns: 200px 250px 300px 100px 120px repeat(auto-fit, minmax(150px, 1fr)) 80px;
+}
+
+.row-header-cell {
+  padding: 12px 8px;
+  border-right: 1px solid #dee2e6;
+  display: flex;
+  align-items: center;
+  font-size: 0.9rem;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.row-header-cell:last-child {
+  border-right: none;
+}
+
+/* Header-specific styling */
+.images-header {
+  justify-content: center;
+}
+
+.actions-header {
+  justify-content: center;
+}
+
+/* Row View Row */
+.row-view-row {
+  display: grid;
+  grid-template-columns: 200px 250px 300px 100px 120px 1fr 80px;
+  border-bottom: 1px solid #e9ecef;
+  transition: background-color 0.2s;
+  position: relative;
+}
+
+/* Adjust grid template when there are category fields */
+.row-view-row:has(.field-cell) {
+  grid-template-columns: 200px 250px 300px 100px 120px repeat(auto-fit, minmax(150px, 1fr)) 80px;
+}
+
+.row-view-row:hover {
+  background-color: #f8f9fa;
+}
+
+.row-view-row.processing {
+  background-color: #e3f2fd;
+}
+
+.row-view-row.processed {
+  background-color: #e8f5e8;
+}
+
+.row-view-row.new {
+  background-color: #fff3cd;
+}
+
+/* Status indicators for row view */
+.row-view-row.processed::before {
+  content: "✓";
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 20px;
+  height: 20px;
+  background-color: #4CAF50;
+  color: white;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: bold;
+  font-size: 12px;
+  z-index: 2;
+}
+
+.row-view-row.processing::before {
+  content: "⋯";
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 20px;
+  height: 20px;
+  background-color: #2196F3;
+  color: white;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: bold;
+  font-size: 12px;
+  z-index: 2;
+}
+
+.row-view-row.new::before {
+  content: "NEW";
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  padding: 2px 6px;
+  background-color: #FF9800;
+  color: white;
+  border-radius: 10px;
+  font-size: 10px;
+  font-weight: bold;
+  z-index: 2;
+}
+
+/* Row Cells */
+.row-cell {
+  padding: 12px 8px;
+  border-right: 1px solid #e9ecef;
+  display: flex;
+  align-items: center;
+  font-size: 0.9rem;
+  overflow: hidden;
+}
+
+.row-cell:last-child {
+  border-right: none;
+}
+
+/* Images Cell */
+.images-cell {
+  flex-direction: column;
+  align-items: center;
+  padding: 8px;
+}
+
+.row-images-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+}
+
+.group-number-badge {
+  background-color: #007bff;
+  color: white;
+  padding: 4px 8px;
+  border-radius: 12px;
+  font-size: 0.8rem;
+  font-weight: bold;
+  margin-bottom: 8px;
+}
+
+.row-thumbs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  justify-content: center;
+  width: 100%;
+}
+
+.row-thumb {
+  width: 40px;
+  height: 40px;
+  object-fit: cover;
+  border-radius: 4px;
+  cursor: move;
+  border: 1px solid #ddd;
+  transition: transform 0.2s;
+}
+
+.row-thumb:hover {
+  transform: scale(1.1);
+  z-index: 1;
+}
+
+/* Title Cell */
+.title-cell {
+  align-items: flex-start;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.row-title {
+  font-weight: 500;
+  line-height: 1.4;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  word-break: break-word;
+}
+
+/* Description Cell */
+.description-cell {
+  align-items: flex-start;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.row-description {
+  line-height: 1.3;
+  display: -webkit-box;
+  -webkit-line-clamp: 4;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  word-break: break-word;
+  color: #666;
+}
+
+/* Input Cells */
+.price-cell,
+.sku-cell,
+.field-cell {
+  padding: 8px 6px;
+}
+
+.row-input {
+  width: 100%;
+  padding: 6px 8px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  font-size: 0.85rem;
+  background-color: #fff;
+  color: #333;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.row-input:focus {
+  outline: none;
+  border-color: #007bff;
+  box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.1);
+}
+
+.price-input {
+  text-align: right;
+}
+
+.field-input {
+  background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 12 12"><path fill="gray" d="M2 4l4 4 4-4z"/></svg>');
+  background-repeat: no-repeat;
+  background-position: right 6px center;
+  background-size: 10px;
+  padding-right: 24px;
+}
+
+/* Actions Cell */
+.actions-cell {
+  justify-content: center;
+  padding: 8px;
+}
+
+.row-download-button {
+  background: none;
+  border: 1px solid #007bff;
+  color: #007bff;
+  padding: 6px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+}
+
+.row-download-button:hover {
+  background-color: #007bff;
+  color: white;
+}
+
+/* Loading states */
+.row-loading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #666;
+  font-style: italic;
+}
+
+.row-loading .spinner {
+  width: 16px;
+  height: 16px;
+}
+
+.row-loading .spinner-circle {
+  width: 16px;
+  height: 16px;
+  border-width: 2px;
+}
+
+/* Error states */
+.row-error {
+  color: #dc3545;
+  font-style: italic;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* Placeholder states */
+.row-placeholder {
+  color: #999;
+  font-style: italic;
+}
+
+/* Responsive adjustments for row view */
+@media (max-width: 1400px) {
+  .row-view-table {
+    min-width: 1000px;
+  }
+  
+  .row-view-header,
+  .row-view-row {
+    grid-template-columns: 160px 200px 250px 90px 100px 1fr 70px;
+  }
+  
+  .row-view-header:has(+ .row-view-row .field-cell),
+  .row-view-row:has(.field-cell) {
+    grid-template-columns: 160px 200px 250px 90px 100px repeat(auto-fit, minmax(120px, 1fr)) 70px;
+  }
+}
+
+@media (max-width: 1200px) {
+  .row-view-table {
+    min-width: 800px;
+  }
+  
+  .row-view-header,
+  .row-view-row {
+    grid-template-columns: 140px 180px 200px 80px 90px 1fr 60px;
+  }
+  
+  .row-view-header:has(+ .row-view-row .field-cell),
+  .row-view-row:has(.field-cell) {
+    grid-template-columns: 140px 180px 200px 80px 90px repeat(auto-fit, minmax(100px, 1fr)) 60px;
+  }
+  
+  .row-thumb {
+    width: 30px;
+    height: 30px;
+  }
+}
+
+@media (max-width: 768px) {
+  .header-left {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.5rem;
+  }
+  
+  .view-toggle {
+    align-self: flex-start;
+  }
+}

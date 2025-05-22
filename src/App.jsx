@@ -8,6 +8,7 @@ import { fromCognitoIdentityPool } from "@aws-sdk/credential-provider-cognito-id
 import { AppStateProvider, useAppState } from './StateContext';
 
 // PreviewSection component
+// PreviewSection component - Updated with Grid/Row Toggle
 function PreviewSection({ categoryFields = [] }) {
   const { state, dispatch } = useAppState();
   const { 
@@ -36,6 +37,9 @@ function PreviewSection({ categoryFields = [] }) {
 
   // Handle hover for drop target
   const [hoveredGroup, setHoveredGroup] = useState(null);
+  
+  // Add view mode state
+  const [viewMode, setViewMode] = useState('grid'); // 'grid' or 'row'
 
   // AWS Configuration
   const REGION = "us-east-2";
@@ -567,10 +571,50 @@ Action(SiteID=US|Country=US|Currency=USD|Version=1193|CC=UTF-8),Custom label (SK
   // Check if there are valid listings to download
   const hasValidListings = responseData.some(item => item && !item.error);
 
+  // Get all unique category field labels for table headers in row view
+  const getAllCategoryFieldLabels = () => {
+    const allLabels = new Set();
+    responseData.forEach(response => {
+      if (response && response.storedFieldSelections) {
+        Object.keys(response.storedFieldSelections).forEach(label => {
+          if (label !== 'price' && label !== 'sku') {
+            allLabels.add(label);
+          }
+        });
+      }
+    });
+    return Array.from(allLabels);
+  };
+
+  const allFieldLabels = getAllCategoryFieldLabels();
+
   return (
     <section className="preview-section">
       <div className="section-header">
-        <h2>Image Groups & Listings</h2>
+        <div className="header-left">
+          <h2>Image Groups & Listings</h2>
+          {/* View Toggle Button */}
+          <div className="view-toggle">
+            <button 
+              className={`view-toggle-btn ${viewMode === 'grid' ? 'active' : ''}`}
+              onClick={() => setViewMode('grid')}
+              title="Grid View"
+            >
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+                <path d="M1 2.5A1.5 1.5 0 0 1 2.5 1h3A1.5 1.5 0 0 1 7 2.5v3A1.5 1.5 0 0 1 5.5 7h-3A1.5 1.5 0 0 1 1 5.5v-3zM2.5 2a.5.5 0 0 0-.5.5v3a.5.5 0 0 0 .5.5h3a.5.5 0 0 0 .5-.5v-3a.5.5 0 0 0-.5-.5h-3zm6.5.5A1.5 1.5 0 0 1 10.5 1h3A1.5 1.5 0 0 1 15 2.5v3A1.5 1.5 0 0 1 13.5 7h-3A1.5 1.5 0 0 1 9 5.5v-3zm1.5-.5a.5.5 0 0 0-.5.5v3a.5.5 0 0 0 .5.5h3a.5.5 0 0 0 .5-.5v-3a.5.5 0 0 0-.5-.5h-3zM1 10.5A1.5 1.5 0 0 1 2.5 9h3A1.5 1.5 0 0 1 7 10.5v3A1.5 1.5 0 0 1 5.5 15h-3A1.5 1.5 0 0 1 1 13.5v-3zm1.5-.5a.5.5 0 0 0-.5.5v3a.5.5 0 0 0 .5.5h3a.5.5 0 0 0 .5-.5v-3a.5.5 0 0 0-.5-.5h-3zm6.5.5A1.5 1.5 0 0 1 10.5 9h3a1.5 1.5 0 0 1 1.5 1.5v3a1.5 1.5 0 0 1-1.5 1.5h-3A1.5 1.5 0 0 1 9 13.5v-3zm1.5-.5a.5.5 0 0 0-.5.5v3a.5.5 0 0 0 .5.5h3a.5.5 0 0 0 .5-.5v-3a.5.5 0 0 0-.5-.5h-3z"/>
+              </svg>
+            </button>
+            <button 
+              className={`view-toggle-btn ${viewMode === 'row' ? 'active' : ''}`}
+              onClick={() => setViewMode('row')}
+              title="Row View"
+            >
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+                <path d="M2.5 12a.5.5 0 0 1 .5-.5h10a.5.5 0 0 1 0 1H3a.5.5 0 0 1-.5-.5zm0-4a.5.5 0 0 1 .5-.5h10a.5.5 0 0 1 0 1H3a.5.5 0 0 1-.5-.5zm0-4a.5.5 0 0 1 .5-.5h10a.5.5 0 0 1 0 1H3a.5.5 0 0 1-.5-.5z"/>
+              </svg>
+            </button>
+          </div>
+        </div>
         {hasValidListings && (
           <button 
             className="download-button"
@@ -594,66 +638,280 @@ Action(SiteID=US|Country=US|Currency=USD|Version=1193|CC=UTF-8),Custom label (SK
           )}
         </div>
       )}
-      <div className="groups-container">
-        {imageGroups.map((group, gi) => {
-          // Skip empty groups
-          if (group.length === 0) return null;
-          
-          // Determine the class based on processing state
-          let groupClass = "";
-          if (processingGroups[gi]) {
-            groupClass = "processing";
-          } else if (processedGroupIndices && processedGroupIndices.includes(gi)) {
-            groupClass = "processed";
-          } else if (group.length > 0 && !responseData[gi]) {
-            groupClass = "new";
-          }
-          
-          // Get group metadata
-          const metadata = groupMetadata && groupMetadata[gi] 
-            ? groupMetadata[gi] 
-            : { price: price, sku: sku };
-          
-          // Group-specific price and SKU or fall back to global settings
-          const groupPrice = metadata.price || price;
-          const groupSku = metadata.sku || sku;
-          
-          return (
-            <div
-              key={gi}
-              className={`group-card ${groupClass}`}
-              onDrop={e => handleGroupDrop(e, gi)}
-              onDragOver={e => e.preventDefault()}
-            >
-              {/* Just add a simple group number indicator */}
-              <div className="group-header">
-                <span className="group-number">Group {gi + 1}</span>
+
+      {/* Conditional rendering based on view mode */}
+      {viewMode === 'grid' ? (
+        <div className="groups-container">
+          {imageGroups.map((group, gi) => {
+            // Skip empty groups
+            if (group.length === 0) return null;
+            
+            // Determine the class based on processing state
+            let groupClass = "";
+            if (processingGroups[gi]) {
+              groupClass = "processing";
+            } else if (processedGroupIndices && processedGroupIndices.includes(gi)) {
+              groupClass = "processed";
+            } else if (group.length > 0 && !responseData[gi]) {
+              groupClass = "new";
+            }
+            
+            return (
+              <div
+                key={gi}
+                className={`group-card ${groupClass}`}
+                onDrop={e => handleGroupDrop(e, gi)}
+                onDragOver={e => e.preventDefault()}
+              >
+                {/* Just add a simple group number indicator */}
+                <div className="group-header">
+                  <span className="group-number">Group {gi + 1}</span>
+                </div>
+                
+                <div className="thumbs">
+                  {group.map((src, xi) => (
+                    <img key={xi} src={src} alt={`group-${gi}-img-${xi}`} draggable onDragStart={e => {
+                      e.dataTransfer.setData("from", "group");
+                      e.dataTransfer.setData("index", `${gi}-${xi}`);
+                    }} />
+                  ))}
+                </div>
+                <div className="listing">
+                  {processingGroups[gi] ? (
+                    <div className="listing-loading">
+                      <Spinner />
+                      <p>Generating listing for group {gi+1}...</p>
+                    </div>
+                  ) : (
+                    <div>
+                      {renderResponseData(gi) || <p>No data. Click "Generate Listing".</p>}
+                      {responseData[gi] && !responseData[gi].error && (
+                        <button 
+                          className="download-single-button"
+                          onClick={() => downloadSingleListing(gi)}
+                        >
+                          Download This Listing
+                        </button>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      ) : (
+        // Row View
+        <div className="row-view-container">
+          {imageGroups.some(group => group.length > 0) && (
+            <div className="row-view-table">
+              {/* Table Header */}
+              <div className="row-view-header">
+                <div className="row-header-cell images-header">Images</div>
+                <div className="row-header-cell title-header">Title</div>
+                <div className="row-header-cell description-header">Description</div>
+                <div className="row-header-cell price-header">Price</div>
+                <div className="row-header-cell sku-header">SKU</div>
+                {allFieldLabels.map(label => (
+                  <div key={label} className="row-header-cell field-header">{label}</div>
+                ))}
+                <div className="row-header-cell actions-header">Actions</div>
               </div>
               
-              <div className="thumbs">
-                {group.map((src, xi) => (
-                  <img key={xi} src={src} alt={`group-${gi}-img-${xi}`} draggable onDragStart={e => {
-                    e.dataTransfer.setData("from", "group");
-                    e.dataTransfer.setData("index", `${gi}-${xi}`);
-                  }} />
-                ))}
-              </div>
-              <div className="listing">
-                {processingGroups[gi] ? (
-                  <div className="listing-loading">
-                    <Spinner />
-                    <p>Generating listing for group {gi+1}...</p>
+              {/* Table Rows */}
+              {imageGroups.map((group, gi) => {
+                // Skip empty groups
+                if (group.length === 0) return null;
+                
+                const response = responseData[gi];
+                const metadata = groupMetadata && groupMetadata[gi] 
+                  ? groupMetadata[gi] 
+                  : { price: price || '', sku: sku || '' };
+                
+                const groupPrice = metadata.price || price || '';
+                const groupSku = metadata.sku || sku || '';
+                const listingFieldSelections = response?.storedFieldSelections || fieldSelections;
+                
+                // Determine the class based on processing state
+                let groupClass = "";
+                if (processingGroups[gi]) {
+                  groupClass = "processing";
+                } else if (processedGroupIndices && processedGroupIndices.includes(gi)) {
+                  groupClass = "processed";
+                } else if (group.length > 0 && !responseData[gi]) {
+                  groupClass = "new";
+                }
+                
+                // Function to update price for this specific listing
+                const updateListingPrice = (newPrice) => {
+                  const updatedMetadata = [...(groupMetadata || [])];
+                  while (updatedMetadata.length <= gi) {
+                    updatedMetadata.push(null);
+                  }
+                  updatedMetadata[gi] = {
+                    ...(updatedMetadata[gi] || {}),
+                    price: newPrice
+                  };
+                  dispatch({ type: 'UPDATE_GROUP_METADATA', payload: updatedMetadata });
+                };
+                
+                // Function to update SKU for this specific listing
+                const updateListingSku = (newSku) => {
+                  const updatedMetadata = [...(groupMetadata || [])];
+                  while (updatedMetadata.length <= gi) {
+                    updatedMetadata.push(null);
+                  }
+                  updatedMetadata[gi] = {
+                    ...(updatedMetadata[gi] || {}),
+                    sku: newSku
+                  };
+                  dispatch({ type: 'UPDATE_GROUP_METADATA', payload: updatedMetadata });
+                };
+                
+                return (
+                  <div
+                    key={gi}
+                    className={`row-view-row ${groupClass}`}
+                    onDrop={e => handleGroupDrop(e, gi)}
+                    onDragOver={e => e.preventDefault()}
+                  >
+                    {/* Images Column */}
+                    <div className="row-cell images-cell">
+                      <div className="row-images-container">
+                        <div className="group-number-badge">Group {gi + 1}</div>
+                        <div className="row-thumbs">
+                          {group.map((src, xi) => (
+                            <img 
+                              key={xi} 
+                              src={src} 
+                              alt={`group-${gi}-img-${xi}`} 
+                              className="row-thumb"
+                              draggable 
+                              onDragStart={e => {
+                                e.dataTransfer.setData("from", "group");
+                                e.dataTransfer.setData("index", `${gi}-${xi}`);
+                              }} 
+                            />
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                    
+                    {/* Title Column */}
+                    <div className="row-cell title-cell">
+                      {processingGroups[gi] ? (
+                        <div className="row-loading">
+                          <Spinner />
+                          <span>Generating...</span>
+                        </div>
+                      ) : response && !response.error ? (
+                        <div className="row-title">{response.title || 'No title generated'}</div>
+                      ) : response && response.error ? (
+                        <div className="row-error">Error: {response.error}</div>
+                      ) : (
+                        <div className="row-placeholder">Click "Generate Listing"</div>
+                      )}
+                    </div>
+                    
+                    {/* Description Column */}
+                    <div className="row-cell description-cell">
+                      {processingGroups[gi] ? (
+                        <div className="row-loading">
+                          <Spinner />
+                          <span>Generating...</span>
+                        </div>
+                      ) : response && !response.error ? (
+                        <div className="row-description">{response.description || 'No description generated'}</div>
+                      ) : response && response.error ? (
+                        <div className="row-error">Error generating description</div>
+                      ) : (
+                        <div className="row-placeholder">Click "Generate Listing"</div>
+                      )}
+                    </div>
+                    
+                    {/* Price Column */}
+                    <div className="row-cell price-cell">
+                      <input
+                        type="text"
+                        value={groupPrice}
+                        onChange={(e) => updateListingPrice(e.target.value)}
+                        placeholder="Enter price"
+                        className="row-input price-input"
+                      />
+                    </div>
+                    
+                    {/* SKU Column */}
+                    <div className="row-cell sku-cell">
+                      <input
+                        type="text"
+                        value={groupSku}
+                        onChange={(e) => updateListingSku(e.target.value)}
+                        placeholder="Enter SKU"
+                        className="row-input sku-input"
+                      />
+                    </div>
+                    
+                    {/* Category Fields Columns */}
+                    {allFieldLabels.map(label => {
+                      const fieldDefinition = categoryFields.find(field => field.FieldLabel === label);
+                      const options = fieldDefinition?.CategoryOptions ? 
+                        fieldDefinition.CategoryOptions.split(';').map(opt => opt.trim()) : [];
+                      const displayValue = (listingFieldSelections[label] === "-- Select --" || !listingFieldSelections[label]) ? 
+                        "" : listingFieldSelections[label];
+                      
+                      return (
+                        <div key={label} className="row-cell field-cell">
+                          {options.length > 0 ? (
+                            <div style={{ position: 'relative' }}>
+                              <input
+                                type="text"
+                                value={displayValue}
+                                onChange={(e) => updateListingFieldSelection(gi, label, e.target.value)}
+                                placeholder="Select or enter"
+                                list={`${label}-${gi}-row-options`}
+                                className="row-input field-input"
+                              />
+                              <datalist id={`${label}-${gi}-row-options`}>
+                                {options.map((opt, idx) => (
+                                  <option key={idx} value={opt}>{opt}</option>
+                                ))}
+                              </datalist>
+                            </div>
+                          ) : (
+                            <input
+                              type="text"
+                              value={displayValue}
+                              onChange={(e) => updateListingFieldSelection(gi, label, e.target.value)}
+                              placeholder="Enter value"
+                              className="row-input field-input"
+                            />
+                          )}
+                        </div>
+                      );
+                    })}
+                    
+                    {/* Actions Column */}
+                    <div className="row-cell actions-cell">
+                      {response && !response.error && (
+                        <button 
+                          className="row-download-button"
+                          onClick={() => downloadSingleListing(gi)}
+                          title="Download This Listing"
+                        >
+                          <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+                            <path d="M.5 9.9a.5.5 0 0 1 .5.5v2.5a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-2.5a.5.5 0 0 1 1 0v2.5a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2v-2.5a.5.5 0 0 1 .5-.5z"/>
+                            <path d="M7.646 11.854a.5.5 0 0 0 .708 0l3-3a.5.5 0 0 0-.708-.708L8.5 10.293V1.5a.5.5 0 0 0-1 0v8.793L5.354 8.146a.5.5 0 1 0-.708.708l3 3z"/>
+                          </svg>
+                        </button>
+                      )}
+                    </div>
                   </div>
-                ) : (
-                  <div>
-                    {renderResponseData(gi) || <p>No data. Click "Generate Listing".</p>}
-                  </div>
-                )}
-              </div>
+                );
+              })}
             </div>
-          );
-        })}
-      </div>
+          )}
+        </div>
+      )}
     </section>
   );
 }

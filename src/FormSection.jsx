@@ -1,4 +1,4 @@
-// FormSection.jsx (Updated with Context)
+// FormSection.jsx (Updated with eBay Integration)
 import { useState, useRef, useEffect } from 'react';
 import { DynamoDBClient, QueryCommand } from '@aws-sdk/client-dynamodb';
 import { unmarshall } from '@aws-sdk/util-dynamodb';
@@ -6,13 +6,17 @@ import { GetCommand, DynamoDBDocumentClient, ScanCommand } from '@aws-sdk/lib-dy
 import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
 import { fromCognitoIdentityPool } from "@aws-sdk/credential-provider-cognito-identity";
 import { useAppState } from './StateContext';
+import { useEbayAuth } from './EbayAuthContext';
 
 // Import the optimized image handlers and uploader
 import OptimizedImageUploader from './OptimizedImageUploader';
 import { processImagesInBatch } from './OptimizedImageHandler';
+import EbayAuth from './EbayAuth';
+import EbayPolicySelector from './EbayPolicySelector';
 import './OptimizedUploaderStyles.css';
+import './EbayAuth.css';
 
-export const getSelectedCategoryOptionsJSON = (fieldSelections, price, sku) => {
+export const getSelectedCategoryOptionsJSON = (fieldSelections, price, sku, ebayPolicies = null) => {
   const output = {};
   // Include ALL field selections, even those with default values
   Object.entries(fieldSelections).forEach(([label, value]) => {
@@ -21,6 +25,14 @@ export const getSelectedCategoryOptionsJSON = (fieldSelections, price, sku) => {
   });
   if (price) output["price"] = price;
   if (sku) output["sku"] = sku;
+  
+  // Add eBay policy information if available
+  if (ebayPolicies) {
+    if (ebayPolicies.paymentPolicyId) output["ebayPaymentPolicyId"] = ebayPolicies.paymentPolicyId;
+    if (ebayPolicies.fulfillmentPolicyId) output["ebayFulfillmentPolicyId"] = ebayPolicies.fulfillmentPolicyId;
+    if (ebayPolicies.returnPolicyId) output["ebayReturnPolicyId"] = ebayPolicies.returnPolicyId;
+  }
+  
   return output;
 };
 
@@ -50,6 +62,9 @@ function FormSection({ onGenerateListing, onCategoryFieldsChange }) {
     groupMetadata
   } = state;
   
+  // Get eBay auth state
+  const { isAuthenticated: ebayAuthenticated, selectedPolicies } = useEbayAuth();
+  
   // Local state for UI
   const [selectedCategory, setSelectedCategory] = useState("--");
   const [subcategories, setSubcategories] = useState(["--"]);
@@ -58,6 +73,7 @@ function FormSection({ onGenerateListing, onCategoryFieldsChange }) {
   const [categories, setCategories] = useState({});
   const [categoriesLoading, setCategoriesLoading] = useState(true);
   const [autoRotateEnabled, setAutoRotateEnabled] = useState(false);
+  const [showEbayAuth, setShowEbayAuth] = useState(false);
 
   // Pass categoryFields to parent when they change
   useEffect(() => {
@@ -110,6 +126,24 @@ function FormSection({ onGenerateListing, onCategoryFieldsChange }) {
     dispatch({ type: 'UPDATE_GROUP_METADATA', payload: [] });
   };
 
+  // Handle eBay authentication success
+  const handleEbayAuthSuccess = () => {
+    console.log('eBay authentication successful');
+    // Could show a success message or update UI
+  };
+
+  // Handle eBay authentication error
+  const handleEbayAuthError = (error) => {
+    console.error('eBay authentication error:', error);
+    dispatch({ type: 'ADD_ERROR_MESSAGE', payload: `eBay authentication failed: ${error}` });
+  };
+
+  // Handle policy selection changes
+  const handlePolicyChange = (policyType, policy) => {
+    console.log(`Selected ${policyType}:`, policy);
+    // You could store this in app state if needed
+  };
+
   // Fetch categories on component mount
   useEffect(() => {
     const fetchCategories = async () => {
@@ -118,7 +152,6 @@ function FormSection({ onGenerateListing, onCategoryFieldsChange }) {
         const scanCommand = new ScanCommand({
           TableName: 'ListCategory',
         });
-
 
         const response = await docClient.send(scanCommand);
         const categoryData = {};
@@ -188,7 +221,6 @@ function FormSection({ onGenerateListing, onCategoryFieldsChange }) {
       }
     }
   }, [category, categories, selectedCategory]);
-
 
   // Synchronize with parent component
   useEffect(() => {
@@ -1038,6 +1070,37 @@ const uploadToS3 = async (file) => {
               </div>
             );
           })}
+        </div>
+      </div>
+
+      {/* eBay Authentication Section */}
+      <div className="form-group">
+        <label>eBay Integration</label>
+        <div className="ebay-integration-section">
+          {!showEbayAuth ? (
+            <button 
+              className="ebay-toggle-button"
+              onClick={() => setShowEbayAuth(true)}
+            >
+              {ebayAuthenticated ? '✅ Configure eBay Policies' : '🔗 Connect eBay Account'}
+            </button>
+          ) : (
+            <div className="ebay-auth-expanded">
+              <button 
+                className="ebay-collapse-button"
+                onClick={() => setShowEbayAuth(false)}
+              >
+                ▼ Hide eBay Integration
+              </button>
+              <EbayAuth 
+                onAuthSuccess={handleEbayAuthSuccess}
+                onAuthError={handleEbayAuthError}
+              />
+              {ebayAuthenticated && (
+                <EbayPolicySelector onPolicyChange={handlePolicyChange} />
+              )}
+            </div>
+          )}
         </div>
       </div>
 

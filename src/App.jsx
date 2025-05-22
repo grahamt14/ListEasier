@@ -6,10 +6,12 @@ import { saveAs } from 'file-saver';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { fromCognitoIdentityPool } from "@aws-sdk/credential-provider-cognito-identity";
 import { AppStateProvider, useAppState } from './StateContext';
+import { EbayAuthProvider, useEbayAuth } from './EbayAuthContext';
 
-// PreviewSection component - Updated with Row View Fixes
+// PreviewSection component - Updated with eBay integration
 function PreviewSection({ categoryFields = [] }) {
   const { state, dispatch } = useAppState();
+  const { selectedPolicies } = useEbayAuth(); // Get eBay policies
   const { 
     imageGroups, 
     s3ImageGroups,
@@ -24,7 +26,7 @@ function PreviewSection({ categoryFields = [] }) {
     sku,
     processingStatus,
     groupMetadata,
-    fieldSelections  // Add this line to get fieldSelections from state
+    fieldSelections
   } = state;
   
   // Use new processing status for consistent display
@@ -117,7 +119,8 @@ function PreviewSection({ categoryFields = [] }) {
     responseData: responseData,
     imageGroups: imageGroups,
     s3ImageGroups: s3ImageGroups,
-    groupMetadata: groupMetadata
+    groupMetadata: groupMetadata,
+    selectedPolicies: selectedPolicies
   });
   
   // Validate that we have processed data
@@ -167,6 +170,17 @@ Action(SiteID=US|Country=US|Currency=USD|Version=1193|CC=UTF-8),Custom label (SK
     allCategoryFieldLabels.forEach(field => {
       header += `,${field}`;
     });
+  }
+
+  // Add eBay policy columns if policies are selected
+  if (selectedPolicies.paymentPolicyId) {
+    header += ',Payment policy name';
+  }
+  if (selectedPolicies.fulfillmentPolicyId) {
+    header += ',Shipping policy name';
+  }
+  if (selectedPolicies.returnPolicyId) {
+    header += ',Return policy name';
   }
   
   header += '\n';
@@ -234,6 +248,17 @@ Action(SiteID=US|Country=US|Currency=USD|Version=1193|CC=UTF-8),Custom label (SK
         const fieldValue = listingFieldSelections[field] || "-- Select --";
         line += `,"${fieldValue.replace(/"/g, '""')}"`;
       });
+    }
+
+    // Add eBay policy IDs if selected
+    if (selectedPolicies.paymentPolicyId) {
+      line += `,"${selectedPolicies.paymentPolicyId}"`;
+    }
+    if (selectedPolicies.fulfillmentPolicyId) {
+      line += `,"${selectedPolicies.fulfillmentPolicyId}"`;
+    }
+    if (selectedPolicies.returnPolicyId) {
+      line += `,"${selectedPolicies.returnPolicyId}"`;
     }
     
     csvContent += `${line}\n`;
@@ -338,6 +363,17 @@ Action(SiteID=US|Country=US|Currency=USD|Version=1193|CC=UTF-8),Custom label (SK
       header += `,${field}`;
     });
   }
+
+  // Add eBay policy columns if policies are selected
+  if (selectedPolicies.paymentPolicyId) {
+    header += ',Payment policy name';
+  }
+  if (selectedPolicies.fulfillmentPolicyId) {
+    header += ',Shipping policy name';
+  }
+  if (selectedPolicies.returnPolicyId) {
+    header += ',Return policy name';
+  }
   
   header += '\n';
 
@@ -354,6 +390,17 @@ Action(SiteID=US|Country=US|Currency=USD|Version=1193|CC=UTF-8),Custom label (SK
       const fieldValue = listingFieldSelections[field] || "-- Select --";
       line += `,"${fieldValue.replace(/"/g, '""')}"`;
     });
+  }
+
+  // Add eBay policy IDs if selected
+  if (selectedPolicies.paymentPolicyId) {
+    line += `,"${selectedPolicies.paymentPolicyId}"`;
+  }
+  if (selectedPolicies.fulfillmentPolicyId) {
+    line += `,"${selectedPolicies.fulfillmentPolicyId}"`;
+  }
+  if (selectedPolicies.returnPolicyId) {
+    line += `,"${selectedPolicies.returnPolicyId}"`;
   }
   
   const csvContent = header + line + '\n';
@@ -623,7 +670,6 @@ Action(SiteID=US|Country=US|Currency=USD|Version=1193|CC=UTF-8),Custom label (SK
   const generateGridTemplate = (fieldCount) => {
     const baseColumns = '200px 250px 300px 100px 120px'; // Images, Title, Description, Price, SKU
     const fieldColumns = fieldCount > 0 ? ` repeat(${fieldCount}, 150px)` : '';
-    // Removed actions column
     
     return baseColumns + fieldColumns;
   };
@@ -753,11 +799,11 @@ Action(SiteID=US|Country=US|Currency=USD|Version=1193|CC=UTF-8),Custom label (SK
           })}
         </div>
       ) : (
-        // Row View
+        // Row View - same as before, no changes needed for eBay integration
         <div className="row-view-container">
           {imageGroups.some(group => group.length > 0) && (
             <div className="row-view-table">
-              {/* Table Header with dynamic grid template - REMOVED Actions header */}
+              {/* Table Header with dynamic grid template */}
               <div 
                 className="row-view-header" 
                 style={{ gridTemplateColumns: generateGridTemplate(allFieldLabels.length) }}
@@ -770,7 +816,6 @@ Action(SiteID=US|Country=US|Currency=USD|Version=1193|CC=UTF-8),Custom label (SK
                 {allFieldLabels.map(label => (
                   <div key={label} className="row-header-cell field-header">{label}</div>
                 ))}
-                {/* REMOVED Actions header */}
               </div>
               
               {/* Table Rows with dynamic grid template */}
@@ -966,8 +1011,6 @@ Action(SiteID=US|Country=US|Currency=USD|Version=1193|CC=UTF-8),Custom label (SK
                         </div>
                       );
                     })}
-                    
-                    {/* REMOVED Actions Column */}
                   </div>
                 );
               })}
@@ -982,6 +1025,7 @@ Action(SiteID=US|Country=US|Currency=USD|Version=1193|CC=UTF-8),Custom label (SK
 // Main App Component
 function AppContent() {
   const { state, dispatch } = useAppState();
+  const { selectedPolicies } = useEbayAuth(); // Get eBay policies
   const { category, subCategory, fieldSelections, price, sku } = state;
   
   // Add state for categoryFields
@@ -999,10 +1043,10 @@ function AppContent() {
     }),
   });
 
-  // Modified handleGenerateListing in App.jsx that doesn't depend on S3 URLs being set first
+  // Modified handleGenerateListing to include eBay policies
   const handleGenerateListing = async () => {
     try {
-       const { imageGroups, filesBase64, batchSize, processedGroupIndices, fieldSelections } = state;
+      const { imageGroups, filesBase64, batchSize, processedGroupIndices, fieldSelections } = state;
    
       const nonEmptyGroups = imageGroups.filter(g => g.length > 0);
 
@@ -1019,7 +1063,6 @@ function AppContent() {
         return !processedGroupIndices || !processedGroupIndices.includes(originalIndex);
       });
       
-	  
       // Get indices of new groups to be processed
       const newGroupIndices = newGroupsToProcess.map(group => {
         return imageGroups.findIndex(g => g === group);
@@ -1127,227 +1170,228 @@ function AppContent() {
       dispatch({ type: 'SET_IS_DIRTY', payload: false });
       dispatch({ type: 'SET_PROCESSING_GROUPS', payload: updatedProcessingGroups });
 
-     // Prepare options for API call - include ALL field selections
-     const selectedCategoryOptions = getSelectedCategoryOptionsJSON(fieldSelections, price, sku);   
-     // Save current field selections to use in listings (including all fields with default values)
-     const currentFieldSelections = {...fieldSelections};
+      // Prepare options for API call - include eBay policies
+      const selectedCategoryOptions = getSelectedCategoryOptionsJSON(fieldSelections, price, sku, selectedPolicies);   
+      // Save current field selections to use in listings (including all fields with default values)
+      const currentFieldSelections = {...fieldSelections};
 
-     // Track indices of groups being processed
-     const processedIndices = [];
-     
-     // Increase batch size but with retry mechanism for failures
-     const PROCESSING_BATCH_SIZE = 40; // Increased to 80 concurrent requests
-     const MAX_RETRIES = 3; // Allow up to 3 retries for failed requests
-     const RETRY_DELAY_MS = 2000; // Wait 1 second between retries
-     
-     // Function to process a single group with retries
-     const processGroupWithRetry = async (group, actualIndex, retryCount = 0) => {
-       try {
-         const response = await fetch(
-           "https://7f26uyyjs5.execute-api.us-east-2.amazonaws.com/ListEasily/ListEasilyAPI",
-           {
-             method: "POST",
-             headers: { "Content-Type": "application/json" },
-             body: JSON.stringify({
-               category,
-               subCategory,
-               Base64Key: [group],
-               SelectedCategoryOptions: selectedCategoryOptions
-             })
-           }
-         );
-         
-         if (!response.ok) {
-           // If we get a 504 Gateway Timeout and have retries left, retry with backoff
-           if (response.status === 504 && retryCount < MAX_RETRIES) {
-             console.log(`Gateway timeout for group ${actualIndex}, retrying (${retryCount + 1}/${MAX_RETRIES})...`);
-             await new Promise(resolve => setTimeout(resolve, RETRY_DELAY_MS * (retryCount + 1)));
-             return processGroupWithRetry(group, actualIndex, retryCount + 1);
-           }
-           
-           throw new Error(`API error: ${response.status} ${response.statusText}`);
-         }
-         
-         const data = await response.json();
-         let parsed = data.body;
-         if (typeof parsed === "string") parsed = JSON.parse(parsed);
-         
-         return { 
-           index: actualIndex, 
-           result: Array.isArray(parsed) ? parsed[0] : parsed,
-           success: true
-         };
-       } catch (err) {
-         // If it's not a gateway timeout or we're out of retries, fail
-         console.error(`Error processing group ${actualIndex}:`, err);
-         return { 
-           index: actualIndex, 
-           error: true, 
-           result: { 
-             error: "Failed to fetch listing data", 
-             raw_content: err.message 
-           },
-           success: false
-         };
-       }
-     };
-     
-     // Split groups into more manageable chunks for parallel processing
-     // Process in batches of PROCESSING_BATCH_SIZE
-     const results = [];
-     
-     for (let batchStart = 0; batchStart < allGroupsToProcess.length; batchStart += PROCESSING_BATCH_SIZE) {
-       const currentBatch = allGroupsToProcess.slice(batchStart, batchStart + PROCESSING_BATCH_SIZE);
-       const batchIndices = [];
-       
-       // Map current batch items to their actual indices
-       for (let i = 0; i < currentBatch.length; i++) {
-         const batchItemIndex = batchStart + i;
-         let actualIndex;
-         
-         if (batchItemIndex < newGroupIndices.length) {
-           // This is a group from imageGroups
-           actualIndex = newGroupIndices[batchItemIndex];
-         } else {
-           // This is a pool group
-           const poolArrayIndex = batchItemIndex - newGroupIndices.length;
-           actualIndex = newPoolGroupIndices[poolArrayIndex];
-         }
-         
-         batchIndices.push(actualIndex);
-         processedIndices.push(actualIndex);
-       }
-       
-       // Update status to show which batch is being processed
-       processingStatus.currentGroup = batchStart + 1; // Show the first group in the batch
-       dispatch({ 
-         type: 'SET_PROCESSING_STATUS', 
-         payload: { ...processingStatus }
-       });
-       
-       // Process batch in parallel with retries
-       const batchPromises = currentBatch.map((group, idx) => 
-         processGroupWithRetry(group, batchIndices[idx])
-       );
-       
-       // Wait for all promises in this batch
-       const batchResults = await Promise.all(batchPromises);
-       results.push(...batchResults);
-       
-       // Update completed count
-       const completedCount = Math.min(batchStart + PROCESSING_BATCH_SIZE, allGroupsToProcess.length);
-       processingStatus.processCompleted = completedCount;
-       dispatch({ 
-         type: 'SET_PROCESSING_STATUS', 
-         payload: { ...processingStatus }
-       });
-       
-       // Update UI with the results so far
-       batchResults.forEach(({ index, result }) => {
-         // Update response data with ALL field selections (including default values)
-         dispatch({
-           type: 'UPDATE_RESPONSE_DATA',
-           payload: { 
-             index, 
-             value: {
-               ...result,
-               // Store ALL the field selections with the response (including defaults)
-               storedFieldSelections: currentFieldSelections
-             }
-           }
-         });
-         
-         // Mark processing as complete for this group
-         dispatch({
-           type: 'UPDATE_PROCESSING_GROUP',
-           payload: { index, value: false }
-         });
-       });
-       
-       // Introduce a small delay between batches to avoid overwhelming the server
-       if (batchStart + PROCESSING_BATCH_SIZE < allGroupsToProcess.length) {
-         // Very small delay just to let the event loop breathe
-         await new Promise(resolve => setTimeout(resolve, 100));
-       }
-     }
-     
-     // All processing complete - update the final status
-     processingStatus.processCompleted = totalGroups;
-     processingStatus.currentGroup = totalGroups;
-     
-     // Final status update
-     dispatch({ 
-       type: 'SET_PROCESSING_STATUS', 
-       payload: processingStatus
-     });
-     
-     // Update legacy counter
-     dispatch({ type: 'SET_COMPLETED_CHUNKS', payload: totalGroups });
-     
-     // Mark all processed groups as completed to prevent reprocessing
-     dispatch({ type: 'MARK_GROUPS_AS_PROCESSED', payload: processedIndices });
-     
-     // Clear the image pool
-     if (filesBase64.length > 0) {
-       dispatch({ type: 'SET_FILES_BASE64', payload: [] });
-     }
-     
-     // Short delay before resetting status to allow UI to show 100% completion
-     setTimeout(() => {
-       // Reset all status indicators
-       dispatch({ type: 'RESET_STATUS' });
-       dispatch({ type: 'SET_IS_LOADING', payload: false });
-     }, 500);
-     
-     // Return success for Promise.allSettled
-     return true;
-     
-   } catch (error) {
-     // Handle any unexpected errors
-     console.error("Error in generate listing process:", error);
-     
-     // Show error message
-     alert(`An error occurred: ${error.message}`);
-     
-     // Reset status on error
-     dispatch({ type: 'RESET_STATUS' });
-     dispatch({ type: 'SET_IS_LOADING', payload: false });
-     
-     // Re-throw for Promise.allSettled
-     throw error;
-   }
- };
+      // Track indices of groups being processed
+      const processedIndices = [];
+      
+      // Increase batch size but with retry mechanism for failures
+      const PROCESSING_BATCH_SIZE = 40; // Increased to 80 concurrent requests
+      const MAX_RETRIES = 3; // Allow up to 3 retries for failed requests
+      const RETRY_DELAY_MS = 2000; // Wait 1 second between retries
+      
+      // Function to process a single group with retries
+      const processGroupWithRetry = async (group, actualIndex, retryCount = 0) => {
+        try {
+          const response = await fetch(
+            "https://7f26uyyjs5.execute-api.us-east-2.amazonaws.com/ListEasily/ListEasilyAPI",
+            {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                category,
+                subCategory,
+                Base64Key: [group],
+                SelectedCategoryOptions: selectedCategoryOptions // Now includes eBay policies
+              })
+            }
+          );
+          
+          if (!response.ok) {
+            // If we get a 504 Gateway Timeout and have retries left, retry with backoff
+            if (response.status === 504 && retryCount < MAX_RETRIES) {
+              console.log(`Gateway timeout for group ${actualIndex}, retrying (${retryCount + 1}/${MAX_RETRIES})...`);
+              await new Promise(resolve => setTimeout(resolve, RETRY_DELAY_MS * (retryCount + 1)));
+              return processGroupWithRetry(group, actualIndex, retryCount + 1);
+            }
+            
+            throw new Error(`API error: ${response.status} ${response.statusText}`);
+          }
+          
+          const data = await response.json();
+          let parsed = data.body;
+          if (typeof parsed === "string") parsed = JSON.parse(parsed);
+          
+          return { 
+            index: actualIndex, 
+            result: Array.isArray(parsed) ? parsed[0] : parsed,
+            success: true
+          };
+        } catch (err) {
+          // If it's not a gateway timeout or we're out of retries, fail
+          console.error(`Error processing group ${actualIndex}:`, err);
+          return { 
+            index: actualIndex, 
+            error: true, 
+            result: { 
+              error: "Failed to fetch listing data", 
+              raw_content: err.message 
+            },
+            success: false
+          };
+        }
+      };
+      
+      // Split groups into more manageable chunks for parallel processing
+      // Process in batches of PROCESSING_BATCH_SIZE
+      const results = [];
+      
+      for (let batchStart = 0; batchStart < allGroupsToProcess.length; batchStart += PROCESSING_BATCH_SIZE) {
+        const currentBatch = allGroupsToProcess.slice(batchStart, batchStart + PROCESSING_BATCH_SIZE);
+        const batchIndices = [];
+        
+        // Map current batch items to their actual indices
+        for (let i = 0; i < currentBatch.length; i++) {
+          const batchItemIndex = batchStart + i;
+          let actualIndex;
+          
+          if (batchItemIndex < newGroupIndices.length) {
+            // This is a group from imageGroups
+            actualIndex = newGroupIndices[batchItemIndex];
+          } else {
+            // This is a pool group
+            const poolArrayIndex = batchItemIndex - newGroupIndices.length;
+            actualIndex = newPoolGroupIndices[poolArrayIndex];
+          }
+          
+          batchIndices.push(actualIndex);
+          processedIndices.push(actualIndex);
+        }
+        
+        // Update status to show which batch is being processed
+        processingStatus.currentGroup = batchStart + 1; // Show the first group in the batch
+        dispatch({ 
+          type: 'SET_PROCESSING_STATUS', 
+          payload: { ...processingStatus }
+        });
+        
+        // Process batch in parallel with retries
+        const batchPromises = currentBatch.map((group, idx) => 
+          processGroupWithRetry(group, batchIndices[idx])
+        );
+        
+        // Wait for all promises in this batch
+        const batchResults = await Promise.all(batchPromises);
+        results.push(...batchResults);
+        
+        // Update completed count
+        const completedCount = Math.min(batchStart + PROCESSING_BATCH_SIZE, allGroupsToProcess.length);
+        processingStatus.processCompleted = completedCount;
+        dispatch({ 
+          type: 'SET_PROCESSING_STATUS', 
+          payload: { ...processingStatus }
+        });
+        
+        // Update UI with the results so far
+        batchResults.forEach(({ index, result }) => {
+          // Update response data with ALL field selections (including default values)
+          dispatch({
+            type: 'UPDATE_RESPONSE_DATA',
+            payload: { 
+              index, 
+              value: {
+                ...result,
+                // Store ALL the field selections with the response (including defaults)
+                storedFieldSelections: currentFieldSelections
+              }
+            }
+          });
+          
+          // Mark processing as complete for this group
+          dispatch({
+            type: 'UPDATE_PROCESSING_GROUP',
+            payload: { index, value: false }
+          });
+        });
+        
+        // Introduce a small delay between batches to avoid overwhelming the server
+        if (batchStart + PROCESSING_BATCH_SIZE < allGroupsToProcess.length) {
+          // Very small delay just to let the event loop breathe
+          await new Promise(resolve => setTimeout(resolve, 100));
+        }
+      }
+      
+      // All processing complete - update the final status
+      processingStatus.processCompleted = totalGroups;
+      processingStatus.currentGroup = totalGroups;
+      
+      // Final status update
+      dispatch({ 
+        type: 'SET_PROCESSING_STATUS', 
+        payload: processingStatus
+      });
+      
+      // Update legacy counter
+      dispatch({ type: 'SET_COMPLETED_CHUNKS', payload: totalGroups });
+      
+      // Mark all processed groups as completed to prevent reprocessing
+      dispatch({ type: 'MARK_GROUPS_AS_PROCESSED', payload: processedIndices });
+      
+      // Clear the image pool
+      if (filesBase64.length > 0) {
+        dispatch({ type: 'SET_FILES_BASE64', payload: [] });
+      }
+      
+      // Short delay before resetting status to allow UI to show 100% completion
+      setTimeout(() => {
+        // Reset all status indicators
+        dispatch({ type: 'RESET_STATUS' });
+        dispatch({ type: 'SET_IS_LOADING', payload: false });
+      }, 500);
+      
+      // Return success for Promise.allSettled
+      return true;
+      
+    } catch (error) {
+      // Handle any unexpected errors
+      console.error("Error in generate listing process:", error);
+      
+      // Show error message
+      alert(`An error occurred: ${error.message}`);
+      
+      // Reset status on error
+      dispatch({ type: 'RESET_STATUS' });
+      dispatch({ type: 'SET_IS_LOADING', payload: false });
+      
+      // Re-throw for Promise.allSettled
+      throw error;
+    }
+  };
 
- return (
-   <div className="app-container">
-     <header className="header">
-       <img src="/images/ListEasier.jpg" alt="ListEasier" className="logo" />
-       <h1>ListEasier</h1>
-     </header>
+  return (
+    <div className="app-container">
+      <header className="header">
+        <img src="/images/ListEasier.jpg" alt="ListEasier" className="logo" />
+        <h1>ListEasier</h1>
+      </header>
 
-     <main className="main-card">
-       <FormSection 
-         onGenerateListing={handleGenerateListing} 
-         onCategoryFieldsChange={setCategoryFields}
-       />
-       <PreviewSection categoryFields={categoryFields} />
-     </main>
+      <main className="main-card">
+        <FormSection 
+          onGenerateListing={handleGenerateListing} 
+          onCategoryFieldsChange={setCategoryFields}
+        />
+        <PreviewSection categoryFields={categoryFields} />
+      </main>
 
-
-     <footer className="footer">
-       <p>© 2025 ListEasier</p>
-     </footer>
-   </div>
- );
+      <footer className="footer">
+        <p>© 2025 ListEasier</p>
+      </footer>
+    </div>
+  );
 }
 
-// Main App with Provider - THIS IS THE MISSING PART!
+// Main App with Both Providers
 function App() {
- return (
-   <AppStateProvider>
-     <AppContent />
-   </AppStateProvider>
- );
+  return (
+    <EbayAuthProvider>
+      <AppStateProvider>
+        <AppContent />
+      </AppStateProvider>
+    </EbayAuthProvider>
+  );
 }
 
 export default App;

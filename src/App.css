@@ -1092,7 +1092,7 @@ select {
   height: 16px;
 }
 
-/* Row View Container */
+/* Row View Container - Fixed background scrolling issue */
 .row-view-container {
   width: 100%;
   overflow-x: auto;
@@ -1101,11 +1101,12 @@ select {
   box-shadow: 0 2px 8px rgba(0,0,0,0.1);
 }
 
-/* Row View Table */
+/* Row View Table - Extended background to cover all content */
 .row-view-table {
   display: flex;
   flex-direction: column;
-  min-width: 1200px; /* Minimum width to prevent cramping */
+  min-width: 100%; /* Changed to ensure full width coverage */
+  background: #fff; /* Added background to ensure it extends with content */
 }
 
 /* Row View Header - Dynamic grid with inline styles */
@@ -1115,10 +1116,11 @@ select {
   background-color: #f8f9fa;
   border-bottom: 2px solid #dee2e6;
   font-weight: bold;
-  color: #495057;
+  color: #000; /* Ensure header text is black */
   position: sticky;
   top: 0;
   z-index: 5;
+  width: 100%; /* Ensure full width */
 }
 
 .row-header-cell {
@@ -1129,6 +1131,8 @@ select {
   font-size: 0.9rem;
   text-transform: uppercase;
   letter-spacing: 0.5px;
+  color: #000; /* Ensure header cell text is black */
+  background-color: #f8f9fa; /* Ensure background extends */
 }
 
 .row-header-cell:last-child {
@@ -1138,10 +1142,7 @@ select {
 /* Header-specific styling */
 .images-header {
   justify-content: center;
-}
-
-.actions-header {
-  justify-content: center;
+  color: #000;
 }
 
 /* Row View Row - Dynamic grid with inline styles */
@@ -1151,6 +1152,9 @@ select {
   border-bottom: 1px solid #e9ecef;
   transition: background-color 0.2s;
   position: relative;
+  background-color: #fff; /* Ensure white background */
+  width: 100%; /* Ensure full width */
+  color: #000; /* Ensure all text is black */
 }
 
 .row-view-row:hover {
@@ -1220,7 +1224,7 @@ select {
   z-index: 2;
 }
 
-/* Row Cells */
+/* Row Cells - Ensure all text is black */
 .row-cell {
   padding: 12px 8px;
   border-right: 1px solid #e9ecef;
@@ -1228,6 +1232,8 @@ select {
   align-items: center;
   font-size: 0.9rem;
   overflow: hidden;
+  color: #000; /* Ensure all cell text is black */
+  background-color: inherit; /* Inherit background from row */
 }
 
 .row-cell:last-child {
@@ -1239,6 +1245,7 @@ select {
   flex-direction: column;
   align-items: center;
   padding: 8px;
+  color: #000;
 }
 
 .row-images-container {
@@ -1286,6 +1293,7 @@ select {
   align-items: flex-start;
   flex-direction: column;
   justify-content: center;
+  color: #000;
 }
 
 .row-title {
@@ -1297,6 +1305,7 @@ select {
   overflow: hidden;
   text-overflow: ellipsis;
   word-break: break-word;
+  color: #000 !important; /* Force black text */
 }
 
 /* Description Cell */
@@ -1304,6 +1313,7 @@ select {
   align-items: flex-start;
   flex-direction: column;
   justify-content: center;
+  color: #000;
 }
 
 .row-description {
@@ -1314,7 +1324,7 @@ select {
   overflow: hidden;
   text-overflow: ellipsis;
   word-break: break-word;
-  color: #666;
+  color: #000 !important; /* Force black text instead of #666 */
 }
 
 /* Input Cells */
@@ -1322,6 +1332,7 @@ select {
 .sku-cell,
 .field-cell {
   padding: 8px 6px;
+  color: #000;
 }
 
 .row-input {
@@ -1331,7 +1342,7 @@ select {
   border-radius: 4px;
   font-size: 0.85rem;
   background-color: #fff;
-  color: #333;
+  color: #000 !important; /* Force black text */
   transition: border-color 0.2s, box-shadow 0.2s;
 }
 
@@ -1339,10 +1350,12 @@ select {
   outline: none;
   border-color: #007bff;
   box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.1);
+  color: #000 !important;
 }
 
 .price-input {
   text-align: right;
+  color: #000 !important;
 }
 
 .field-input {
@@ -1351,30 +1364,7 @@ select {
   background-position: right 6px center;
   background-size: 10px;
   padding-right: 24px;
-}
-
-/* Actions Cell */
-.actions-cell {
-  justify-content: center;
-  padding: 8px;
-}
-
-.row-download-button {
-  background: none;
-  border: 1px solid #007bff;
-  color: #007bff;
-  padding: 6px 8px;
-  border-radius: 4px;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: all 0.2s;
-}
-
-.row-download-button:hover {
-  background-color: #007bff;
-  color: white;
+  color: #000 !important;
 }
 
 /* Loading states */
@@ -1382,7 +1372,7 @@ select {
   display: flex;
   align-items: center;
   gap: 8px;
-  color: #666;
+  color: #000 !important; /* Changed from #666 to black */
   font-style: italic;
 }
 
@@ -1397,9 +1387,13 @@ select {
   border-width: 2px;
 }
 
+.row-loading span {
+  color: #000 !important; /* Ensure loading text is black */
+}
+
 /* Error states */
 .row-error {
-  color: #dc3545;
+  color: #dc3545 !important; /* Keep error text red but ensure it's visible */
   font-style: italic;
   display: -webkit-box;
   -webkit-line-clamp: 2;
@@ -1409,7 +1403,7 @@ select {
 
 /* Placeholder states */
 .row-placeholder {
-  color: #999;
+  color: #000 !important; /* Changed from #999 to black */
   font-style: italic;
 }
 

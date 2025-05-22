@@ -7,7 +7,7 @@ import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { fromCognitoIdentityPool } from "@aws-sdk/credential-provider-cognito-identity";
 import { AppStateProvider, useAppState } from './StateContext';
 
-// PreviewSection component - Updated with Dynamic Column Scaling
+// PreviewSection component - Updated with Row View Fixes
 function PreviewSection({ categoryFields = [] }) {
   const { state, dispatch } = useAppState();
   const { 
@@ -599,13 +599,13 @@ Action(SiteID=US|Country=US|Currency=USD|Version=1193|CC=UTF-8),Custom label (SK
 
   const allFieldLabels = getAllCategoryFieldLabels();
 
-  // Generate dynamic grid template based on number of fields
+  // Generate dynamic grid template based on number of fields (REMOVED Actions column)
   const generateGridTemplate = (fieldCount) => {
     const baseColumns = '200px 250px 300px 100px 120px'; // Images, Title, Description, Price, SKU
     const fieldColumns = fieldCount > 0 ? ` repeat(${fieldCount}, 150px)` : '';
-    const actionsColumn = ' 80px'; // Actions column
+    // Removed actions column
     
-    return baseColumns + fieldColumns + actionsColumn;
+    return baseColumns + fieldColumns;
   };
 
   return (
@@ -717,7 +717,7 @@ Action(SiteID=US|Country=US|Currency=USD|Version=1193|CC=UTF-8),Custom label (SK
         <div className="row-view-container">
           {imageGroups.some(group => group.length > 0) && (
             <div className="row-view-table">
-              {/* Table Header with dynamic grid template */}
+              {/* Table Header with dynamic grid template - REMOVED Actions header */}
               <div 
                 className="row-view-header" 
                 style={{ gridTemplateColumns: generateGridTemplate(allFieldLabels.length) }}
@@ -730,7 +730,7 @@ Action(SiteID=US|Country=US|Currency=USD|Version=1193|CC=UTF-8),Custom label (SK
                 {allFieldLabels.map(label => (
                   <div key={label} className="row-header-cell field-header">{label}</div>
                 ))}
-                <div className="row-header-cell actions-header">Actions</div>
+                {/* REMOVED Actions header */}
               </div>
               
               {/* Table Rows with dynamic grid template */}
@@ -818,14 +818,14 @@ Action(SiteID=US|Country=US|Currency=USD|Version=1193|CC=UTF-8),Custom label (SK
                       {processingGroups[gi] ? (
                         <div className="row-loading">
                           <Spinner />
-                          <span>Generating...</span>
+                          <span style={{ color: '#000' }}>Generating...</span>
                         </div>
                       ) : response && !response.error ? (
-                        <div className="row-title">{response.title || 'No title generated'}</div>
+                        <div className="row-title" style={{ color: '#000' }}>{response.title || 'No title generated'}</div>
                       ) : response && response.error ? (
-                        <div className="row-error">Error: {response.error}</div>
+                        <div className="row-error" style={{ color: '#dc3545' }}>Error: {response.error}</div>
                       ) : (
-                        <div className="row-placeholder">Click "Generate Listing"</div>
+                        <div className="row-placeholder" style={{ color: '#000' }}>Click "Generate Listing"</div>
                       )}
                     </div>
                     
@@ -834,14 +834,14 @@ Action(SiteID=US|Country=US|Currency=USD|Version=1193|CC=UTF-8),Custom label (SK
                       {processingGroups[gi] ? (
                         <div className="row-loading">
                           <Spinner />
-                          <span>Generating...</span>
+                          <span style={{ color: '#000' }}>Generating...</span>
                         </div>
                       ) : response && !response.error ? (
-                        <div className="row-description">{response.description || 'No description generated'}</div>
+                        <div className="row-description" style={{ color: '#000' }}>{response.description || 'No description generated'}</div>
                       ) : response && response.error ? (
-                        <div className="row-error">Error generating description</div>
+                        <div className="row-error" style={{ color: '#dc3545' }}>Error generating description</div>
                       ) : (
-                        <div className="row-placeholder">Click "Generate Listing"</div>
+                        <div className="row-placeholder" style={{ color: '#000' }}>Click "Generate Listing"</div>
                       )}
                     </div>
                     
@@ -853,6 +853,7 @@ Action(SiteID=US|Country=US|Currency=USD|Version=1193|CC=UTF-8),Custom label (SK
                         onChange={(e) => updateListingPrice(e.target.value)}
                         placeholder="Enter price"
                         className="row-input price-input"
+                        style={{ color: '#000' }}
                       />
                     </div>
                     
@@ -864,6 +865,7 @@ Action(SiteID=US|Country=US|Currency=USD|Version=1193|CC=UTF-8),Custom label (SK
                         onChange={(e) => updateListingSku(e.target.value)}
                         placeholder="Enter SKU"
                         className="row-input sku-input"
+                        style={{ color: '#000' }}
                       />
                     </div>
                     
@@ -886,6 +888,7 @@ Action(SiteID=US|Country=US|Currency=USD|Version=1193|CC=UTF-8),Custom label (SK
                                 placeholder="Select or enter"
                                 list={`${label}-${gi}-row-options`}
                                 className="row-input field-input"
+                                style={{ color: '#000' }}
                               />
                               <datalist id={`${label}-${gi}-row-options`}>
                                 {options.map((opt, idx) => (
@@ -900,27 +903,14 @@ Action(SiteID=US|Country=US|Currency=USD|Version=1193|CC=UTF-8),Custom label (SK
                               onChange={(e) => updateListingFieldSelection(gi, label, e.target.value)}
                               placeholder="Enter value"
                               className="row-input field-input"
+                              style={{ color: '#000' }}
                             />
                           )}
                         </div>
                       );
                     })}
                     
-                    {/* Actions Column */}
-                    <div className="row-cell actions-cell">
-                      {response && !response.error && (
-                        <button 
-                          className="row-download-button"
-                          onClick={() => downloadSingleListing(gi)}
-                          title="Download This Listing"
-                        >
-                          <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
-                            <path d="M.5 9.9a.5.5 0 0 1 .5.5v2.5a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-2.5a.5.5 0 0 1 1 0v2.5a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2v-2.5a.5.5 0 0 1 .5-.5z"/>
-                            <path d="M7.646 11.854a.5.5 0 0 0 .708 0l3-3a.5.5 0 0 0-.708-.708L8.5 10.293V1.5a.5.5 0 0 0-1 0v8.793L5.354 8.146a.5.5 0 1 0-.708.708l3 3z"/>
-                          </svg>
-                        </button>
-                      )}
-                    </div>
+                    {/* REMOVED Actions Column */}
                   </div>
                 );
               })}

@@ -1173,56 +1173,8 @@ select {
   background-color: #fff3cd;
 }
 
-/* Status indicators for row view */
-.row-view-row.processed::before {
-  content: "✓";
-  position: absolute;
-  top: 8px;
-  right: 8px;
-  width: 20px;
-  height: 20px;
-  background-color: #4CAF50;
-  color: white;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-weight: bold;
-  font-size: 12px;
-  z-index: 2;
-}
-
-.row-view-row.processing::before {
-  content: "⋯";
-  position: absolute;
-  top: 8px;
-  right: 8px;
-  width: 20px;
-  height: 20px;
-  background-color: #2196F3;
-  color: white;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-weight: bold;
-  font-size: 12px;
-  z-index: 2;
-}
-
-.row-view-row.new::before {
-  content: "NEW";
-  position: absolute;
-  top: 8px;
-  right: 8px;
-  padding: 2px 6px;
-  background-color: #FF9800;
-  color: white;
-  border-radius: 10px;
-  font-size: 10px;
-  font-weight: bold;
-  z-index: 2;
-}
+/* Status indicators for row view - REMOVED since moved to images column */
+/* These styles are no longer needed as status is now in images column */
 
 /* Row Cells - Ensure all text is black */
 .row-cell {
@@ -1234,6 +1186,7 @@ select {
   overflow: hidden;
   color: #000; /* Ensure all cell text is black */
   background-color: inherit; /* Inherit background from row */
+  position: relative; /* Remove relative positioning since status moved */
 }
 
 .row-cell:last-child {
@@ -1255,6 +1208,16 @@ select {
   width: 100%;
 }
 
+/* Group header with status indicator */
+.group-header-with-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
 .group-number-badge {
   background-color: #007bff;
   color: white;
@@ -1262,7 +1225,38 @@ select {
   border-radius: 12px;
   font-size: 0.8rem;
   font-weight: bold;
-  margin-bottom: 8px;
+}
+
+/* Status indicators in images column */
+.status-indicator {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: bold;
+  font-size: 12px;
+  border-radius: 50%;
+  width: 20px;
+  height: 20px;
+}
+
+.status-indicator.processed {
+  background-color: #4CAF50;
+  color: white;
+}
+
+.status-indicator.processing {
+  background-color: #2196F3;
+  color: white;
+}
+
+.status-indicator.new {
+  background-color: #FF9800;
+  color: white;
+  border-radius: 10px;
+  padding: 2px 6px;
+  font-size: 10px;
+  width: auto;
+  height: auto;
 }
 
 .row-thumbs {

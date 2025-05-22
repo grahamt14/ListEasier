@@ -794,7 +794,17 @@ Action(SiteID=US|Country=US|Currency=USD|Version=1193|CC=UTF-8),Custom label (SK
                     {/* Images Column */}
                     <div className="row-cell images-cell">
                       <div className="row-images-container">
-                        <div className="group-number-badge">Group {gi + 1}</div>
+                        <div className="group-header-with-status">
+                          <div className="group-number-badge">Group {gi + 1}</div>
+                          {/* Status indicator moved to images column */}
+                          {processingGroups[gi] ? (
+                            <div className="status-indicator processing">⋯</div>
+                          ) : (processedGroupIndices && processedGroupIndices.includes(gi)) ? (
+                            <div className="status-indicator processed">✓</div>
+                          ) : (group.length > 0 && !responseData[gi]) ? (
+                            <div className="status-indicator new">NEW</div>
+                          ) : null}
+                        </div>
                         <div className="row-thumbs">
                           {group.map((src, xi) => (
                             <img 

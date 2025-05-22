@@ -7,8 +7,7 @@ import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { fromCognitoIdentityPool } from "@aws-sdk/credential-provider-cognito-identity";
 import { AppStateProvider, useAppState } from './StateContext';
 
-// PreviewSection component
-// PreviewSection component - Updated with Grid/Row Toggle
+// PreviewSection component - Updated with Dynamic Column Scaling
 function PreviewSection({ categoryFields = [] }) {
   const { state, dispatch } = useAppState();
   const { 
@@ -697,8 +696,8 @@ Action(SiteID=US|Country=US|Currency=USD|Version=1193|CC=UTF-8),Custom label (SK
         <div className="row-view-container">
           {imageGroups.some(group => group.length > 0) && (
             <div className="row-view-table">
-              {/* Table Header */}
-              <div className="row-view-header">
+              {/* Table Header with dynamic field count */}
+              <div className="row-view-header" data-field-count={allFieldLabels.length}>
                 <div className="row-header-cell images-header">Images</div>
                 <div className="row-header-cell title-header">Title</div>
                 <div className="row-header-cell description-header">Description</div>
@@ -710,7 +709,7 @@ Action(SiteID=US|Country=US|Currency=USD|Version=1193|CC=UTF-8),Custom label (SK
                 <div className="row-header-cell actions-header">Actions</div>
               </div>
               
-              {/* Table Rows */}
+              {/* Table Rows with dynamic field count */}
               {imageGroups.map((group, gi) => {
                 // Skip empty groups
                 if (group.length === 0) return null;
@@ -764,6 +763,7 @@ Action(SiteID=US|Country=US|Currency=USD|Version=1193|CC=UTF-8),Custom label (SK
                   <div
                     key={gi}
                     className={`row-view-row ${groupClass}`}
+                    data-field-count={allFieldLabels.length}
                     onDrop={e => handleGroupDrop(e, gi)}
                     onDragOver={e => e.preventDefault()}
                   >

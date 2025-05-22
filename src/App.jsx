@@ -948,6 +948,7 @@ function AppContent() {
         return !processedGroupIndices || !processedGroupIndices.includes(originalIndex);
       });
       
+	  
       // Get indices of new groups to be processed
       const newGroupIndices = newGroupsToProcess.map(group => {
         return imageGroups.findIndex(g => g === group);

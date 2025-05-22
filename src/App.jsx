@@ -1291,6 +1291,7 @@ function AppContent() {
        <PreviewSection categoryFields={categoryFields} />
      </main>
 
+
      <footer className="footer">
        <p>© 2025 ListEasier</p>
      </footer>

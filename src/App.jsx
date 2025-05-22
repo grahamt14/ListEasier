@@ -322,7 +322,7 @@ Action(SiteID=US|Country=US|Currency=USD|Version=1193|CC=UTF-8),Custom label (SK
     }
   }
 };
-  const renderResponseData = (index) => {
+const renderResponseData = (index) => {
   const response = responseData[index];
   if (!response) return null;
   
@@ -383,7 +383,7 @@ Action(SiteID=US|Country=US|Currency=USD|Version=1193|CC=UTF-8),Custom label (SK
             </div>
         ))}
         
-        {/* Add category fields as metadata, including price and SKU */}
+        {/* Add category fields as editable metadata, including price and SKU */}
         <div className="category-fields-metadata">
           <h5 style={{ margin: '10px 0 5px 0', color: '#000' }}>Item Details</h5>
           
@@ -397,25 +397,97 @@ Action(SiteID=US|Country=US|Currency=USD|Version=1193|CC=UTF-8),Custom label (SK
             <span style={{ color: '#000' }}>{groupSku}</span>
           </div>
           
-          {/* Add ALL category fields from the stored selections, including those with default values */}
+          {/* Add ALL category fields from the stored selections as editable fields */}
           {Object.entries(listingFieldSelections).map(([label, value]) => {
-            // Display ALL fields, including those with default values
+            // Display ALL fields, including those with default values, but make them editable
             if (label !== 'price' && label !== 'sku') {
-              const displayValue = value || "-- Select --";
+              // Get the original field definition to show options
+              const fieldDefinition = categoryFields.find(field => field.FieldLabel === label);
+              const options = fieldDefinition?.CategoryOptions ? 
+                fieldDefinition.CategoryOptions.split(';').map(opt => opt.trim()) : [];
+              
+              // Display empty string instead of "-- Select --" for default values
+              const displayValue = (value === "-- Select --" || !value) ? "" : value;
+              
               return (
-                <div key={label} className="response-field listing-metadata">
+                <div key={label} className="response-field listing-metadata editable-field">
                   <strong style={{ color: '#000' }}>{label}:</strong>
-                  <span style={{ color: '#000' }}>{displayValue}</span>
+                  {options.length > 0 ? (
+                    // If we have options, show a dropdown
+                    <select
+                      value={displayValue}
+                      onChange={(e) => updateListingFieldSelection(index, label, e.target.value)}
+                      style={{
+                        marginLeft: '8px',
+                        padding: '4px 8px',
+                        border: '1px solid #ccc',
+                        borderRadius: '4px',
+                        backgroundColor: '#fff',
+                        color: '#000',
+                        fontSize: '0.9rem'
+                      }}
+                    >
+                      <option value="">-- Select --</option>
+                      {options.map((opt, idx) => (
+                        <option key={idx} value={opt}>{opt}</option>
+                      ))}
+                    </select>
+                  ) : (
+                    // If no options, show a text input
+                    <input
+                      type="text"
+                      value={displayValue}
+                      onChange={(e) => updateListingFieldSelection(index, label, e.target.value)}
+                      placeholder="Enter value"
+                      style={{
+                        marginLeft: '8px',
+                        padding: '4px 8px',
+                        border: '1px solid #ccc',
+                        borderRadius: '4px',
+                        backgroundColor: '#fff',
+                        color: '#000',
+                        fontSize: '0.9rem',
+                        minWidth: '150px'
+                      }}
+                    />
+                  )}
                 </div>
               );
             }
-			
+            
             return null;
           })}
         </div>
       </div>
     </div>
   );
+};
+
+const updateListingFieldSelection = (listingIndex, fieldLabel, newValue) => {
+  // Get the current response data
+  const updatedResponseData = [...responseData];
+  
+  // Make sure the listing exists
+  if (!updatedResponseData[listingIndex]) {
+    return;
+  }
+  
+  // Update the stored field selections for this specific listing
+  const currentListing = { ...updatedResponseData[listingIndex] };
+  const currentStoredSelections = { ...currentListing.storedFieldSelections } || {};
+  
+  // Update the specific field
+  currentStoredSelections[fieldLabel] = newValue;
+  
+  // Update the listing with the new field selections
+  currentListing.storedFieldSelections = currentStoredSelections;
+  updatedResponseData[listingIndex] = currentListing;
+  
+  // Update the state
+  dispatch({
+    type: 'SET_RESPONSE_DATA',
+    payload: updatedResponseData
+  });
 };
 
   // Spinner component

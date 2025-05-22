@@ -898,3 +898,64 @@ select {
 .listing-metadata.sku-field {
   border-left-color: #4CAF50;
 }
+
+/* Styles for editable category fields in listings */
+.editable-field {
+  display: flex !important;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 12px;
+  background-color: #fff;
+  border: 1px solid #e0e0e0;
+  border-radius: 4px;
+  margin-top: 4px;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.editable-field:hover {
+  border-color: #2196F3;
+  box-shadow: 0 0 0 2px rgba(33, 150, 243, 0.1);
+}
+
+.editable-field strong {
+  flex-shrink: 0;
+  min-width: 120px;
+}
+
+.editable-field select,
+.editable-field input {
+  flex-grow: 1;
+  margin-left: 8px !important;
+  max-width: 200px;
+}
+
+/* Override the default listing-metadata styles for editable fields */
+.listing-metadata.editable-field {
+  background-color: #fff;
+  border-left: 3px solid #4CAF50;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+}
+
+.listing-metadata.editable-field:hover {
+  border-left-color: #2196F3;
+}
+
+/* Responsive adjustments for mobile */
+@media (max-width: 600px) {
+  .editable-field {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+  }
+  
+  .editable-field strong {
+    min-width: auto;
+  }
+  
+  .editable-field select,
+  .editable-field input {
+    margin-left: 0 !important;
+    width: 100%;
+    max-width: 100%;
+  }
+}

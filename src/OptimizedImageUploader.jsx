@@ -1,10 +1,10 @@
-// OptimizedImageUploader.jsx (Updated with Context)
+// OptimizedImageUploader.jsx (Updated with HEIC Context Support)
 import React, { useState, useRef, useEffect } from 'react';
-import { processImagesInBatch } from './OptimizedImageHandler';
+import { processImagesInBatch, isHeicFile } from './OptimizedImageHandler';
 import { useAppState } from './StateContext';
 
 /**
- * Efficient image uploader component for handling large batches
+ * Efficient image uploader component for handling large batches including HEIC files
  */
 const OptimizedImageUploader = ({ 
   onImagesProcessed, 
@@ -30,10 +30,59 @@ const OptimizedImageUploader = ({
   }, []);
   
   /**
-   * Process multiple images with progress tracking
+   * Check if files contain HEIC images and validate them
+   */
+  const validateFiles = (files) => {
+    const validFiles = [];
+    const invalidFiles = [];
+    
+    Array.from(files).forEach(file => {
+      // Check if it's an image file (including HEIC)
+      const isImage = file.type.startsWith('image/') || isHeicFile(file);
+      
+      // Check file size (reject files over 50MB to accommodate large HEIC files)
+      const isValidSize = file.size <= 50 * 1024 * 1024;
+      
+      if (isImage && isValidSize) {
+        validFiles.push(file);
+      } else {
+        invalidFiles.push({
+          name: file.name,
+          reason: !isImage ? 'Not an image file' : 'File too large (max 50MB)'
+        });
+      }
+    });
+    
+    // Show warnings for invalid files
+    if (invalidFiles.length > 0) {
+      const warningMessage = invalidFiles
+        .map(f => `${f.name}: ${f.reason}`)
+        .join('\n');
+      console.warn('Invalid files skipped:\n', warningMessage);
+    }
+    
+    return validFiles;
+  };
+  
+  /**
+   * Process multiple images with progress tracking and HEIC support
    */
   const processImages = async (files) => {
     if (!files || files.length === 0) return;
+    
+    // Step 1: Validate files
+    const validFiles = validateFiles(files);
+    
+    if (validFiles.length === 0) {
+      alert('No valid image files found. Please select JPG, PNG, GIF, WEBP, or HEIC files under 50MB.');
+      return;
+    }
+    
+    // Check if there are HEIC files and warn user
+    const heicFiles = validFiles.filter(isHeicFile);
+    if (heicFiles.length > 0) {
+      console.log(`Found ${heicFiles.length} HEIC files that will be converted to JPEG`);
+    }
     
     // Update global state for upload status
     dispatch({ 
@@ -41,39 +90,15 @@ const OptimizedImageUploader = ({
       payload: { 
         isUploading: true, 
         uploadProgress: 0, 
-        uploadTotal: files.length,
+        uploadTotal: validFiles.length,
         uploadCompleted: 0,
-        uploadStage: 'Processing images...'
+        uploadStage: heicFiles.length > 0 ? 
+          `Converting ${heicFiles.length} HEIC files and processing images...` : 
+          'Processing images...'
       } 
     });
     
     try {
-      // Step 1: Quick validation pass
-      const validFiles = Array.from(files).filter(file => {
-        // Only process image files
-        const isImage = file.type.startsWith('image/');
-        
-        // Check file size (reject files over 20MB)
-        const isValidSize = file.size <= 20 * 1024 * 1024;
-        
-        return isImage && isValidSize;
-      });
-      
-      if (validFiles.length === 0) {
-        throw new Error('No valid image files found.');
-      }
-      
-      // Update total count with valid files
-      dispatch({ 
-        type: 'SET_UPLOAD_STATUS', 
-        payload: { 
-          uploadTotal: validFiles.length,
-          uploadStage: 'Optimizing images...'
-        } 
-      });
-      
-      // Step 2: Process images in batches with efficient memory usage
-      
       // Store the processing operation in a ref for potential cancellation
       const processingOperation = {}; 
       processingRef.current = processingOperation;
@@ -85,11 +110,16 @@ const OptimizedImageUploader = ({
         autoRotate: autoRotateEnabled,
         toBase64: true,
         progressCallback: (progress) => {
+          const stage = progress < 0.2 && heicFiles.length > 0 ? 
+            'Converting HEIC files...' : 
+            'Optimizing images...';
+          
           dispatch({ 
             type: 'SET_UPLOAD_STATUS', 
             payload: { 
               uploadProgress: Math.round(progress * 100),
-              uploadCompleted: Math.round(progress * validFiles.length)
+              uploadCompleted: Math.round(progress * validFiles.length),
+              uploadStage: stage
             } 
           });
         }
@@ -99,9 +129,16 @@ const OptimizedImageUploader = ({
       onImagesProcessed(results, validFiles.filter((_, i) => i < stats.successful));
       
       // Display summary of processing
-      if (errors.length > 0) {
-        console.warn(`${errors.length} of ${validFiles.length} files failed to process:`, errors);
+      let summaryMessage = `Successfully processed ${stats.successful} of ${stats.total} files`;
+      if (stats.heicConverted > 0) {
+        summaryMessage += ` (${stats.heicConverted} HEIC files converted)`;
       }
+      if (errors.length > 0) {
+        summaryMessage += `. ${errors.length} files failed to process.`;
+        console.warn(`Processing errors:`, errors);
+      }
+      
+      console.log(summaryMessage);
       
       // Show completed status for a moment
       dispatch({ 
@@ -167,7 +204,7 @@ const OptimizedImageUploader = ({
   };
   
   /**
-   * Handle file drop
+   * Handle file drop with HEIC support
    */
   const handleDrop = (e) => {
     e.preventDefault();
@@ -175,7 +212,7 @@ const OptimizedImageUploader = ({
     setDragActive(false);
     
     const droppedFiles = Array.from(e.dataTransfer.files).filter(
-      file => file.type.startsWith("image/")
+      file => file.type.startsWith("image/") || isHeicFile(file)
     );
     
     if (droppedFiles.length > 0) {
@@ -247,14 +284,14 @@ const OptimizedImageUploader = ({
             </svg>
           </div>
           <p className="upload-text">Click or drag images to upload</p>
-          <p className="upload-hint">Supports JPG, PNG, GIF, WEBP • Max 20MB per file</p>
+          <p className="upload-hint">Supports JPG, PNG, GIF, WEBP, HEIC • Max 50MB per file</p>
         </>
       )}
       <input 
         ref={fileInputRef} 
         type="file" 
         multiple 
-        accept="image/*" 
+        accept="image/*,.heic,.heif" 
         onChange={handleFileChange} 
         hidden 
       />

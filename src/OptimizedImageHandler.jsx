@@ -1,5 +1,60 @@
 // OptimizedImageHandler.js
 import imageCompression from 'browser-image-compression'; // Recommended to add this dependency
+import heic2any from 'heic2any'; // Add this import for HEIC support
+
+/**
+ * Check if a file is a HEIC/HEIF image
+ * @param {File} file - File to check
+ * @returns {boolean} - True if file is HEIC/HEIF
+ */
+export const isHeicFile = (file) => {
+  const heicTypes = [
+    'image/heic',
+    'image/heif',
+    'image/HEIC',
+    'image/HEIF'
+  ];
+  
+  // Check MIME type first
+  if (heicTypes.includes(file.type)) {
+    return true;
+  }
+  
+  // Check file extension as fallback (some systems don't set MIME type correctly)
+  const fileName = file.name.toLowerCase();
+  return fileName.endsWith('.heic') || fileName.endsWith('.heif');
+};
+
+/**
+ * Convert HEIC file to JPEG
+ * @param {File} file - HEIC file to convert
+ * @returns {Promise<File>} - Converted JPEG file
+ */
+export const convertHeicToJpeg = async (file) => {
+  try {
+    console.log(`Converting HEIC file: ${file.name}`);
+    
+    // Convert HEIC to JPEG blob
+    const jpegBlob = await heic2any({
+      blob: file,
+      toType: 'image/jpeg',
+      quality: 0.9, // High quality for initial conversion
+    });
+    
+    // Create a new File object from the blob
+    const jpegFileName = file.name.replace(/\.(heic|heif)$/i, '.jpg');
+    const jpegFile = new File([jpegBlob], jpegFileName, {
+      type: 'image/jpeg',
+      lastModified: file.lastModified,
+    });
+    
+    console.log(`HEIC conversion complete: ${jpegFileName}`);
+    return jpegFile;
+  } catch (error) {
+    console.error('Error converting HEIC file:', error);
+    throw new Error(`Failed to convert HEIC file: ${error.message}`);
+  }
+};
 
 /**
  * Worker-based image processing 
@@ -119,8 +174,37 @@ export const processImagesInBatch = async (files, options = {}) => {
     progressCallback = () => {},
   } = options;
   
+  // Step 1: Convert any HEIC files to JPEG first
+  console.log(`Processing ${files.length} files, checking for HEIC files...`);
+  const convertedFiles = [];
+  const heicConversionErrors = [];
+  
+  for (let i = 0; i < files.length; i++) {
+    const file = files[i];
+    
+    try {
+      if (isHeicFile(file)) {
+        console.log(`Converting HEIC file: ${file.name}`);
+        const convertedFile = await convertHeicToJpeg(file);
+        convertedFiles.push(convertedFile);
+        
+        // Update progress for HEIC conversion
+        progressCallback((i + 1) / files.length * 0.2); // HEIC conversion takes 20% of progress
+      } else {
+        convertedFiles.push(file);
+        progressCallback((i + 1) / files.length * 0.2);
+      }
+    } catch (error) {
+      console.error(`Failed to convert HEIC file ${file.name}:`, error);
+      heicConversionErrors.push({ name: file.name, error: error.message });
+      // Skip this file and continue with others
+    }
+  }
+  
+  console.log(`HEIC conversion complete. ${convertedFiles.length} files ready for processing.`);
+  
   // Create a pool of workers based on CPU cores
-  const workerPool = Array.from({ length: Math.min(files.length, maxWorkers) }, () => 
+  const workerPool = Array.from({ length: Math.min(convertedFiles.length, maxWorkers) }, () => 
     createImageProcessingWorker()
   );
   
@@ -134,16 +218,16 @@ export const processImagesInBatch = async (files, options = {}) => {
   };
   
   // Process up to maxWorkers files at once for better parallelization
-  const results = new Array(files.length).fill(null);
-  const errors = [];
+  const results = new Array(convertedFiles.length).fill(null);
+  const processingErrors = [];
   let completed = 0;
   
   // Process in batches based on worker count
-  const batchSize = Math.max(1, Math.ceil(files.length / maxWorkers));
+  const batchSize = Math.max(1, Math.ceil(convertedFiles.length / maxWorkers));
   const batches = [];
   
-  for (let i = 0; i < files.length; i += batchSize) {
-    const batchFiles = Array.from(files)
+  for (let i = 0; i < convertedFiles.length; i += batchSize) {
+    const batchFiles = Array.from(convertedFiles)
       .slice(i, i + batchSize)
       .map((file, batchIndex) => ({
         file,
@@ -188,14 +272,15 @@ export const processImagesInBatch = async (files, options = {}) => {
           
           results[index] = processedImage;
           completed++;
-          progressCallback(completed / files.length);
+          // Progress is 20% HEIC conversion + 80% processing
+          progressCallback(0.2 + (completed / convertedFiles.length) * 0.8);
           return { success: true, index };
         } catch (error) {
           console.error(`Error processing file ${file.name}:`, error);
-          errors.push({ name: file.name, error: error.message });
+          processingErrors.push({ name: file.name, error: error.message });
           results[index] = null;
           completed++;
-          progressCallback(completed / files.length);
+          progressCallback(0.2 + (completed / convertedFiles.length) * 0.8);
           return { success: false, index, error };
         }
       })
@@ -205,13 +290,17 @@ export const processImagesInBatch = async (files, options = {}) => {
   // Clean up workers
   workerPool.forEach(worker => worker.terminate());
   
+  // Combine all errors
+  const allErrors = [...heicConversionErrors, ...processingErrors];
+  
   return {
     results: results.filter(Boolean),
-    errors,
+    errors: allErrors,
     stats: {
       total: files.length,
       successful: results.filter(Boolean).length,
-      failed: errors.length
+      failed: allErrors.length,
+      heicConverted: files.filter(isHeicFile).length
     }
   };
 };
@@ -502,5 +591,7 @@ const analyzeRegionBrightness = (data, width, startY, endY, startX = 0, endX = n
 export default {
   processImagesInBatch,
   detectImageOrientation,
-  createImageProcessingWorker
+  createImageProcessingWorker,
+  isHeicFile,
+  convertHeicToJpeg
 };

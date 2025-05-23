@@ -1,4 +1,4 @@
-// FormSection.jsx (Updated with eBay Integration)
+// FormSection.jsx (Updated with eBay Integration and HEIC Support)
 import { useState, useRef, useEffect } from 'react';
 import { DynamoDBClient, QueryCommand } from '@aws-sdk/client-dynamodb';
 import { unmarshall } from '@aws-sdk/util-dynamodb';
@@ -10,7 +10,7 @@ import { useEbayAuth } from './EbayAuthContext';
 
 // Import the optimized image handlers and uploader
 import OptimizedImageUploader from './OptimizedImageUploader';
-import { processImagesInBatch } from './OptimizedImageHandler';
+import { processImagesInBatch, isHeicFile, convertHeicToJpeg } from './OptimizedImageHandler';
 import EbayAuth from './EbayAuth';
 import EbayPolicySelector from './EbayPolicySelector';
 import './OptimizedUploaderStyles.css';
@@ -261,7 +261,7 @@ function FormSection({ onGenerateListing, onCategoryFieldsChange }) {
     }
   };
 
-  // Handle image rotation
+  // Enhanced image rotation with HEIC support
   const handleRotateImage = async (index, direction) => {
     try {
       dispatch({ type: 'ROTATE_IMAGE', payload: { index, direction } });
@@ -353,7 +353,47 @@ const uploadGroupedImagesToS3 = async (selectedIndices) => {
         uploadTotal: selectedRawFiles.length,
         uploadCompleted: 0,
         uploadProgress: 0,
-        uploadStage: 'Uploading selected images to S3...'
+        uploadStage: 'Converting and uploading selected images to S3...'
+      } 
+    });
+    
+    // Convert HEIC files first if needed
+    const convertedFiles = [];
+    for (let i = 0; i < selectedRawFiles.length; i++) {
+      const file = selectedRawFiles[i];
+      
+      try {
+        if (isHeicFile(file)) {
+          console.log(`Converting HEIC file for upload: ${file.name}`);
+          const convertedFile = await convertHeicToJpeg(file);
+          convertedFiles.push(convertedFile);
+        } else {
+          convertedFiles.push(file);
+        }
+        
+        // Update progress for conversion
+        dispatch({ 
+          type: 'SET_UPLOAD_STATUS', 
+          payload: { 
+            uploadProgress: Math.round(((i + 1) / selectedRawFiles.length) * 30), // 30% for conversion
+            uploadStage: isHeicFile(file) ? 
+              `Converting HEIC files... (${i + 1}/${selectedRawFiles.length})` :
+              `Preparing files... (${i + 1}/${selectedRawFiles.length})`
+          } 
+        });
+      } catch (error) {
+        console.error(`Error converting file ${file.name}:`, error);
+        // Use original file if conversion fails
+        convertedFiles.push(file);
+      }
+    }
+    
+    // Update status for S3 upload
+    dispatch({ 
+      type: 'SET_UPLOAD_STATUS', 
+      payload: { 
+        uploadStage: 'Uploading to S3...',
+        uploadProgress: 30
       } 
     });
     
@@ -362,8 +402,8 @@ const uploadGroupedImagesToS3 = async (selectedIndices) => {
     const UPLOAD_BATCH_SIZE = 80; // Increased to 20 concurrent uploads
     const s3Urls = [];
     
-    for (let i = 0; i < selectedRawFiles.length; i += UPLOAD_BATCH_SIZE) {
-      const batch = selectedRawFiles.slice(i, i + UPLOAD_BATCH_SIZE);
+    for (let i = 0; i < convertedFiles.length; i += UPLOAD_BATCH_SIZE) {
+      const batch = convertedFiles.slice(i, i + UPLOAD_BATCH_SIZE);
       
       // Upload current batch in parallel
       const uploadPromises = batch.map(async (file, batchIndex) => {
@@ -387,13 +427,14 @@ const uploadGroupedImagesToS3 = async (selectedIndices) => {
         }
       });
       
-      // Update progress
-      const completedCount = Math.min(i + UPLOAD_BATCH_SIZE, selectedRawFiles.length);
+      // Update progress (30% conversion + 70% upload)
+      const completedCount = Math.min(i + UPLOAD_BATCH_SIZE, convertedFiles.length);
+      const uploadProgress = 30 + Math.round((completedCount / convertedFiles.length) * 70);
       dispatch({ 
         type: 'SET_UPLOAD_STATUS', 
         payload: { 
           uploadCompleted: completedCount,
-          uploadProgress: Math.round((completedCount / selectedRawFiles.length) * 100)
+          uploadProgress: uploadProgress
         } 
       });
     }
@@ -403,7 +444,7 @@ const uploadGroupedImagesToS3 = async (selectedIndices) => {
       type: 'SET_UPLOAD_STATUS', 
       payload: { 
         uploadProgress: 100,
-        uploadCompleted: selectedRawFiles.length,
+        uploadCompleted: convertedFiles.length,
         uploadStage: 'Upload complete!',
         isUploading: false
       } 
@@ -590,13 +631,19 @@ const handleGenerateListingWithUpload = async () => {
       }
     }
     
+    // Check if any files are HEIC
+    const heicFiles = allRawFiles.filter(isHeicFile);
+    const hasHeicFiles = heicFiles.length > 0;
+    
     // Start uploading - update global state
     const uploadStatusObject = {
       isUploading: true, 
       uploadTotal: allRawFiles.length,
       uploadCompleted: 0,
       uploadProgress: 0,
-      uploadStage: 'Uploading images to S3...',
+      uploadStage: hasHeicFiles ? 
+        `Converting ${heicFiles.length} HEIC files and uploading to S3...` : 
+        'Uploading images to S3...',
       currentFileIndex: 0
     };
     
@@ -605,13 +652,60 @@ const handleGenerateListingWithUpload = async () => {
       payload: uploadStatusObject
     });
     
+    // Step 1: Convert HEIC files first if needed
+    const convertedFiles = [];
+    if (hasHeicFiles) {
+      for (let i = 0; i < allRawFiles.length; i++) {
+        const file = allRawFiles[i];
+        
+        try {
+          if (isHeicFile(file)) {
+            console.log(`Converting HEIC file: ${file.name}`);
+            const convertedFile = await convertHeicToJpeg(file);
+            convertedFiles.push(convertedFile);
+          } else {
+            convertedFiles.push(file);
+          }
+          
+          // Update progress for HEIC conversion (20% of total progress)
+          uploadStatusObject.uploadProgress = Math.round(((i + 1) / allRawFiles.length) * 20);
+          uploadStatusObject.uploadStage = isHeicFile(file) ? 
+            `Converting HEIC files... (${i + 1}/${allRawFiles.length})` :
+            `Preparing files... (${i + 1}/${allRawFiles.length})`;
+          
+          dispatch({ 
+            type: 'SET_UPLOAD_STATUS', 
+            payload: { ...uploadStatusObject } 
+          });
+        } catch (error) {
+          console.error(`Error converting HEIC file ${file.name}:`, error);
+          // Use original file if conversion fails
+          convertedFiles.push(file);
+        }
+      }
+    } else {
+      // No HEIC files, use original files
+      convertedFiles.push(...allRawFiles);
+    }
+    
+    // Step 2: Upload to S3
+    uploadStatusObject.uploadStage = 'Uploading to S3...';
+    uploadStatusObject.uploadProgress = hasHeicFiles ? 20 : 0;
+    
+    dispatch({ 
+      type: 'SET_UPLOAD_STATUS', 
+      payload: { ...uploadStatusObject } 
+    });
+    
     // Create a batching system for parallel uploads
     const BATCH_SIZE = 20; // Process 20 files at a time
     const s3UrlsList = [];
+    const baseProgress = hasHeicFiles ? 20 : 0; // Starting progress after HEIC conversion
+    const uploadProgressRange = 100 - baseProgress; // Remaining progress for upload
     
     // Process files in parallel batches
-    for (let i = 0; i < allRawFiles.length; i += BATCH_SIZE) {
-      const batch = allRawFiles.slice(i, i + BATCH_SIZE);
+    for (let i = 0; i < convertedFiles.length; i += BATCH_SIZE) {
+      const batch = convertedFiles.slice(i, i + BATCH_SIZE);
       
       // Upload batch in parallel
       const batchPromises = batch.map((file, batchIndex) => {
@@ -632,9 +726,9 @@ const handleGenerateListingWithUpload = async () => {
       });
       
       // Update progress
-      const completedCount = Math.min(i + BATCH_SIZE, allRawFiles.length);
+      const completedCount = Math.min(i + BATCH_SIZE, convertedFiles.length);
       uploadStatusObject.uploadCompleted = completedCount;
-      uploadStatusObject.uploadProgress = Math.round((completedCount / allRawFiles.length) * 100);
+      uploadStatusObject.uploadProgress = baseProgress + Math.round((completedCount / convertedFiles.length) * uploadProgressRange);
       uploadStatusObject.currentFileIndex = completedCount;
       
       dispatch({ 
@@ -645,7 +739,7 @@ const handleGenerateListingWithUpload = async () => {
     
     // Complete S3 upload process
     uploadStatusObject.uploadProgress = 100;
-    uploadStatusObject.uploadCompleted = allRawFiles.length;
+    uploadStatusObject.uploadCompleted = convertedFiles.length;
     uploadStatusObject.uploadStage = 'Upload complete! Organizing images...';
     
     dispatch({ 
@@ -1104,7 +1198,7 @@ const uploadToS3 = async (file) => {
         </div>
       </div>
 
-      {/* Optimized Image Uploader Component */}
+      {/* Optimized Image Uploader Component with HEIC Support */}
       <OptimizedImageUploader
         onImagesProcessed={handleImageUploaderProcess}
         autoRotateEnabled={autoRotateEnabled}

@@ -1,5 +1,6 @@
-// TesseractRotate.jsx
+// TesseractRotate.jsx (Updated with HEIC Support)
 import { useEffect, useState } from 'react';
+import { isHeicFile, convertHeicToJpeg } from './OptimizedImageHandler';
 
 // Enhanced image rotation function that prevents black borders and maintains aspect ratio
 export const rotateImage = (base64Img, degrees) => {
@@ -51,7 +52,7 @@ export const rotateImage = (base64Img, degrees) => {
   });
 };
 
-// Enhanced Tesseract auto-rotation function with better error handling
+// Enhanced Tesseract auto-rotation function with better error handling and HEIC support
 export const autoRotateWithTesseract = async (base64Img) => {
   // Skip Tesseract if the module is not available
   let Tesseract;
@@ -221,27 +222,41 @@ const analyzeImageSectionVertical = (data, width, startX, endX, sectionHeight) =
   return pixelCount > 0 ? totalBrightness / pixelCount : 0;
 };
 
-// Combined image processing function with better error handling and diagnostic logging
+// Combined image processing function with better error handling, diagnostic logging, and HEIC support
 export const processImage = async (file, autoRotateEnabled) => {
   try {
     console.log(`Processing file: ${file.name} (${file.size} bytes, type: ${file.type})`);
     
-    // Step 1: Convert to base64
+    // Step 1: Handle HEIC conversion if needed
+    let processedFile = file;
+    if (isHeicFile(file)) {
+      console.log("HEIC file detected, converting to JPEG...");
+      try {
+        processedFile = await convertHeicToJpeg(file);
+        console.log(`HEIC conversion complete: ${processedFile.name}`);
+      } catch (heicError) {
+        console.error("HEIC conversion failed:", heicError);
+        // Continue with original file if conversion fails
+        processedFile = file;
+      }
+    }
+    
+    // Step 2: Convert to base64
     console.log("Converting to base64...");
-    const base64 = await convertToBase64(file);
+    const base64 = await convertToBase64(processedFile);
     console.log("Base64 conversion complete");
     
     // Only perform auto-rotation if enabled by user
     if (autoRotateEnabled) {
-      // Step 2: Try enhanced heuristic approach first
+      // Step 3: Try enhanced heuristic approach first
       console.log("Running heuristic orientation detection...");
       let processedImage = await detectRotationWithHeuristics(base64);
       let rotationApplied = processedImage !== base64;
       console.log(`Heuristic detection ${rotationApplied ? 'applied rotation' : 'detected no rotation'}`);
       
-      // Step 3: Determine if we should attempt Tesseract processing
-      const fileSize = file.size;
-      const fileName = file.name.toLowerCase();
+      // Step 4: Determine if we should attempt Tesseract processing
+      const fileSize = processedFile.size;
+      const fileName = processedFile.name.toLowerCase();
       
       const isLikelyDocument = 
         fileSize < 2000000 && // Smaller files are more likely to be document scans
@@ -281,7 +296,9 @@ export const processImage = async (file, autoRotateEnabled) => {
     console.error(`Error processing file ${file.name}:`, error);
     // Convert to base64 as fallback if processing fails
     try {
-      return await convertToBase64(file);
+      // If original file failed, try with the processed file (in case HEIC conversion worked)
+      const fallbackFile = processedFile || file;
+      return await convertToBase64(fallbackFile);
     } catch (fallbackError) {
       console.error("Fallback conversion failed:", fallbackError);
       throw new Error(`Unable to process image: ${fallbackError.message}`);
@@ -289,27 +306,47 @@ export const processImage = async (file, autoRotateEnabled) => {
   }
 };
 
-// Convert image to base64
+// Convert image to base64 with HEIC support
 export const convertToBase64 = (file) => {
   return new Promise((resolve, reject) => {
-    const img = new Image();
-    img.onload = () => {
-      const maxWidth = 800;
-      let width = img.width;
-      let height = img.height;
-      if (width > maxWidth) {
-        height = Math.floor(height * (maxWidth / width));
-        width = maxWidth;
+    // Handle HEIC files first if needed
+    const processFile = async (inputFile) => {
+      let fileToProcess = inputFile;
+      
+      // Convert HEIC to JPEG if needed
+      if (isHeicFile(inputFile)) {
+        try {
+          console.log("Converting HEIC file in convertToBase64...");
+          fileToProcess = await convertHeicToJpeg(inputFile);
+        } catch (heicError) {
+          console.warn("HEIC conversion failed in convertToBase64, using original:", heicError);
+          fileToProcess = inputFile;
+        }
       }
-      const canvas = document.createElement("canvas");
-      canvas.width = width;
-      canvas.height = height;
-      const ctx = canvas.getContext("2d");
-      ctx.drawImage(img, 0, 0, width, height);
-      resolve(canvas.toDataURL(file.type));
+      
+      const img = new Image();
+      img.onload = () => {
+        const maxWidth = 800;
+        let width = img.width;
+        let height = img.height;
+        if (width > maxWidth) {
+          height = Math.floor(height * (maxWidth / width));
+          width = maxWidth;
+        }
+        const canvas = document.createElement("canvas");
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext("2d");
+        ctx.drawImage(img, 0, 0, width, height);
+        
+        // Always output as JPEG for consistency, regardless of input format
+        resolve(canvas.toDataURL('image/jpeg', 0.9));
+      };
+      img.onerror = (err) => reject(err);
+      img.src = URL.createObjectURL(fileToProcess);
     };
-    img.onerror = (err) => reject(err);
-    img.src = URL.createObjectURL(file);
+    
+    processFile(file).catch(reject);
   });
 };
 

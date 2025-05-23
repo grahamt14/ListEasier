@@ -776,6 +776,41 @@
   line-height: 1.4;
 }
 
+/* Styles for editable title and description fields */
+.editable-title-field,
+.editable-description-field {
+  background-color: #f8f9fa;
+  padding: 12px;
+  border-radius: 6px;
+  border: 1px solid #e9ecef;
+  margin-bottom: 12px;
+}
+
+.editable-title-input,
+.editable-description-input {
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.editable-title-input:focus,
+.editable-description-input:focus {
+  outline: none;
+  border-color: #007bff !important;
+  box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.1) !important;
+}
+
+/* Row view title and description input styles */
+.row-title-input,
+.row-description-input {
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.row-title-input:focus,
+.row-description-input:focus {
+  outline: none;
+  border-color: #007bff !important;
+  box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.1) !important;
+}
+
 /* Updated styles for category fields metadata */
 .category-fields-metadata {
   margin-top: 15px;
@@ -1135,13 +1170,14 @@
   z-index: 1;
 }
 
-/* Title Cell */
+/* Title Cell - Updated for editable textarea */
 .title-cell {
   align-items: flex-start;
   flex-direction: column;
   justify-content: center;
   color: #000 !important;
   background-color: inherit;
+  padding: 8px 6px;
 }
 
 .row-title {
@@ -1156,13 +1192,14 @@
   color: #000 !important;
 }
 
-/* Description Cell */
+/* Description Cell - Updated for editable textarea */
 .description-cell {
   align-items: flex-start;
   flex-direction: column;
   justify-content: center;
   color: #000 !important;
   background-color: inherit;
+  padding: 8px 6px;
 }
 
 .row-description {
@@ -1317,6 +1354,17 @@
     width: 100%;
     max-width: 100%;
   }
+
+  /* Mobile styles for editable title and description */
+  .editable-title-field,
+  .editable-description-field {
+    padding: 8px;
+  }
+
+  .editable-title-input,
+  .editable-description-input {
+    font-size: 0.9rem;
+  }
 }
 
 /* Responsive adjustments for row view */
@@ -1351,5 +1399,20 @@
   
   .view-toggle {
     align-self: flex-start;
+  }
+
+  /* Adjust textarea sizes for mobile in row view */
+  .row-title-input,
+  .row-description-input {
+    font-size: 0.8rem;
+    padding: 4px 6px;
+  }
+
+  .row-title-input {
+    min-height: 35px;
+  }
+
+  .row-description-input {
+    min-height: 50px;
   }
 }

@@ -67,7 +67,7 @@ function PreviewSection({ categoryFields = [] }) {
     setPreviewImage(null);
   };
 
-  // Add the updateListingFieldSelection function here
+// Add the updateListingFieldSelection function here
   const updateListingFieldSelection = (listingIndex, fieldLabel, newValue) => {
     // Get the current response data
     const updatedResponseData = [...responseData];
@@ -86,6 +86,28 @@ function PreviewSection({ categoryFields = [] }) {
     
     // Update the listing with the new field selections
     currentListing.storedFieldSelections = currentStoredSelections;
+    updatedResponseData[listingIndex] = currentListing;
+    
+    // Update the state
+    dispatch({
+      type: 'SET_RESPONSE_DATA',
+      payload: updatedResponseData
+    });
+  };
+
+  // Add function to update title and description
+  const updateListingContent = (listingIndex, field, newValue) => {
+    // Get the current response data
+    const updatedResponseData = [...responseData];
+    
+    // Make sure the listing exists
+    if (!updatedResponseData[listingIndex]) {
+      return;
+    }
+    
+    // Update the specific field (title or description)
+    const currentListing = { ...updatedResponseData[listingIndex] };
+    currentListing[field] = newValue;
     updatedResponseData[listingIndex] = currentListing;
     
     // Update the state

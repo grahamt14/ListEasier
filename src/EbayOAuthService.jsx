@@ -29,7 +29,7 @@ class EbayOAuthService {
     
     this.credentials = {
       clientId: 'DavidJac-ListEasi-SBX-50e7167ce-0d788b93',
-      clientSecret: 'SBX-0e7167ce0d788b93-8b89-4ac9-ba7f-5818',
+      clientSecret: 'SBX-0e7167ce5ea2-8b89-4ac9-ba7f-5818',
       redirectUri: 'https://main.dhpq8vit86dyp.amplifyapp.com/ebay/callback',
       ruName: 'David_Jacobs-DavidJac-ListEa-gkelan'
     };

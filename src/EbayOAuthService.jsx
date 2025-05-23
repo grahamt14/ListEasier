@@ -19,18 +19,17 @@ class EbayOAuthService {
     
     // Set environment (change to 'production' for live)
     this.environment = 'sandbox'; // or 'production'
-    
     // Your eBay app credentials - THESE NEED TO BE CONFIGURED PROPERLY
     this.credentials = {
       // Get these from your eBay Developer Account at https://developer.ebay.com/my/keys
-      clientId: process.env.REACT_APP_EBAY_CLIENT_ID || 'YOUR_ACTUAL_EBAY_CLIENT_ID',
-      clientSecret: process.env.REACT_APP_EBAY_CLIENT_SECRET || 'YOUR_ACTUAL_EBAY_CLIENT_SECRET',
+      clientId: process.env.REACT_APP_EBAY_CLIENT_ID || 'DavidJac-ListEasi-SBX-50e7167ce-0d788b93',
+      clientSecret: process.env.REACT_APP_EBAY_CLIENT_SECRET || 'SBX-0e7167ce5ea2-8b89-4ac9-ba7f-5818',
       
       // This MUST match EXACTLY what you configured in your eBay app
       redirectUri: process.env.REACT_APP_EBAY_REDIRECT_URI || window.location.origin + '/ebay/callback',
       
       // Get this from your eBay Developer Account - it's the RuName you created
-      ruName: process.env.REACT_APP_EBAY_RU_NAME || 'YOUR_ACTUAL_RU_NAME'
+      ruName: process.env.REACT_APP_EBAY_RU_NAME || 'David_Jacobs-DavidJac-ListEa-gkelan'
     };
     
     // Required scopes for business policies
@@ -76,6 +75,7 @@ class EbayOAuthService {
   isConfigured() {
     return this.configurationValid;
   }
+
 
   /**
    * Get configuration instructions for the user

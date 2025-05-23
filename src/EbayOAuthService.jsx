@@ -21,7 +21,7 @@ class EbayOAuthService {
     this.environment = 'sandbox'; // or 'production'
     
     // Lambda function URL for token exchange - UPDATE THIS WITH YOUR ACTUAL LAMBDA URL
-    this.lambdaTokenEndpoint = 'https://xospzjj5da.execute-api.us-east-2.amazonaws.com/prod';
+   this.lambdaTokenEndpoint = 'https://xospzjj5da.execute-api.us-east-2.amazonaws.com/prod/ebay-token-exchange';
     
     // Debug environment variables first
     console.log('Environment Variables Debug:');

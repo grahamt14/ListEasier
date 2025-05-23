@@ -1481,33 +1481,71 @@ function AppContent() {
     </div>
   );
 }
-// eBay Callback Handler Component
 const EbayCallback = () => {
   const { handleAuthCallback } = useEbayAuth();
 
   useEffect(() => {
+    console.log('=== EBAY CALLBACK COMPONENT MOUNTED ===');
+    console.log('Current URL:', window.location.href);
+    console.log('URL search params:', window.location.search);
+    console.log('URL pathname:', window.location.pathname);
+    
     const urlParams = new URLSearchParams(window.location.search);
     const authCode = urlParams.get('code');
     const error = urlParams.get('error');
+    const state = urlParams.get('state');
+    const errorDescription = urlParams.get('error_description');
+    
+    console.log('URL Parameters parsed:');
+    console.log('  code:', authCode);
+    console.log('  error:', error);
+    console.log('  state:', state);
+    console.log('  error_description:', errorDescription);
+    
+    // Log all URL parameters for debugging
+    console.log('All URL parameters:');
+    for (const [key, value] of urlParams) {
+      console.log(`  ${key}: ${value}`);
+    }
 
     if (error) {
-      console.error('eBay OAuth error:', error);
+      console.error('=== OAUTH ERROR RECEIVED ===');
+      console.error('Error:', error);
+      console.error('Error Description:', errorDescription);
+      
       // Redirect back to main app with error
-      window.location.href = '/?ebay_error=' + encodeURIComponent(error);
+      const errorParam = encodeURIComponent(errorDescription || error);
+      console.log('Redirecting to main app with error:', errorParam);
+      window.location.href = '/?ebay_error=' + errorParam;
       return;
     }
 
     if (authCode) {
+      console.log('=== AUTHORIZATION CODE RECEIVED ===');
+      console.log('Authorization code:', authCode);
+      console.log('Authorization code length:', authCode.length);
+      console.log('State parameter:', state);
+      
+      console.log('Calling handleAuthCallback...');
       handleAuthCallback(authCode).then(success => {
+        console.log('handleAuthCallback completed, success:', success);
         if (success) {
+          console.log('Authentication successful, redirecting to main app');
           // Redirect back to main app on success
           window.location.href = '/?ebay_connected=true';
         } else {
+          console.log('Authentication failed, redirecting with error');
           // Redirect back with error
           window.location.href = '/?ebay_error=authentication_failed';
         }
+      }).catch(callbackError => {
+        console.error('handleAuthCallback threw an error:', callbackError);
+        window.location.href = '/?ebay_error=callback_error';
       });
     } else {
+      console.warn('=== NO CODE OR ERROR RECEIVED ===');
+      console.warn('This might indicate an issue with the OAuth flow');
+      console.warn('Redirecting back to main app');
       // No code or error, redirect back to main app
       window.location.href = '/';
     }
@@ -1525,6 +1563,9 @@ const EbayCallback = () => {
         <div className="spinner-circle"></div>
       </div>
       <p>Processing eBay authentication...</p>
+      <p style={{ fontSize: '0.8rem', color: '#666', marginTop: '1rem' }}>
+        Check the browser console for detailed debugging information
+      </p>
     </div>
   );
 };

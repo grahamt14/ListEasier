@@ -1,4 +1,4 @@
-// EbayAuthContext.jsx - Updated with better callback handling
+// EbayAuthContext.jsx - Updated with enhanced callback debugging
 import React, { createContext, useContext, useReducer, useEffect } from 'react';
 import EbayOAuthService from './EbayOAuthService';
 
@@ -166,17 +166,47 @@ export function EbayAuthProvider({ children }) {
   };
 
   const handleAuthCallback = async (authCode) => {
+    console.log('=== EBAY AUTH CALLBACK DEBUG ===');
+    console.log('handleAuthCallback called with code:', authCode);
+    console.log('Code length:', authCode?.length || 0);
+    console.log('Code first 10 chars:', authCode?.substring(0, 10) || 'undefined');
+    
+    if (!authCode) {
+      console.error('No authorization code provided to handleAuthCallback');
+      dispatch({ type: 'SET_ERROR', payload: 'No authorization code received' });
+      return false;
+    }
+
     dispatch({ type: 'SET_LOADING', payload: true });
+    dispatch({ type: 'CLEAR_ERROR' });
+    
     try {
-      console.log('Processing eBay auth callback with code:', authCode);
-      await ebayService.exchangeCodeForToken(authCode);
+      console.log('Calling ebayService.exchangeCodeForToken...');
+      console.log('EbayService configured:', ebayService.isConfigured());
+      
+      const tokenData = await ebayService.exchangeCodeForToken(authCode);
+      
+      console.log('Token exchange completed successfully');
+      console.log('Token data received:', {
+        hasAccessToken: !!tokenData.access_token,
+        hasRefreshToken: !!tokenData.refresh_token,
+        tokenType: tokenData.token_type,
+        expiresIn: tokenData.expires_in
+      });
+      
       dispatch({ type: 'SET_AUTHENTICATED', payload: true });
       await loadUserData();
-      console.log('eBay authentication successful');
+      console.log('eBay authentication completed successfully');
       return true;
     } catch (error) {
-      console.error('Auth callback error:', error);
-      dispatch({ type: 'SET_ERROR', payload: `Authentication failed: ${error.message}` });
+      console.error('=== AUTH CALLBACK ERROR ===');
+      console.error('Error type:', error.constructor.name);
+      console.error('Error message:', error.message);
+      console.error('Error stack:', error.stack);
+      
+      const errorMessage = error.message || 'Authentication failed';
+      console.error('Setting error message:', errorMessage);
+      dispatch({ type: 'SET_ERROR', payload: `Authentication failed: ${errorMessage}` });
       return false;
     } finally {
       dispatch({ type: 'SET_LOADING', payload: false });

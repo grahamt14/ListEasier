@@ -1,4 +1,4 @@
-// EbayOAuthService.js - Updated with proper configuration
+// EbayOAuthService.js - Updated with better debugging and error handling
 class EbayOAuthService {
   constructor() {
     // eBay API Configuration
@@ -19,25 +19,29 @@ class EbayOAuthService {
     
     // Set environment (change to 'production' for live)
     this.environment = 'sandbox'; // or 'production'
-    // Your eBay app credentials - THESE NEED TO BE CONFIGURED PROPERLY
+    
+    // Your eBay app credentials
     this.credentials = {
-      // Get these from your eBay Developer Account at https://developer.ebay.com/my/keys
-      clientId: process.env.REACT_APP_EBAY_CLIENT_ID || 'DavidJac-ListEasi-SBX-50e7167ce-0d788b93',
-      clientSecret: process.env.REACT_APP_EBAY_CLIENT_SECRET || 'SBX-0e7167ce5ea2-8b89-4ac9-ba7f-5818',
-      
-      // This MUST match EXACTLY what you configured in your eBay app
+      clientId: process.env.REACT_APP_EBAY_CLIENT_ID || 'YOUR_ACTUAL_EBAY_CLIENT_ID',
+      clientSecret: process.env.REACT_APP_EBAY_CLIENT_SECRET || 'YOUR_ACTUAL_EBAY_CLIENT_SECRET',
       redirectUri: process.env.REACT_APP_EBAY_REDIRECT_URI || window.location.origin + '/ebay/callback',
-      
-      // Get this from your eBay Developer Account - it's the RuName you created
-      ruName: process.env.REACT_APP_EBAY_RU_NAME || 'David_Jacobs-DavidJac-ListEa-gkelan'
+      ruName: process.env.REACT_APP_EBAY_RU_NAME || 'YOUR_ACTUAL_RU_NAME'
     };
     
-    // Required scopes for business policies
+    // Updated scopes - using more specific scopes that are commonly approved
     this.scopes = [
-      'https://api.ebay.com/oauth/api_scope/sell.account',
       'https://api.ebay.com/oauth/api_scope/sell.account.readonly',
       'https://api.ebay.com/oauth/api_scope/commerce.identity.readonly'
     ];
+    
+    // Debug logging
+    console.log('eBay OAuth Service Configuration:');
+    console.log('Environment:', this.environment);
+    console.log('Client ID:', this.credentials.clientId ? 'Set ✓' : 'Missing ✗');
+    console.log('Client Secret:', this.credentials.clientSecret ? 'Set ✓' : 'Missing ✗');
+    console.log('Redirect URI:', this.credentials.redirectUri);
+    console.log('RuName:', this.credentials.ruName ? 'Set ✓' : 'Missing ✗');
+    console.log('Scopes:', this.scopes);
     
     // Validate configuration on construction
     this.validateConfiguration();
@@ -47,12 +51,17 @@ class EbayOAuthService {
    * Validate that all required credentials are configured
    */
   validateConfiguration() {
-    const required = ['clientId', 'clientSecret', 'redirectUri', 'ruName'];
+    const required = ['clientId', 'clientSecret', 'redirectUri'];
     const missing = required.filter(key => 
       !this.credentials[key] || 
       this.credentials[key].startsWith('YOUR_') ||
       this.credentials[key] === ''
     );
+    
+    // RuName is sometimes optional depending on eBay app setup
+    if (!this.credentials.ruName || this.credentials.ruName.startsWith('YOUR_')) {
+      console.warn('RuName not set - this might be required depending on your eBay app configuration');
+    }
     
     if (missing.length > 0) {
       console.error('eBay OAuth Configuration Error: Missing or invalid credentials:', missing);
@@ -61,7 +70,6 @@ class EbayOAuthService {
         console.error(`- ${key}: ${this.credentials[key]}`);
       });
       
-      // Don't throw an error, just log it so the app doesn't crash
       this.configurationValid = false;
     } else {
       this.configurationValid = true;
@@ -76,28 +84,6 @@ class EbayOAuthService {
     return this.configurationValid;
   }
 
-
-  /**
-   * Get configuration instructions for the user
-   */
-  getConfigurationInstructions() {
-    return {
-      step1: "Go to https://developer.ebay.com/my/keys",
-      step2: "Create a new application or use an existing one",
-      step3: "Copy your Client ID and Client Secret",
-      step4: "Create a RuName (Redirect URL Name) with your callback URL",
-      step5: "Set environment variables or update the credentials in EbayOAuthService.js",
-      environment: this.environment,
-      redirectUri: this.credentials.redirectUri,
-      requiredEnvVars: [
-        'REACT_APP_EBAY_CLIENT_ID',
-        'REACT_APP_EBAY_CLIENT_SECRET', 
-        'REACT_APP_EBAY_REDIRECT_URI',
-        'REACT_APP_EBAY_RU_NAME'
-      ]
-    };
-  }
-
   /**
    * Get the current API URLs based on environment
    */
@@ -106,7 +92,7 @@ class EbayOAuthService {
   }
 
   /**
-   * Generate the eBay OAuth authorization URL
+   * Generate the eBay OAuth authorization URL with better parameter validation
    */
   generateAuthUrl(state = null) {
     if (!this.isConfigured()) {
@@ -114,21 +100,44 @@ class EbayOAuthService {
     }
 
     const urls = this.getApiUrls();
-    const params = new URLSearchParams({
+    
+    // Validate redirect URI format
+    if (!this.credentials.redirectUri.startsWith('http')) {
+      throw new Error('Redirect URI must be a valid HTTP/HTTPS URL');
+    }
+    
+    // Build parameters object
+    const params = {
       client_id: this.credentials.clientId,
       redirect_uri: this.credentials.redirectUri,
       response_type: 'code',
-      scope: this.scopes.join(' '),
-      ...(state && { state })
+      scope: this.scopes.join(' ')
+    };
+    
+    // Only add state if provided
+    if (state) {
+      params.state = state;
+    }
+    
+    // Debug the parameters being sent
+    console.log('eBay OAuth Parameters:');
+    console.log('Auth URL:', urls.authUrl);
+    console.log('Parameters:', params);
+    
+    // Create URL with proper encoding
+    const urlParams = new URLSearchParams();
+    Object.entries(params).forEach(([key, value]) => {
+      urlParams.append(key, value);
     });
-
-    const authUrl = `${urls.authUrl}?${params.toString()}`;
+    
+    const authUrl = `${urls.authUrl}?${urlParams.toString()}`;
     console.log('Generated eBay auth URL:', authUrl);
+    
     return authUrl;
   }
 
   /**
-   * Exchange authorization code for access token
+   * Exchange authorization code for access token with better error handling
    */
   async exchangeCodeForToken(authorizationCode) {
     if (!this.isConfigured()) {
@@ -139,29 +148,59 @@ class EbayOAuthService {
     
     try {
       console.log('Exchanging authorization code for token...');
+      console.log('Token URL:', urls.tokenUrl);
+      console.log('Authorization code:', authorizationCode);
+      
+      // Prepare the request body
+      const requestBody = new URLSearchParams({
+        grant_type: 'authorization_code',
+        code: authorizationCode,
+        redirect_uri: this.credentials.redirectUri
+      });
+      
+      console.log('Token exchange request body:', requestBody.toString());
+      
+      // Prepare headers
+      const headers = {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'Authorization': `Basic ${btoa(`${this.credentials.clientId}:${this.credentials.clientSecret}`)}`
+      };
+      
+      console.log('Token exchange headers:', {
+        'Content-Type': headers['Content-Type'],
+        'Authorization': 'Basic [REDACTED]'
+      });
       
       const response = await fetch(urls.tokenUrl, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/x-www-form-urlencoded',
-          'Authorization': `Basic ${btoa(`${this.credentials.clientId}:${this.credentials.clientSecret}`)}`
-        },
-        body: new URLSearchParams({
-          grant_type: 'authorization_code',
-          code: authorizationCode,
-          redirect_uri: this.credentials.redirectUri
-        })
+        headers: headers,
+        body: requestBody
       });
 
       const responseText = await response.text();
       console.log('Token exchange response status:', response.status);
-      console.log('Token exchange response:', responseText);
+      console.log('Token exchange response headers:', Object.fromEntries(response.headers.entries()));
+      console.log('Token exchange response body:', responseText);
 
       if (!response.ok) {
         let errorMessage = `Token exchange failed: ${response.status}`;
         try {
           const errorData = JSON.parse(responseText);
-          errorMessage += ` - ${errorData.error_description || errorData.error || responseText}`;
+          console.error('Parsed error data:', errorData);
+          
+          // Provide more specific error messages
+          if (errorData.error_description) {
+            errorMessage += ` - ${errorData.error_description}`;
+          }
+          
+          if (errorData.error_id === 'invalid_request') {
+            errorMessage += '\n\nPossible causes:\n';
+            errorMessage += '- Invalid redirect_uri (must match exactly what\'s configured in eBay)\n';
+            errorMessage += '- Invalid authorization code (may have expired)\n';
+            errorMessage += '- Invalid client credentials\n';
+            errorMessage += '- Missing or incorrect grant_type';
+          }
+          
         } catch (e) {
           errorMessage += ` - ${responseText}`;
         }
@@ -183,8 +222,6 @@ class EbayOAuthService {
    * Store tokens securely
    */
   storeTokens(tokenData) {
-    // In a real application, store these securely (encrypted, server-side)
-    // For demo purposes, using localStorage (NOT recommended for production)
     const tokens = {
       access_token: tokenData.access_token,
       refresh_token: tokenData.refresh_token,
@@ -261,7 +298,6 @@ class EbayOAuthService {
       return tokenData;
     } catch (error) {
       console.error('Error refreshing token:', error);
-      // Clear invalid tokens
       localStorage.removeItem('ebay_tokens');
       throw error;
     }
@@ -299,7 +335,7 @@ class EbayOAuthService {
     const defaultHeaders = {
       'Authorization': `Bearer ${accessToken}`,
       'Content-Type': 'application/json',
-      'X-EBAY-C-MARKETPLACE-ID': 'EBAY_US' // Default to US marketplace
+      'X-EBAY-C-MARKETPLACE-ID': 'EBAY_US'
     };
 
     const requestOptions = {
@@ -317,13 +353,11 @@ class EbayOAuthService {
       const response = await fetch(`${urls.apiUrl}${endpoint}`, requestOptions);
 
       if (response.status === 401) {
-        // Token might be invalid, try refreshing
         try {
           console.log('Received 401, attempting token refresh...');
           await this.refreshAccessToken();
           const newAccessToken = await this.getValidAccessToken();
           
-          // Retry with new token
           requestOptions.headers.Authorization = `Bearer ${newAccessToken}`;
           const retryResponse = await fetch(`${urls.apiUrl}${endpoint}`, requestOptions);
           
@@ -401,19 +435,6 @@ class EbayOAuthService {
   }
 
   /**
-   * Get user account information
-   */
-  async getUserAccount() {
-    try {
-      const response = await this.makeApiRequest('/sell/account/v1/privilege');
-      return response;
-    } catch (error) {
-      console.error('Error fetching user account:', error);
-      throw error;
-    }
-  }
-
-  /**
    * Check if user is authenticated
    */
   isAuthenticated() {
@@ -434,7 +455,6 @@ class EbayOAuthService {
    */
   async getUserProfile() {
     try {
-      // Get basic user info from identity API
       const response = await this.makeApiRequest('/commerce/identity/v1/user', {
         headers: {
           'X-EBAY-C-MARKETPLACE-ID': 'EBAY_US'

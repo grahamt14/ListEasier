@@ -20,8 +20,8 @@ class EbayOAuthService {
     // Set environment (change to 'production' for live)
     this.environment = 'sandbox'; // or 'production'
     
-    // Lambda function URL for token exchange - UPDATE THIS WITH YOUR ACTUAL LAMBDA URL
-   this.lambdaTokenEndpoint = 'https://xospzjj5da.execute-api.us-east-2.amazonaws.com/prod/ebay-token-exchange';
+    // Lambda function URL for token exchange - CORRECTED ENDPOINT TO MATCH API GATEWAY
+    this.lambdaTokenEndpoint = 'https://xospzjj5da.execute-api.us-east-2.amazonaws.com/prod/ebay-token-exchange';
     
     // Debug environment variables first
     console.log('Environment Variables Debug:');
@@ -216,22 +216,56 @@ class EbayOAuthService {
       const responseText = await response.text();
       console.log('Lambda response body:', responseText);
 
-      if (!response.ok) {
-        throw new Error(`Lambda function error: ${response.status} - ${responseText}`);
-      }
-
       let responseData;
       try {
         responseData = JSON.parse(responseText);
+        
+        // Check if response contains a nested JSON response (common issue with API Gateway)
+        if (responseData.body && typeof responseData.body === 'string') {
+          try {
+            const nestedBody = JSON.parse(responseData.body);
+            
+            // If we have a nested error, throw it
+            if (nestedBody.error) {
+              throw new Error(`Lambda function error: ${nestedBody.error}`);
+            }
+            
+            // Otherwise, try to use the nested body
+            responseData = nestedBody;
+          } catch (nestedError) {
+            // If parsing the nested body fails, continue with the original response
+            console.log('Could not parse nested body, using original response');
+          }
+        }
+        
+        // Check if direct error in response
+        if (responseData.error) {
+          throw new Error(`Token exchange failed: ${responseData.error}`);
+        }
+        
+        // If response is not OK, throw error
+        if (!response.ok) {
+          throw new Error(`Lambda function error: ${response.status} - ${responseText}`);
+        }
+        
+        // If success is explicitly false, throw error
+        if (responseData.success === false) {
+          throw new Error(`Token exchange failed: ${responseData.error || 'Unknown error'}`);
+        }
+        
+        // Ensure we have tokenData
+        if (!responseData.tokenData && !responseData.access_token) {
+          throw new Error('Token data missing from response');
+        }
+        
+        // Normalize response format
+        const tokenData = responseData.tokenData || responseData;
+        
       } catch (parseError) {
         throw new Error(`Invalid JSON response from Lambda: ${responseText}`);
       }
 
-      if (!responseData.success) {
-        throw new Error(`Token exchange failed: ${responseData.error}`);
-      }
-
-      const tokenData = responseData.tokenData;
+      const tokenData = responseData.tokenData || responseData;
       console.log('=== TOKEN EXCHANGE SUCCESS ===');
       console.log('Token type:', tokenData.token_type);
       console.log('Expires in:', tokenData.expires_in, 'seconds');

@@ -8,7 +8,7 @@ import { fromCognitoIdentityPool } from "@aws-sdk/credential-provider-cognito-id
 import { AppStateProvider, useAppState } from './StateContext';
 import { EbayAuthProvider, useEbayAuth } from './EbayAuthContext';
 
-// PreviewSection component - Updated with eBay integration
+// Updated PreviewSection component with editable title and description
 function PreviewSection({ categoryFields = [] }) {
   const { state, dispatch } = useAppState();
   const { selectedPolicies } = useEbayAuth(); // Get eBay policies
@@ -67,7 +67,7 @@ function PreviewSection({ categoryFields = [] }) {
     setPreviewImage(null);
   };
 
-// Add the updateListingFieldSelection function here
+  // Add the updateListingFieldSelection function here
   const updateListingFieldSelection = (listingIndex, fieldLabel, newValue) => {
     // Get the current response data
     const updatedResponseData = [...responseData];
@@ -135,165 +135,167 @@ function PreviewSection({ categoryFields = [] }) {
     });
   };
 
- const generateCSVContent = () => {
-  // Debug output to help diagnose data structure issues
-  console.log("Generating CSV with data:", {
-    responseData: responseData,
-    imageGroups: imageGroups,
-    s3ImageGroups: s3ImageGroups,
-    groupMetadata: groupMetadata,
-    selectedPolicies: selectedPolicies
-  });
-  
-  // Validate that we have processed data
-  if (!responseData || responseData.length === 0) {
-    console.error("Missing response data");
-    alert("Error: No listing data available. Please generate listings first.");
-    return null;
-  }
-  
-  // Find valid listings - groups that have been successfully processed
-  const validIndices = responseData
-    .map((response, index) => ({ response, index }))
-    .filter(item => 
-      item.response && 
-      !item.response.error && 
-      imageGroups[item.index] && 
-      imageGroups[item.index].length > 0
-    );
-  
-  if (validIndices.length === 0) {
-    alert("No valid listings to download!");
-    return null;
-  }
-  
-  // Gather all unique category field labels across all listings
-  const allCategoryFieldLabels = new Set();
-  validIndices.forEach(({ response }) => {
-    if (response.storedFieldSelections) {
-      Object.keys(response.storedFieldSelections).forEach(label => {
-        // Include all field labels, regardless of their values
-        if (label !== 'price' && label !== 'sku') {
-          allCategoryFieldLabels.add(label);
-        }
-      });
+  // ... (keep all the existing CSV generation and download functions unchanged)
+
+  const generateCSVContent = () => {
+    // Debug output to help diagnose data structure issues
+    console.log("Generating CSV with data:", {
+      responseData: responseData,
+      imageGroups: imageGroups,
+      s3ImageGroups: s3ImageGroups,
+      groupMetadata: groupMetadata,
+      selectedPolicies: selectedPolicies
+    });
+    
+    // Validate that we have processed data
+    if (!responseData || responseData.length === 0) {
+      console.error("Missing response data");
+      alert("Error: No listing data available. Please generate listings first.");
+      return null;
     }
-  });
-  
-  // Create header including standard fields and all category fields
-  let header = `#INFO,Version=0.0.2,Template= eBay-draft-listings-template_US,,,,,,,,
+    
+    // Find valid listings - groups that have been successfully processed
+    const validIndices = responseData
+      .map((response, index) => ({ response, index }))
+      .filter(item => 
+        item.response && 
+        !item.response.error && 
+        imageGroups[item.index] && 
+        imageGroups[item.index].length > 0
+      );
+    
+    if (validIndices.length === 0) {
+      alert("No valid listings to download!");
+      return null;
+    }
+    
+    // Gather all unique category field labels across all listings
+    const allCategoryFieldLabels = new Set();
+    validIndices.forEach(({ response }) => {
+      if (response.storedFieldSelections) {
+        Object.keys(response.storedFieldSelections).forEach(label => {
+          // Include all field labels, regardless of their values
+          if (label !== 'price' && label !== 'sku') {
+            allCategoryFieldLabels.add(label);
+          }
+        });
+      }
+    });
+    
+    // Create header including standard fields and all category fields
+    let header = `#INFO,Version=0.0.2,Template= eBay-draft-listings-template_US,,,,,,,,
 #INFO Action and Category ID are required fields. 1) Set Action to Draft 2) Please find the category ID for your listings here: https://pages.ebay.com/sellerinformation/news/categorychanges.html,,,,,,,,,,
 "#INFO After you've successfully uploaded your draft from the Seller Hub Reports tab, complete your drafts to active listings here: https://www.ebay.com/sh/lst/drafts",,,,,,,,,,
 #INFO,,,,,,,,,,
 Action(SiteID=US|Country=US|Currency=USD|Version=1193|CC=UTF-8),Custom label (SKU),Category ID,Title,UPC,Price,Quantity,Item photo URL,Condition ID,Description,Format`;
 
-  // Add category fields to header
-  if (allCategoryFieldLabels.size > 0) {
-    allCategoryFieldLabels.forEach(field => {
-      header += `,${field}`;
-    });
-  }
-
-  // Add eBay policy columns if policies are selected
-  if (selectedPolicies.paymentPolicyId) {
-    header += ',Payment policy name';
-  }
-  if (selectedPolicies.fulfillmentPolicyId) {
-    header += ',Shipping policy name';
-  }
-  if (selectedPolicies.returnPolicyId) {
-    header += ',Return policy name';
-  }
-  
-  header += '\n';
-
-  let csvContent = header;
-  let missingImageGroups = [];
-
-  // Process each valid listing with the correct images
-  validIndices.forEach(({ response, index }) => {
-    const title = response.title ? response.title.replace(/\r?\n|\r/g, ' ').replace(/"/g, '""') : '';
-    const description = response.description ? response.description.replace(/\r?\n|\r/g, ' ').replace(/"/g, '""') : '';
-    
-    // Get the S3 image URLs that correspond to this group
-    let photoUrls = [];
-    
-    // Check if we have valid S3 image URLs for this group
-    if (s3ImageGroups && 
-        s3ImageGroups[index] && 
-        Array.isArray(s3ImageGroups[index]) && 
-        s3ImageGroups[index].length > 0) {
-      
-      // Filter to keep only valid URLs
-      photoUrls = s3ImageGroups[index].filter(url => 
-        url && 
-        typeof url === 'string' && 
-        (url.includes('amazonaws.com') || url.startsWith('http'))
-      );
-      
-      console.log(`Found ${photoUrls.length} photo URLs for listing ${index}`);
-    } else {
-      console.warn(`No S3 image group found for listing ${index}, using placeholders`);
-    }
-    
-    // If no valid URLs, use placeholders
-    if (photoUrls.length === 0) {
-      console.warn(`No valid photo URLs for listing ${index}, using placeholder`);
-      missingImageGroups.push(index);
-      
-      // Create placeholder URLs for each image in the group
-      photoUrls = Array.from(
-        { length: imageGroups[index].length }, 
-        (_, i) => `https://via.placeholder.com/800x600?text=Image+Not+Available+Group+${index+1}+Image+${i+1}`
-      );
-    }
-    
-    const formattedUrls = photoUrls.filter(url => url).join('||');
-    
-    // Get current metadata for this group (which may have been updated by the user)
-    const metadata = groupMetadata && groupMetadata[index] 
-      ? groupMetadata[index] 
-      : { price: price, sku: sku };
-    
-    const groupPrice = metadata.price || price || '9.99';
-    const groupSku = metadata.sku || sku || `SKU-${index+1}`;
-    
-    // Start with the standard fields using current metadata values
-    let line = `Draft,${groupSku},${categoryID},"${title}",,${groupPrice},1,${formattedUrls},3000,"${description}",FixedPrice`;
-    
-    // Add category fields to the line using the stored selections for this listing
+    // Add category fields to header
     if (allCategoryFieldLabels.size > 0) {
-      const listingFieldSelections = response.storedFieldSelections || {};
-      
       allCategoryFieldLabels.forEach(field => {
-        // Include all fields, even those with default values
-        const fieldValue = listingFieldSelections[field] || "-- Select --";
-        line += `,"${fieldValue.replace(/"/g, '""')}"`;
+        header += `,${field}`;
       });
     }
 
-    // Add eBay policy IDs if selected
+    // Add eBay policy columns if policies are selected
     if (selectedPolicies.paymentPolicyId) {
-      line += `,"${selectedPolicies.paymentPolicyId}"`;
+      header += ',Payment policy name';
     }
     if (selectedPolicies.fulfillmentPolicyId) {
-      line += `,"${selectedPolicies.fulfillmentPolicyId}"`;
+      header += ',Shipping policy name';
     }
     if (selectedPolicies.returnPolicyId) {
-      line += `,"${selectedPolicies.returnPolicyId}"`;
+      header += ',Return policy name';
     }
     
-    csvContent += `${line}\n`;
-  });
-  
-  // Show a single alert for all missing images
-  if (missingImageGroups.length > 0) {
-    const groupNumbers = missingImageGroups.map(idx => idx + 1).join(", ");
-    alert(`Warning: ${missingImageGroups.length} listings are missing valid image URLs (groups: ${groupNumbers}). The CSV may not work correctly on eBay.`);
-  }
-  
-  return csvContent;
-};
+    header += '\n';
+
+    let csvContent = header;
+    let missingImageGroups = [];
+
+    // Process each valid listing with the correct images
+    validIndices.forEach(({ response, index }) => {
+      const title = response.title ? response.title.replace(/\r?\n|\r/g, ' ').replace(/"/g, '""') : '';
+      const description = response.description ? response.description.replace(/\r?\n|\r/g, ' ').replace(/"/g, '""') : '';
+      
+      // Get the S3 image URLs that correspond to this group
+      let photoUrls = [];
+      
+      // Check if we have valid S3 image URLs for this group
+      if (s3ImageGroups && 
+          s3ImageGroups[index] && 
+          Array.isArray(s3ImageGroups[index]) && 
+          s3ImageGroups[index].length > 0) {
+        
+        // Filter to keep only valid URLs
+        photoUrls = s3ImageGroups[index].filter(url => 
+          url && 
+          typeof url === 'string' && 
+          (url.includes('amazonaws.com') || url.startsWith('http'))
+        );
+        
+        console.log(`Found ${photoUrls.length} photo URLs for listing ${index}`);
+      } else {
+        console.warn(`No S3 image group found for listing ${index}, using placeholders`);
+      }
+      
+      // If no valid URLs, use placeholders
+      if (photoUrls.length === 0) {
+        console.warn(`No valid photo URLs for listing ${index}, using placeholder`);
+        missingImageGroups.push(index);
+        
+        // Create placeholder URLs for each image in the group
+        photoUrls = Array.from(
+          { length: imageGroups[index].length }, 
+          (_, i) => `https://via.placeholder.com/800x600?text=Image+Not+Available+Group+${index+1}+Image+${i+1}`
+        );
+      }
+      
+      const formattedUrls = photoUrls.filter(url => url).join('||');
+      
+      // Get current metadata for this group (which may have been updated by the user)
+      const metadata = groupMetadata && groupMetadata[index] 
+        ? groupMetadata[index] 
+        : { price: price, sku: sku };
+      
+      const groupPrice = metadata.price || price || '9.99';
+      const groupSku = metadata.sku || sku || `SKU-${index+1}`;
+      
+      // Start with the standard fields using current metadata values
+      let line = `Draft,${groupSku},${categoryID},"${title}",,${groupPrice},1,${formattedUrls},3000,"${description}",FixedPrice`;
+      
+      // Add category fields to the line using the stored selections for this listing
+      if (allCategoryFieldLabels.size > 0) {
+        const listingFieldSelections = response.storedFieldSelections || {};
+        
+        allCategoryFieldLabels.forEach(field => {
+          // Include all fields, even those with default values
+          const fieldValue = listingFieldSelections[field] || "-- Select --";
+          line += `,"${fieldValue.replace(/"/g, '""')}"`;
+        });
+      }
+
+      // Add eBay policy IDs if selected
+      if (selectedPolicies.paymentPolicyId) {
+        line += `,"${selectedPolicies.paymentPolicyId}"`;
+      }
+      if (selectedPolicies.fulfillmentPolicyId) {
+        line += `,"${selectedPolicies.fulfillmentPolicyId}"`;
+      }
+      if (selectedPolicies.returnPolicyId) {
+        line += `,"${selectedPolicies.returnPolicyId}"`;
+      }
+      
+      csvContent += `${line}\n`;
+    });
+    
+    // Show a single alert for all missing images
+    if (missingImageGroups.length > 0) {
+      const groupNumbers = missingImageGroups.map(idx => idx + 1).join(", ");
+      alert(`Warning: ${missingImageGroups.length} listings are missing valid image URLs (groups: ${groupNumbers}). The CSV may not work correctly on eBay.`);
+    }
+    
+    return csvContent;
+  };
 
   const downloadListingsAsCsv = () => {
     const csvContent = generateCSVContent();
@@ -318,336 +320,375 @@ Action(SiteID=US|Country=US|Currency=USD|Version=1193|CC=UTF-8),Custom label (SK
     }
   };
 
- const downloadSingleListing = (groupIndex) => {
-  const listing = responseData[groupIndex];
-  if (!listing || listing.error) {
-    alert("No valid listing to download!");
-    return;
-  }
-  
-  // Get the stored field selections for this listing
-  const listingFieldSelections = listing.storedFieldSelections || {};
-  
-  // Get the current group metadata for price and SKU
-  const metadata = groupMetadata && groupMetadata[groupIndex] 
-    ? groupMetadata[groupIndex] 
-    : { price: price || '', sku: sku || '' };
-  
-  const groupPrice = metadata.price || price || '9.99';
-  const groupSku = metadata.sku || sku || `SKU-${groupIndex+1}`;
-  
-  // Get the correct S3 image URLs for this specific group
-  let photoUrls = [];
-  
-  // Check if we have valid S3 image URLs for this group
-  if (s3ImageGroups && 
-      s3ImageGroups[groupIndex] && 
-      Array.isArray(s3ImageGroups[groupIndex]) && 
-      s3ImageGroups[groupIndex].length > 0) {
+  const downloadSingleListing = (groupIndex) => {
+    const listing = responseData[groupIndex];
+    if (!listing || listing.error) {
+      alert("No valid listing to download!");
+      return;
+    }
     
-    photoUrls = s3ImageGroups[groupIndex].filter(url => 
-      url && 
-      typeof url === 'string' && 
-      (url.includes('amazonaws.com') || url.startsWith('http'))
+    // Get the stored field selections for this listing
+    const listingFieldSelections = listing.storedFieldSelections || {};
+    
+    // Get the current group metadata for price and SKU
+    const metadata = groupMetadata && groupMetadata[groupIndex] 
+      ? groupMetadata[groupIndex] 
+      : { price: price || '', sku: sku || '' };
+    
+    const groupPrice = metadata.price || price || '9.99';
+    const groupSku = metadata.sku || sku || `SKU-${groupIndex+1}`;
+    
+    // Get the correct S3 image URLs for this specific group
+    let photoUrls = [];
+    
+    // Check if we have valid S3 image URLs for this group
+    if (s3ImageGroups && 
+        s3ImageGroups[groupIndex] && 
+        Array.isArray(s3ImageGroups[groupIndex]) && 
+        s3ImageGroups[groupIndex].length > 0) {
+      
+      photoUrls = s3ImageGroups[groupIndex].filter(url => 
+        url && 
+        typeof url === 'string' && 
+        (url.includes('amazonaws.com') || url.startsWith('http'))
+      );
+      
+      console.log(`Found ${photoUrls.length} photo URLs for single listing ${groupIndex}:`, photoUrls);
+    } else {
+      console.warn(`No S3 image group found for listing ${groupIndex}, using placeholders`);
+    }
+    
+    // If no valid URLs found, use placeholders for each image in the group
+    if (photoUrls.length === 0) {
+      console.warn(`No valid photo URLs for listing ${groupIndex}, using placeholders`);
+      alert(`Warning: Listing in Group ${groupIndex+1} has no valid image URLs. The CSV may not work correctly on eBay.`);
+      
+      // Create placeholder URLs for each image in the group
+      photoUrls = Array.from(
+        { length: imageGroups[groupIndex].length }, 
+        (_, i) => `https://via.placeholder.com/800x600?text=Image+Not+Available+Group+${groupIndex+1}+Image+${i+1}`
+      );
+    }
+    
+    // Get all field labels from stored selections (including those with default values)
+    const selectedFields = Object.keys(listingFieldSelections).filter(label => 
+      label !== 'price' && label !== 'sku'
     );
     
-    console.log(`Found ${photoUrls.length} photo URLs for single listing ${groupIndex}:`, photoUrls);
-  } else {
-    console.warn(`No S3 image group found for listing ${groupIndex}, using placeholders`);
-  }
-  
-  // If no valid URLs found, use placeholders for each image in the group
-  if (photoUrls.length === 0) {
-    console.warn(`No valid photo URLs for listing ${groupIndex}, using placeholders`);
-    alert(`Warning: Listing in Group ${groupIndex+1} has no valid image URLs. The CSV may not work correctly on eBay.`);
-    
-    // Create placeholder URLs for each image in the group
-    photoUrls = Array.from(
-      { length: imageGroups[groupIndex].length }, 
-      (_, i) => `https://via.placeholder.com/800x600?text=Image+Not+Available+Group+${groupIndex+1}+Image+${i+1}`
-    );
-  }
-  
-  // Get all field labels from stored selections (including those with default values)
-  const selectedFields = Object.keys(listingFieldSelections).filter(label => 
-    label !== 'price' && label !== 'sku'
-  );
-  
-  let header = `#INFO,Version=0.0.2,Template= eBay-draft-listings-template_US,,,,,,,,
+    let header = `#INFO,Version=0.0.2,Template= eBay-draft-listings-template_US,,,,,,,,
 #INFO Action and Category ID are required fields. 1) Set Action to Draft 2) Please find the category ID for your listings here: https://pages.ebay.com/sellerinformation/news/categorychanges.html,,,,,,,,,,
 "#INFO After you've successfully uploaded your draft from the Seller Hub Reports tab, complete your drafts to active listings here: https://www.ebay.com/sh/lst/drafts",,,,,,,,,,
 #INFO,,,,,,,,,,
 Action(SiteID=US|Country=US|Currency=USD|Version=1193|CC=UTF-8),Custom label (SKU),Category ID,Title,UPC,Price,Quantity,Item photo URL,Condition ID,Description,Format`;
 
-  // Add category fields to header
-  if (selectedFields.length > 0) {
-    selectedFields.forEach(field => {
-      header += `,${field}`;
-    });
-  }
-
-  // Add eBay policy columns if policies are selected
-  if (selectedPolicies.paymentPolicyId) {
-    header += ',Payment policy name';
-  }
-  if (selectedPolicies.fulfillmentPolicyId) {
-    header += ',Shipping policy name';
-  }
-  if (selectedPolicies.returnPolicyId) {
-    header += ',Return policy name';
-  }
-  
-  header += '\n';
-
-  const title = listing.title ? listing.title.replace(/\r?\n|\r/g, ' ').replace(/"/g, '""') : '';
-  const formattedUrls = photoUrls.filter(url => url).join('||');
-  const description = listing.description ? listing.description.replace(/\r?\n|\r/g, ' ').replace(/"/g, '""') : '';
-  
-  // Start with standard fields using the current metadata values
-  let line = `Draft,${groupSku},${categoryID},"${title}",,${groupPrice},1,${formattedUrls},3000,"${description}",FixedPrice`;
-  
-  // Add category fields to the line (including those with default values)
-  if (selectedFields.length > 0) {
-    selectedFields.forEach(field => {
-      const fieldValue = listingFieldSelections[field] || "-- Select --";
-      line += `,"${fieldValue.replace(/"/g, '""')}"`;
-    });
-  }
-
-  // Add eBay policy IDs if selected
-  if (selectedPolicies.paymentPolicyId) {
-    line += `,"${selectedPolicies.paymentPolicyId}"`;
-  }
-  if (selectedPolicies.fulfillmentPolicyId) {
-    line += `,"${selectedPolicies.fulfillmentPolicyId}"`;
-  }
-  if (selectedPolicies.returnPolicyId) {
-    line += `,"${selectedPolicies.returnPolicyId}"`;
-  }
-  
-  const csvContent = header + line + '\n';
-  
-  // Create and download the CSV
-  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-  const csvFileName = `listing_group_${groupIndex+1}_${new Date().toISOString().split('T')[0]}.csv`;
-  
-  if (navigator.msSaveBlob) {
-    navigator.msSaveBlob(blob, csvFileName);
-  } else {
-    const link = document.createElement("a");
-    if (link.download !== undefined) {
-      const url = URL.createObjectURL(blob);
-      link.setAttribute("href", url);
-      link.setAttribute("download", csvFileName);
-      link.style.visibility = "hidden";
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
+    // Add category fields to header
+    if (selectedFields.length > 0) {
+      selectedFields.forEach(field => {
+        header += `,${field}`;
+      });
     }
-  }
-};
 
- const renderResponseData = (index) => {
-  const response = responseData[index];
-  if (!response) return null;
-  
-  // Get group metadata for this listing
-  const metadata = groupMetadata && groupMetadata[index] 
-    ? groupMetadata[index] 
-    : { price: price || '', sku: sku || '' };
-  
-  // Group-specific price and SKU or fall back to global settings
-  const groupPrice = metadata.price || price || '';
-  const groupSku = metadata.sku || sku || '';
-  
-  // Use stored field selections if available, otherwise fall back to current state
-  const listingFieldSelections = response.storedFieldSelections || fieldSelections;
-  
-  if (response.error) {
+    // Add eBay policy columns if policies are selected
+    if (selectedPolicies.paymentPolicyId) {
+      header += ',Payment policy name';
+    }
+    if (selectedPolicies.fulfillmentPolicyId) {
+      header += ',Shipping policy name';
+    }
+    if (selectedPolicies.returnPolicyId) {
+      header += ',Return policy name';
+    }
+    
+    header += '\n';
+
+    const title = listing.title ? listing.title.replace(/\r?\n|\r/g, ' ').replace(/"/g, '""') : '';
+    const formattedUrls = photoUrls.filter(url => url).join('||');
+    const description = listing.description ? listing.description.replace(/\r?\n|\r/g, ' ').replace(/"/g, '""') : '';
+    
+    // Start with standard fields using the current metadata values
+    let line = `Draft,${groupSku},${categoryID},"${title}",,${groupPrice},1,${formattedUrls},3000,"${description}",FixedPrice`;
+    
+    // Add category fields to the line (including those with default values)
+    if (selectedFields.length > 0) {
+      selectedFields.forEach(field => {
+        const fieldValue = listingFieldSelections[field] || "-- Select --";
+        line += `,"${fieldValue.replace(/"/g, '""')}"`;
+      });
+    }
+
+    // Add eBay policy IDs if selected
+    if (selectedPolicies.paymentPolicyId) {
+      line += `,"${selectedPolicies.paymentPolicyId}"`;
+    }
+    if (selectedPolicies.fulfillmentPolicyId) {
+      line += `,"${selectedPolicies.fulfillmentPolicyId}"`;
+    }
+    if (selectedPolicies.returnPolicyId) {
+      line += `,"${selectedPolicies.returnPolicyId}"`;
+    }
+    
+    const csvContent = header + line + '\n';
+    
+    // Create and download the CSV
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const csvFileName = `listing_group_${groupIndex+1}_${new Date().toISOString().split('T')[0]}.csv`;
+    
+    if (navigator.msSaveBlob) {
+      navigator.msSaveBlob(blob, csvFileName);
+    } else {
+      const link = document.createElement("a");
+      if (link.download !== undefined) {
+        const url = URL.createObjectURL(blob);
+        link.setAttribute("href", url);
+        link.setAttribute("download", csvFileName);
+        link.style.visibility = "hidden";
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+      }
+    }
+  };
+
+  // Updated renderResponseData function with editable title and description
+  const renderResponseData = (index) => {
+    const response = responseData[index];
+    if (!response) return null;
+    
+    // Get group metadata for this listing
+    const metadata = groupMetadata && groupMetadata[index] 
+      ? groupMetadata[index] 
+      : { price: price || '', sku: sku || '' };
+    
+    // Group-specific price and SKU or fall back to global settings
+    const groupPrice = metadata.price || price || '';
+    const groupSku = metadata.sku || sku || '';
+    
+    // Use stored field selections if available, otherwise fall back to current state
+    const listingFieldSelections = response.storedFieldSelections || fieldSelections;
+    
+    if (response.error) {
+      return (
+        <div className="response-error">
+          <p style={{ color: '#000' }}>Error: {response.error}</p>
+          {response.raw_content && <p style={{ color: '#000' }}>Raw content: {response.raw_content}</p>}
+        </div>
+      );
+    }
+    
+    // Function to update price for this specific listing
+    const updateListingPrice = (newPrice) => {
+      const updatedMetadata = [...(groupMetadata || [])];
+      while (updatedMetadata.length <= index) {
+        updatedMetadata.push(null);
+      }
+      updatedMetadata[index] = {
+        ...(updatedMetadata[index] || {}),
+        price: newPrice
+      };
+      dispatch({ type: 'UPDATE_GROUP_METADATA', payload: updatedMetadata });
+    };
+    
+    // Function to update SKU for this specific listing
+    const updateListingSku = (newSku) => {
+      const updatedMetadata = [...(groupMetadata || [])];
+      while (updatedMetadata.length <= index) {
+        updatedMetadata.push(null);
+      }
+      updatedMetadata[index] = {
+        ...(updatedMetadata[index] || {}),
+        sku: newSku
+      };
+      dispatch({ type: 'UPDATE_GROUP_METADATA', payload: updatedMetadata });
+    };
+    
     return (
-      <div className="response-error">
-        <p style={{ color: '#000' }}>Error: {response.error}</p>
-        {response.raw_content && <p style={{ color: '#000' }}>Raw content: {response.raw_content}</p>}
-      </div>
-    );
-  }
-  
-  // Function to update price for this specific listing
-  const updateListingPrice = (newPrice) => {
-    const updatedMetadata = [...(groupMetadata || [])];
-    while (updatedMetadata.length <= index) {
-      updatedMetadata.push(null);
-    }
-    updatedMetadata[index] = {
-      ...(updatedMetadata[index] || {}),
-      price: newPrice
-    };
-    dispatch({ type: 'UPDATE_GROUP_METADATA', payload: updatedMetadata });
-  };
-  
-  // Function to update SKU for this specific listing
-  const updateListingSku = (newSku) => {
-    const updatedMetadata = [...(groupMetadata || [])];
-    while (updatedMetadata.length <= index) {
-      updatedMetadata.push(null);
-    }
-    updatedMetadata[index] = {
-      ...(updatedMetadata[index] || {}),
-      sku: newSku
-    };
-    dispatch({ type: 'UPDATE_GROUP_METADATA', payload: updatedMetadata });
-  };
-  
-  return (
-    <div className="response-data">
-      <h4 style={{ color: '#000' }}>Generated Listing</h4>
-      <div className="response-fields">
-        {/* Display title and description first */}
-        {response.title && (
-          <div className="response-field primary-field">
-            <strong style={{ color: '#000' }}>Title:</strong>
-            <span style={{ color: '#000' }}>{response.title}</span>
-          </div>
-        )}
-        {response.description && (
-          <div className="response-field primary-field">
-            <strong style={{ color: '#000' }}>Description:</strong>
-            <span style={{ color: '#000' }}>{response.description}</span>
-          </div>
-        )}
-        
-        {/* Add other response fields excluding title, description and stored fields */}
-        {Object.entries(response)
-          .filter(([key]) => 
-            key !== 'title' && 
-            key !== 'description' && 
-            key !== 'storedFieldSelections' && 
-            !key.startsWith('error') && 
-            !key.startsWith('raw_')
-          )
-          .map(([key, value]) => (
-            <div key={key} className="response-field">
-              <strong style={{ color: '#000' }}>
-                {key.replace(/_/g, ' ').replace(/^\w/, c => c.toUpperCase())}:
-              </strong>
-              <span style={{ color: '#000' }}>{value}</span>
+      <div className="response-data">
+        <h4 style={{ color: '#000' }}>Generated Listing</h4>
+        <div className="response-fields">
+          {/* Editable title field */}
+          {response.title !== undefined && (
+            <div className="response-field primary-field editable-title-field">
+              <strong style={{ color: '#000' }}>Title:</strong>
+              <textarea
+                value={response.title || ''}
+                onChange={(e) => updateListingContent(index, 'title', e.target.value)}
+                placeholder="Enter title"
+                className="editable-title-input"
+                style={{
+                  width: '100%',
+                  minHeight: '60px',
+                  padding: '8px 12px',
+                  border: '1px solid #ccc',
+                  borderRadius: '4px',
+                  fontSize: '0.9rem',
+                  backgroundColor: '#fff',
+                  color: '#000',
+                  resize: 'vertical',
+                  fontFamily: 'inherit',
+                  lineHeight: '1.4'
+                }}
+              />
             </div>
-        ))}
-        
-        {/* Add category fields as editable metadata, including price and SKU */}
-        <div className="category-fields-metadata">
-          <h5 style={{ margin: '10px 0 5px 0', color: '#000' }}>Item Details</h5>
+          )}
           
-          {/* Make price and SKU editable */}
-          <div className="response-field listing-metadata editable-field">
-            <strong style={{ color: '#000' }}>Price:</strong>
-            <input
-              type="text"
-              value={groupPrice}
-              onChange={(e) => updateListingPrice(e.target.value)}
-              placeholder="Enter price"
-              style={{
-                marginLeft: '8px',
-                padding: '4px 8px',
-                border: '1px solid #ccc',
-                borderRadius: '4px',
-                backgroundColor: '#fff',
-                color: '#000',
-                fontSize: '0.9rem',
-                minWidth: '100px'
-              }}
-            />
-          </div>
-          <div className="response-field listing-metadata editable-field">
-            <strong style={{ color: '#000' }}>SKU:</strong>
-            <input
-              type="text"
-              value={groupSku}
-              onChange={(e) => updateListingSku(e.target.value)}
-              placeholder="Enter SKU"
-              style={{
-                marginLeft: '8px',
-                padding: '4px 8px',
-                border: '1px solid #ccc',
-                borderRadius: '4px',
-                backgroundColor: '#fff',
-                color: '#000',
-                fontSize: '0.9rem',
-                minWidth: '100px'
-              }}
-            />
-          </div>
+          {/* Editable description field */}
+          {response.description !== undefined && (
+            <div className="response-field primary-field editable-description-field">
+              <strong style={{ color: '#000' }}>Description:</strong>
+              <textarea
+                value={response.description || ''}
+                onChange={(e) => updateListingContent(index, 'description', e.target.value)}
+                placeholder="Enter description"
+                className="editable-description-input"
+                style={{
+                  width: '100%',
+                  minHeight: '120px',
+                  padding: '8px 12px',
+                  border: '1px solid #ccc',
+                  borderRadius: '4px',
+                  fontSize: '0.9rem',
+                  backgroundColor: '#fff',
+                  color: '#000',
+                  resize: 'vertical',
+                  fontFamily: 'inherit',
+                  lineHeight: '1.4'
+                }}
+              />
+            </div>
+          )}
           
-          {/* Add ALL category fields from the stored selections as editable fields */}
-          {Object.entries(listingFieldSelections).map(([label, value]) => {
-            // Display ALL fields, including those with default values, but make them editable
-            if (label !== 'price' && label !== 'sku') {
-              // Get the original field definition to show options
-              const fieldDefinition = categoryFields.find(field => field.FieldLabel === label);
-              const options = fieldDefinition?.CategoryOptions ? 
-                fieldDefinition.CategoryOptions.split(';').map(opt => opt.trim()) : [];
-              
-              // Display empty string instead of "-- Select --" for default values
-              const displayValue = (value === "-- Select --" || !value) ? "" : value;
-              
-              return (
-                <div key={label} className="response-field listing-metadata editable-field">
-                  <strong style={{ color: '#000' }}>{label}:</strong>
-                  {options.length > 0 ? (
-                    // If we have options, show an editable dropdown using datalist
-                    <div style={{ position: 'relative', marginLeft: '8px' }}>
+          {/* Add other response fields excluding title, description and stored fields */}
+          {Object.entries(response)
+            .filter(([key]) => 
+              key !== 'title' && 
+              key !== 'description' && 
+              key !== 'storedFieldSelections' && 
+              !key.startsWith('error') && 
+              !key.startsWith('raw_')
+            )
+            .map(([key, value]) => (
+              <div key={key} className="response-field">
+                <strong style={{ color: '#000' }}>
+                  {key.replace(/_/g, ' ').replace(/^\w/, c => c.toUpperCase())}:
+                </strong>
+                <span style={{ color: '#000' }}>{value}</span>
+              </div>
+          ))}
+          
+          {/* Add category fields as editable metadata, including price and SKU */}
+          <div className="category-fields-metadata">
+            <h5 style={{ margin: '10px 0 5px 0', color: '#000' }}>Item Details</h5>
+            
+            {/* Make price and SKU editable */}
+            <div className="response-field listing-metadata editable-field">
+              <strong style={{ color: '#000' }}>Price:</strong>
+              <input
+                type="text"
+                value={groupPrice}
+                onChange={(e) => updateListingPrice(e.target.value)}
+                placeholder="Enter price"
+                style={{
+                  marginLeft: '8px',
+                  padding: '4px 8px',
+                  border: '1px solid #ccc',
+                  borderRadius: '4px',
+                  backgroundColor: '#fff',
+                  color: '#000',
+                  fontSize: '0.9rem',
+                  minWidth: '100px'
+                }}
+              />
+            </div>
+            <div className="response-field listing-metadata editable-field">
+              <strong style={{ color: '#000' }}>SKU:</strong>
+              <input
+                type="text"
+                value={groupSku}
+                onChange={(e) => updateListingSku(e.target.value)}
+                placeholder="Enter SKU"
+                style={{
+                  marginLeft: '8px',
+                  padding: '4px 8px',
+                  border: '1px solid #ccc',
+                  borderRadius: '4px',
+                  backgroundColor: '#fff',
+                  color: '#000',
+                  fontSize: '0.9rem',
+                  minWidth: '100px'
+                }}
+              />
+            </div>
+            
+            {/* Add ALL category fields from the stored selections as editable fields */}
+            {Object.entries(listingFieldSelections).map(([label, value]) => {
+              // Display ALL fields, including those with default values, but make them editable
+              if (label !== 'price' && label !== 'sku') {
+                // Get the original field definition to show options
+                const fieldDefinition = categoryFields.find(field => field.FieldLabel === label);
+                const options = fieldDefinition?.CategoryOptions ? 
+                  fieldDefinition.CategoryOptions.split(';').map(opt => opt.trim()) : [];
+                
+                // Display empty string instead of "-- Select --" for default values
+                const displayValue = (value === "-- Select --" || !value) ? "" : value;
+                
+                return (
+                  <div key={label} className="response-field listing-metadata editable-field">
+                    <strong style={{ color: '#000' }}>{label}:</strong>
+                    {options.length > 0 ? (
+                      // If we have options, show an editable dropdown using datalist
+                      <div style={{ position: 'relative', marginLeft: '8px' }}>
+                        <input
+                          type="text"
+                          value={displayValue}
+                          onChange={(e) => updateListingFieldSelection(index, label, e.target.value)}
+                          placeholder="Enter value or select from dropdown"
+                          list={`${label}-${index}-options`}
+                          style={{
+                            padding: '4px 8px',
+                            border: '1px solid #ccc',
+                            borderRadius: '4px',
+                            backgroundColor: '#fff',
+                            color: '#000',
+                            fontSize: '0.9rem',
+                            minWidth: '200px'
+                          }}
+                        />
+                        <datalist id={`${label}-${index}-options`}>
+                          {options.map((opt, idx) => (
+                            <option key={idx} value={opt}>{opt}</option>
+                          ))}
+                        </datalist>
+                      </div>
+                    ) : (
+                      // If no options, show a regular text input
                       <input
                         type="text"
                         value={displayValue}
                         onChange={(e) => updateListingFieldSelection(index, label, e.target.value)}
-                        placeholder="Enter value or select from dropdown"
-                        list={`${label}-${index}-options`}
+                        placeholder="Enter value"
                         style={{
+                          marginLeft: '8px',
                           padding: '4px 8px',
                           border: '1px solid #ccc',
                           borderRadius: '4px',
                           backgroundColor: '#fff',
                           color: '#000',
                           fontSize: '0.9rem',
-                          minWidth: '200px'
+                          minWidth: '150px'
                         }}
                       />
-                      <datalist id={`${label}-${index}-options`}>
-                        {options.map((opt, idx) => (
-                          <option key={idx} value={opt}>{opt}</option>
-                        ))}
-                      </datalist>
-                    </div>
-                  ) : (
-                    // If no options, show a regular text input
-                    <input
-                      type="text"
-                      value={displayValue}
-                      onChange={(e) => updateListingFieldSelection(index, label, e.target.value)}
-                      placeholder="Enter value"
-                      style={{
-                        marginLeft: '8px',
-                        padding: '4px 8px',
-                        border: '1px solid #ccc',
-                        borderRadius: '4px',
-                        backgroundColor: '#fff',
-                        color: '#000',
-                        fontSize: '0.9rem',
-                        minWidth: '150px'
-                      }}
-                    />
-                  )}
-                </div>
-              );
-            }
-            
-            return null;
-          })}
+                    )}
+                  </div>
+                );
+              }
+              
+              return null;
+            })}
+          </div>
         </div>
       </div>
-    </div>
-  );
-};
+    );
+  };
 
   // Spinner component
   const Spinner = () => (
@@ -821,7 +862,7 @@ Action(SiteID=US|Country=US|Currency=USD|Version=1193|CC=UTF-8),Custom label (SK
           })}
         </div>
       ) : (
-        // Row View - same as before, no changes needed for eBay integration
+        // Row View - Updated with editable title and description
         <div className="row-view-container">
           {imageGroups.some(group => group.length > 0) && (
             <div className="row-view-table">
@@ -937,7 +978,7 @@ Action(SiteID=US|Country=US|Currency=USD|Version=1193|CC=UTF-8),Custom label (SK
                       </div>
                     </div>
                     
-                    {/* Title Column */}
+                    {/* Title Column - Updated with editable textarea */}
                     <div className="row-cell title-cell">
                       {processingGroups[gi] ? (
                         <div className="row-loading">
@@ -945,7 +986,25 @@ Action(SiteID=US|Country=US|Currency=USD|Version=1193|CC=UTF-8),Custom label (SK
                           <span style={{ color: '#000' }}>Generating...</span>
                         </div>
                       ) : response && !response.error ? (
-                        <div className="row-title" style={{ color: '#000' }}>{response.title || 'No title generated'}</div>
+                        <textarea
+                          value={response.title || ''}
+                          onChange={(e) => updateListingContent(gi, 'title', e.target.value)}
+                          placeholder="Enter title"
+                          className="row-title-input"
+                          style={{
+                            width: '100%',
+                            minHeight: '45px',
+                            padding: '6px 8px',
+                            border: '1px solid #ccc',
+                            borderRadius: '4px',
+                            fontSize: '0.85rem',
+                            backgroundColor: '#fff',
+                            color: '#000',
+                            resize: 'vertical',
+                            fontFamily: 'inherit',
+                            lineHeight: '1.3'
+                          }}
+                        />
                       ) : response && response.error ? (
                         <div className="row-error" style={{ color: '#dc3545' }}>Error: {response.error}</div>
                       ) : (
@@ -953,7 +1012,7 @@ Action(SiteID=US|Country=US|Currency=USD|Version=1193|CC=UTF-8),Custom label (SK
                       )}
                     </div>
                     
-                    {/* Description Column */}
+                    {/* Description Column - Updated with editable textarea */}
                     <div className="row-cell description-cell">
                       {processingGroups[gi] ? (
                         <div className="row-loading">
@@ -961,7 +1020,25 @@ Action(SiteID=US|Country=US|Currency=USD|Version=1193|CC=UTF-8),Custom label (SK
                           <span style={{ color: '#000' }}>Generating...</span>
                         </div>
                       ) : response && !response.error ? (
-                        <div className="row-description" style={{ color: '#000' }}>{response.description || 'No description generated'}</div>
+                        <textarea
+                          value={response.description || ''}
+                          onChange={(e) => updateListingContent(gi, 'description', e.target.value)}
+                          placeholder="Enter description"
+                          className="row-description-input"
+                          style={{
+                            width: '100%',
+                            minHeight: '60px',
+                            padding: '6px 8px',
+                            border: '1px solid #ccc',
+                            borderRadius: '4px',
+                            fontSize: '0.85rem',
+                            backgroundColor: '#fff',
+                            color: '#000',
+                            resize: 'vertical',
+                            fontFamily: 'inherit',
+                            lineHeight: '1.3'
+                          }}
+                        />
                       ) : response && response.error ? (
                         <div className="row-error" style={{ color: '#dc3545' }}>Error generating description</div>
                       ) : (

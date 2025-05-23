@@ -1,4 +1,4 @@
-// EbayOAuthService.js - Updated for AWS Amplify with better environment variable handling
+// EbayOAuthService.js - Updated with better debugging and error handling
 class EbayOAuthService {
   constructor() {
     // eBay API Configuration
@@ -27,12 +27,12 @@ class EbayOAuthService {
     console.log('REACT_APP_EBAY_REDIRECT_URI:', process.env.REACT_APP_EBAY_REDIRECT_URI);
     console.log('REACT_APP_EBAY_RU_NAME:', process.env.REACT_APP_EBAY_RU_NAME);
     
-this.credentials = {
-  clientId: 'DavidJac-ListEasi-SBX-50e7167ce-0d788b93',
-  clientSecret: 'SBX-0e7167ce0d788b93-8b89-4ac9-ba7f-5818',
-  redirectUri: 'https://main.dhpq8vit86dyp.amplifyapp.com/ebay/callback',
-  ruName: 'David_Jacobs-DavidJac-ListEa-gkelan'
-};
+    this.credentials = {
+      clientId: 'DavidJac-ListEasi-SBX-50e7167ce-0d788b93',
+      clientSecret: 'SBX-0e7167ce0d788b93-8b89-4ac9-ba7f-5818',
+      redirectUri: 'https://main.dhpq8vit86dyp.amplifyapp.com/ebay/callback',
+      ruName: 'David_Jacobs-DavidJac-ListEa-gkelan'
+    };
     
     // Updated scopes - using more specific scopes that are commonly approved
     this.scopes = [
@@ -176,7 +176,7 @@ this.credentials = {
   }
 
   /**
-   * Exchange authorization code for access token with better error handling
+   * Exchange authorization code for access token with enhanced debugging
    */
   async exchangeCodeForToken(authorizationCode) {
     if (!this.isConfigured()) {
@@ -186,73 +186,119 @@ this.credentials = {
     const urls = this.getApiUrls();
     
     try {
-      console.log('Exchanging authorization code for token...');
+      console.log('=== TOKEN EXCHANGE DEBUG ===');
+      console.log('Authorization code received:', authorizationCode);
       console.log('Token URL:', urls.tokenUrl);
-      console.log('Authorization code:', authorizationCode);
+      console.log('Client ID:', this.credentials.clientId);
+      console.log('Redirect URI:', this.credentials.redirectUri);
       
-      // Prepare the request body
-      const requestBody = new URLSearchParams({
-        grant_type: 'authorization_code',
-        code: authorizationCode,
-        redirect_uri: this.credentials.redirectUri
-      });
+      // Prepare the request body - EXACT format required by eBay
+      const requestBody = new URLSearchParams();
+      requestBody.append('grant_type', 'authorization_code');
+      requestBody.append('code', authorizationCode);
+      requestBody.append('redirect_uri', this.credentials.redirectUri);
       
-      console.log('Token exchange request body:', requestBody.toString());
+      console.log('Request body params:');
+      for (const [key, value] of requestBody) {
+        console.log(`  ${key}: ${value}`);
+      }
       
-      // Prepare headers
+      // Prepare headers - eBay requires specific format
+      const authString = `${this.credentials.clientId}:${this.credentials.clientSecret}`;
+      const base64Auth = btoa(authString);
+      
       const headers = {
         'Content-Type': 'application/x-www-form-urlencoded',
-        'Authorization': `Basic ${btoa(`${this.credentials.clientId}:${this.credentials.clientSecret}`)}`
+        'Authorization': `Basic ${base64Auth}`,
+        'Accept': 'application/json'
       };
       
-      console.log('Token exchange headers:', {
-        'Content-Type': headers['Content-Type'],
-        'Authorization': 'Basic [REDACTED]'
-      });
+      console.log('Request headers:');
+      console.log('  Content-Type:', headers['Content-Type']);
+      console.log('  Authorization: Basic [REDACTED]');
+      console.log('  Accept:', headers['Accept']);
+      console.log('Auth string length:', authString.length);
+      console.log('Base64 auth length:', base64Auth.length);
       
+      // Make the request
+      console.log('Making token exchange request...');
       const response = await fetch(urls.tokenUrl, {
         method: 'POST',
         headers: headers,
-        body: requestBody
+        body: requestBody.toString()
       });
 
+      console.log('Response received:');
+      console.log('  Status:', response.status);
+      console.log('  Status Text:', response.statusText);
+      console.log('  Headers:', Object.fromEntries(response.headers.entries()));
+
       const responseText = await response.text();
-      console.log('Token exchange response status:', response.status);
-      console.log('Token exchange response headers:', Object.fromEntries(response.headers.entries()));
-      console.log('Token exchange response body:', responseText);
+      console.log('  Raw response body:', responseText);
 
       if (!response.ok) {
-        let errorMessage = `Token exchange failed: ${response.status}`;
+        console.error('=== TOKEN EXCHANGE FAILED ===');
+        console.error('Status:', response.status);
+        console.error('Status Text:', response.statusText);
+        console.error('Response:', responseText);
+        
+        let errorMessage = `Token exchange failed: ${response.status} ${response.statusText}`;
+        let errorData = null;
+        
         try {
-          const errorData = JSON.parse(responseText);
+          errorData = JSON.parse(responseText);
           console.error('Parsed error data:', errorData);
           
-          // Provide more specific error messages
           if (errorData.error_description) {
             errorMessage += ` - ${errorData.error_description}`;
           }
           
+          // Provide specific troubleshooting based on error
           if (errorData.error_id === 'invalid_request') {
-            errorMessage += '\n\nPossible causes:\n';
-            errorMessage += '- Invalid redirect_uri (must match exactly what\'s configured in eBay)\n';
-            errorMessage += '- Invalid authorization code (may have expired)\n';
-            errorMessage += '- Invalid client credentials\n';
-            errorMessage += '- Missing or incorrect grant_type';
+            console.error('INVALID_REQUEST troubleshooting:');
+            console.error('1. Check if redirect_uri matches exactly what is configured in eBay app');
+            console.error('2. Verify authorization code is not expired (expires in 5 minutes)');
+            console.error('3. Ensure client credentials are correct');
+            console.error('4. Check that RuName is properly configured in eBay app');
+            
+            errorMessage += '\n\nPossible causes:';
+            errorMessage += '\n• Redirect URI mismatch between request and eBay app configuration';
+            errorMessage += '\n• Authorization code has expired (5 minute limit)';
+            errorMessage += '\n• Invalid client credentials';
+            errorMessage += '\n• RuName not properly configured in eBay Developer account';
           }
           
-        } catch (e) {
+        } catch (parseError) {
+          console.error('Could not parse error response as JSON:', parseError);
           errorMessage += ` - ${responseText}`;
         }
+        
         throw new Error(errorMessage);
       }
 
-      const tokenData = JSON.parse(responseText);
-      this.storeTokens(tokenData);
+      let tokenData;
+      try {
+        tokenData = JSON.parse(responseText);
+        console.log('=== TOKEN EXCHANGE SUCCESS ===');
+        console.log('Token type:', tokenData.token_type);
+        console.log('Expires in:', tokenData.expires_in, 'seconds');
+        console.log('Access token length:', tokenData.access_token?.length || 0);
+        console.log('Refresh token present:', !!tokenData.refresh_token);
+        
+      } catch (parseError) {
+        console.error('Could not parse successful response as JSON:', parseError);
+        throw new Error(`Invalid JSON response: ${responseText}`);
+      }
       
-      console.log('Token exchange successful');
+      this.storeTokens(tokenData);
+      console.log('Tokens stored successfully');
+      
       return tokenData;
     } catch (error) {
-      console.error('Error exchanging code for token:', error);
+      console.error('=== TOKEN EXCHANGE ERROR ===');
+      console.error('Error details:', error);
+      console.error('Error message:', error.message);
+      console.error('Error stack:', error.stack);
       throw error;
     }
   }

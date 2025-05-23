@@ -1,282 +1,5 @@
 import React, { useState, useEffect } from 'react';
-
-// Inline eBay OAuth Service
-class EbayOAuthService {
-  constructor() {
-    // eBay API Configuration
-    this.config = {
-      // Production URLs
-      production: {
-        authUrl: 'https://auth.ebay.com/oauth2/authorize',
-        tokenUrl: 'https://api.ebay.com/identity/v1/oauth2/token',
-        apiUrl: 'https://api.ebay.com'
-      },
-      // Sandbox URLs for testing
-      sandbox: {
-        authUrl: 'https://auth.sandbox.ebay.com/oauth2/authorize',
-        tokenUrl: 'https://api.sandbox.ebay.com/identity/v1/oauth2/token',
-        apiUrl: 'https://api.sandbox.ebay.com'
-      }
-    };
-    
-    // Set environment (change to 'production' for live)
-    this.environment = 'sandbox'; // or 'production'
-    
-    // Your eBay app credentials (these should be stored securely)
-    this.credentials = {
-      clientId: 'YOUR_EBAY_CLIENT_ID', // Replace with your actual eBay Client ID
-      clientSecret: 'YOUR_EBAY_CLIENT_SECRET', // Replace with your actual eBay Client Secret
-      redirectUri: 'http://localhost:3000/ebay/callback', // Replace with your actual redirect URI
-      ruName: 'YOUR_EBAY_RU_NAME' // Replace with your actual RU Name
-    };
-    
-    // Required scopes for business policies
-    this.scopes = [
-      'https://api.ebay.com/oauth/api_scope/sell.account',
-      'https://api.ebay.com/oauth/api_scope/sell.account.readonly',
-      'https://api.ebay.com/oauth/api_scope/commerce.identity.readonly'
-    ];
-  }
-
-  getApiUrls() {
-    return this.config[this.environment];
-  }
-
-  generateAuthUrl(state = null) {
-    const urls = this.getApiUrls();
-    const params = new URLSearchParams({
-      client_id: this.credentials.clientId,
-      redirect_uri: this.credentials.redirectUri,
-      response_type: 'code',
-      scope: this.scopes.join(' '),
-      ...(state && { state })
-    });
-
-    return `${urls.authUrl}?${params.toString()}`;
-  }
-
-  async exchangeCodeForToken(authorizationCode) {
-    const urls = this.getApiUrls();
-    
-    try {
-      const response = await fetch(urls.tokenUrl, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/x-www-form-urlencoded',
-          'Authorization': `Basic ${btoa(`${this.credentials.clientId}:${this.credentials.clientSecret}`)}`
-        },
-        body: new URLSearchParams({
-          grant_type: 'authorization_code',
-          code: authorizationCode,
-          redirect_uri: this.credentials.redirectUri
-        })
-      });
-
-      if (!response.ok) {
-        const errorData = await response.text();
-        throw new Error(`Token exchange failed: ${response.status} - ${errorData}`);
-      }
-
-      const tokenData = await response.json();
-      this.storeTokens(tokenData);
-      return tokenData;
-    } catch (error) {
-      console.error('Error exchanging code for token:', error);
-      throw error;
-    }
-  }
-
-  storeTokens(tokenData) {
-    const tokens = {
-      access_token: tokenData.access_token,
-      refresh_token: tokenData.refresh_token,
-      expires_in: tokenData.expires_in,
-      token_type: tokenData.token_type,
-      expires_at: Date.now() + (tokenData.expires_in * 1000)
-    };
-    
-    localStorage.setItem('ebay_tokens', JSON.stringify(tokens));
-    return tokens;
-  }
-
-  getStoredTokens() {
-    const stored = localStorage.getItem('ebay_tokens');
-    if (!stored) return null;
-    
-    try {
-      const tokens = JSON.parse(stored);
-      
-      if (Date.now() >= tokens.expires_at) {
-        console.log('Tokens expired, need to refresh');
-        return null;
-      }
-      
-      return tokens;
-    } catch (error) {
-      console.error('Error parsing stored tokens:', error);
-      return null;
-    }
-  }
-
-  async refreshAccessToken() {
-    const tokens = this.getStoredTokens();
-    if (!tokens || !tokens.refresh_token) {
-      throw new Error('No refresh token available');
-    }
-
-    const urls = this.getApiUrls();
-
-    try {
-      const response = await fetch(urls.tokenUrl, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/x-www-form-urlencoded',
-          'Authorization': `Basic ${btoa(`${this.credentials.clientId}:${this.credentials.clientSecret}`)}`
-        },
-        body: new URLSearchParams({
-          grant_type: 'refresh_token',
-          refresh_token: tokens.refresh_token,
-          scope: this.scopes.join(' ')
-        })
-      });
-
-      if (!response.ok) {
-        const errorData = await response.text();
-        throw new Error(`Token refresh failed: ${response.status} - ${errorData}`);
-      }
-
-      const tokenData = await response.json();
-      this.storeTokens(tokenData);
-      
-      return tokenData;
-    } catch (error) {
-      console.error('Error refreshing token:', error);
-      localStorage.removeItem('ebay_tokens');
-      throw error;
-    }
-  }
-
-  async getValidAccessToken() {
-    let tokens = this.getStoredTokens();
-    
-    if (!tokens) {
-      throw new Error('No tokens available. User needs to authenticate.');
-    }
-
-    if (Date.now() >= (tokens.expires_at - 300000)) {
-      tokens = await this.refreshAccessToken();
-    }
-
-    return tokens.access_token;
-  }
-
-  async makeApiRequest(endpoint, options = {}) {
-    const accessToken = await this.getValidAccessToken();
-    const urls = this.getApiUrls();
-
-    const defaultHeaders = {
-      'Authorization': `Bearer ${accessToken}`,
-      'Content-Type': 'application/json',
-      'X-EBAY-C-MARKETPLACE-ID': 'EBAY_US'
-    };
-
-    const requestOptions = {
-      method: 'GET',
-      ...options,
-      headers: {
-        ...defaultHeaders,
-        ...options.headers
-      }
-    };
-
-    try {
-      const response = await fetch(`${urls.apiUrl}${endpoint}`, requestOptions);
-
-      if (response.status === 401) {
-        try {
-          await this.refreshAccessToken();
-          const newAccessToken = await this.getValidAccessToken();
-          
-          requestOptions.headers.Authorization = `Bearer ${newAccessToken}`;
-          const retryResponse = await fetch(`${urls.apiUrl}${endpoint}`, requestOptions);
-          
-          if (!retryResponse.ok) {
-            const errorData = await retryResponse.text();
-            throw new Error(`API request failed after token refresh: ${retryResponse.status} - ${errorData}`);
-          }
-          
-          return await retryResponse.json();
-        } catch (refreshError) {
-          console.error('Token refresh failed:', refreshError);
-          throw new Error('Authentication failed. Please log in again.');
-        }
-      }
-
-      if (!response.ok) {
-        const errorData = await response.text();
-        throw new Error(`API request failed: ${response.status} - ${errorData}`);
-      }
-
-      return await response.json();
-    } catch (error) {
-      console.error('API request error:', error);
-      throw error;
-    }
-  }
-
-  async getBusinessPolicies() {
-    try {
-      const response = await this.makeApiRequest('/sell/account/v1/fulfillment_policy');
-      const fulfillmentPolicies = response.fulfillmentPolicies || [];
-
-      const paymentResponse = await this.makeApiRequest('/sell/account/v1/payment_policy');
-      const paymentPolicies = paymentResponse.paymentPolicies || [];
-
-      const returnResponse = await this.makeApiRequest('/sell/account/v1/return_policy');
-      const returnPolicies = returnResponse.returnPolicies || [];
-
-      return {
-        fulfillmentPolicies,
-        paymentPolicies,
-        returnPolicies,
-        success: true
-      };
-    } catch (error) {
-      console.error('Error fetching business policies:', error);
-      return {
-        fulfillmentPolicies: [],
-        paymentPolicies: [],
-        returnPolicies: [],
-        error: error.message,
-        success: false
-      };
-    }
-  }
-
-  async getUserProfile() {
-    try {
-      const response = await this.makeApiRequest('/commerce/identity/v1/user', {
-        headers: {
-          'X-EBAY-C-MARKETPLACE-ID': 'EBAY_US'
-        }
-      });
-      
-      return response;
-    } catch (error) {
-      console.error('Error fetching user profile:', error);
-      throw error;
-    }
-  }
-
-  isAuthenticated() {
-    const tokens = this.getStoredTokens();
-    return tokens !== null;
-  }
-
-  logout() {
-    localStorage.removeItem('ebay_tokens');
-  }
-}
+import EbayOAuthService from './EbayOAuthService';
 
 const EbayAuth = ({ onAuthSuccess, onAuthError }) => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -284,10 +7,20 @@ const EbayAuth = ({ onAuthSuccess, onAuthError }) => {
   const [userProfile, setUserProfile] = useState(null);
   const [businessPolicies, setBusinessPolicies] = useState(null);
   const [error, setError] = useState(null);
+  const [configurationError, setConfigurationError] = useState(false);
   
   const ebayService = new EbayOAuthService();
 
   useEffect(() => {
+    // Check if service is properly configured
+    if (!ebayService.isConfigured()) {
+      setConfigurationError(true);
+      const instructions = ebayService.getConfigurationInstructions();
+      setError(`eBay OAuth is not configured. Please set up your eBay Developer credentials first.`);
+      console.log('Configuration instructions:', instructions);
+      return;
+    }
+
     // Check if user is already authenticated
     checkAuthStatus();
     
@@ -333,7 +66,7 @@ const EbayAuth = ({ onAuthSuccess, onAuthError }) => {
         onAuthSuccess?.();
       } catch (error) {
         console.error('OAuth callback error:', error);
-        setError('Authentication failed. Please try again.');
+        setError(`Authentication failed: ${error.message}`);
         onAuthError?.(error);
       } finally {
         setIsLoading(false);
@@ -362,15 +95,27 @@ const EbayAuth = ({ onAuthSuccess, onAuthError }) => {
   };
 
   const handleLogin = () => {
+    if (!ebayService.isConfigured()) {
+      setError('eBay OAuth service is not properly configured. Please check your credentials.');
+      return;
+    }
+
     setError(null);
     setIsLoading(true);
     
-    // Generate a random state parameter for CSRF protection
-    const state = Math.random().toString(36).substring(2, 15);
-    
-    // Redirect to eBay OAuth
-    const authUrl = ebayService.generateAuthUrl(state);
-    window.location.href = authUrl;
+    try {
+      // Generate a random state parameter for CSRF protection
+      const state = Math.random().toString(36).substring(2, 15);
+      
+      // Redirect to eBay OAuth
+      const authUrl = ebayService.generateAuthUrl(state);
+      console.log('Redirecting to eBay OAuth:', authUrl);
+      window.location.href = authUrl;
+    } catch (error) {
+      console.error('Error generating auth URL:', error);
+      setError(`Failed to initialize authentication: ${error.message}`);
+      setIsLoading(false);
+    }
   };
 
   const handleLogout = () => {
@@ -393,6 +138,24 @@ const EbayAuth = ({ onAuthSuccess, onAuthError }) => {
     }
   };
 
+  const showConfigurationHelp = () => {
+    const instructions = ebayService.getConfigurationInstructions();
+    
+    alert(`eBay Configuration Required:
+
+1. Go to ${instructions.step1}
+2. ${instructions.step2}
+3. ${instructions.step3}
+4. ${instructions.step4}
+5. Set these environment variables:
+   ${instructions.requiredEnvVars.join('\n   ')}
+
+Current environment: ${instructions.environment}
+Redirect URI should be: ${instructions.redirectUri}
+
+Check the browser console for more details.`);
+  };
+
   if (isLoading) {
     return (
       <div className="ebay-auth-container">
@@ -401,6 +164,52 @@ const EbayAuth = ({ onAuthSuccess, onAuthError }) => {
             <div className="spinner-circle"></div>
           </div>
           <p>Connecting to eBay...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (configurationError) {
+    return (
+      <div className="ebay-auth-container">
+        <div className="auth-card">
+          <div className="auth-header">
+            <img 
+              src="https://upload.wikimedia.org/wikipedia/commons/1/1b/EBay_logo.svg" 
+              alt="eBay" 
+              className="ebay-logo"
+            />
+            <h3>eBay Configuration Required</h3>
+            <p>Your eBay Developer credentials need to be configured before you can connect.</p>
+          </div>
+          
+          {error && (
+            <div className="auth-error">
+              <p>{error}</p>
+            </div>
+          )}
+          
+          <div className="auth-benefits">
+            <h4>Setup Steps:</h4>
+            <ul>
+              <li>🔧 Create an eBay Developer Account at developer.ebay.com</li>
+              <li>📝 Create a new application in your developer account</li>
+              <li>🔑 Copy your Client ID and Client Secret</li>
+              <li>🔗 Create a RuName with your callback URL</li>
+              <li>⚙️ Set environment variables or update credentials in code</li>
+            </ul>
+          </div>
+          
+          <button 
+            className="ebay-connect-button"
+            onClick={showConfigurationHelp}
+          >
+            Show Configuration Instructions
+          </button>
+          
+          <div className="auth-footer">
+            <p><small>Check the browser console for detailed configuration information.</small></p>
+          </div>
         </div>
       </div>
     );
@@ -423,6 +232,20 @@ const EbayAuth = ({ onAuthSuccess, onAuthError }) => {
           {error && (
             <div className="auth-error">
               <p>{error}</p>
+              <button 
+                onClick={showConfigurationHelp}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  color: '#007bff',
+                  textDecoration: 'underline',
+                  cursor: 'pointer',
+                  fontSize: '0.9rem',
+                  marginTop: '8px'
+                }}
+              >
+                Need help with configuration?
+              </button>
             </div>
           )}
           

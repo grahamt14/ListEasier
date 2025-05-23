@@ -1,4 +1,4 @@
-// EbayAuthContext.jsx
+// EbayAuthContext.jsx - Updated with better callback handling
 import React, { createContext, useContext, useReducer, useEffect } from 'react';
 import EbayOAuthService from './EbayOAuthService';
 
@@ -16,7 +16,8 @@ const initialState = {
     fulfillmentPolicyId: null,
     returnPolicyId: null
   },
-  error: null
+  error: null,
+  isConfigured: false
 };
 
 // Reducer
@@ -53,9 +54,13 @@ function ebayAuthReducer(state, action) {
     case 'CLEAR_ERROR':
       return { ...state, error: null };
       
+    case 'SET_CONFIGURED':
+      return { ...state, isConfigured: action.payload };
+      
     case 'LOGOUT':
       return {
-        ...initialState
+        ...initialState,
+        isConfigured: state.isConfigured
       };
       
     default:
@@ -68,13 +73,23 @@ export function EbayAuthProvider({ children }) {
   const [state, dispatch] = useReducer(ebayAuthReducer, initialState);
   const ebayService = new EbayOAuthService();
 
-  // Check authentication status on mount
+  // Check configuration and authentication status on mount
   useEffect(() => {
-    checkAuthStatus();
+    checkConfigurationAndAuth();
   }, []);
 
-  const checkAuthStatus = async () => {
+  const checkConfigurationAndAuth = async () => {
     try {
+      // Check if service is properly configured
+      const isConfigured = ebayService.isConfigured();
+      dispatch({ type: 'SET_CONFIGURED', payload: isConfigured });
+      
+      if (!isConfigured) {
+        console.warn('eBay OAuth service is not properly configured');
+        return;
+      }
+
+      // Check if user is already authenticated
       if (ebayService.isAuthenticated()) {
         dispatch({ type: 'SET_AUTHENTICATED', payload: true });
         await loadUserData();
@@ -130,24 +145,38 @@ export function EbayAuthProvider({ children }) {
   };
 
   const login = () => {
+    if (!ebayService.isConfigured()) {
+      dispatch({ type: 'SET_ERROR', payload: 'eBay OAuth service is not properly configured' });
+      return;
+    }
+
     dispatch({ type: 'CLEAR_ERROR' });
     dispatch({ type: 'SET_LOADING', payload: true });
     
-    const state = Math.random().toString(36).substring(2, 15);
-    const authUrl = ebayService.generateAuthUrl(state);
-    window.location.href = authUrl;
+    try {
+      const state = Math.random().toString(36).substring(2, 15);
+      const authUrl = ebayService.generateAuthUrl(state);
+      console.log('Redirecting to eBay OAuth:', authUrl);
+      window.location.href = authUrl;
+    } catch (error) {
+      console.error('Error generating auth URL:', error);
+      dispatch({ type: 'SET_ERROR', payload: `Failed to start authentication: ${error.message}` });
+      dispatch({ type: 'SET_LOADING', payload: false });
+    }
   };
 
   const handleAuthCallback = async (authCode) => {
     dispatch({ type: 'SET_LOADING', payload: true });
     try {
+      console.log('Processing eBay auth callback with code:', authCode);
       await ebayService.exchangeCodeForToken(authCode);
       dispatch({ type: 'SET_AUTHENTICATED', payload: true });
       await loadUserData();
+      console.log('eBay authentication successful');
       return true;
     } catch (error) {
       console.error('Auth callback error:', error);
-      dispatch({ type: 'SET_ERROR', payload: 'Authentication failed' });
+      dispatch({ type: 'SET_ERROR', payload: `Authentication failed: ${error.message}` });
       return false;
     } finally {
       dispatch({ type: 'SET_LOADING', payload: false });

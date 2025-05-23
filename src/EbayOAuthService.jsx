@@ -1,4 +1,4 @@
-// EbayOAuthService.js
+// EbayOAuthService.js - Updated with proper configuration
 class EbayOAuthService {
   constructor() {
     // eBay API Configuration
@@ -20,12 +20,17 @@ class EbayOAuthService {
     // Set environment (change to 'production' for live)
     this.environment = 'sandbox'; // or 'production'
     
-    // Your eBay app credentials (these should be stored securely)
+    // Your eBay app credentials - THESE NEED TO BE CONFIGURED PROPERLY
     this.credentials = {
-      clientId: process.env.REACT_APP_EBAY_CLIENT_ID || 'DavidJac-ListEasi-SBX-50e7167ce-0d788b93',
-      clientSecret: process.env.REACT_APP_EBAY_CLIENT_SECRET || 'YOUR_EBAY_CLIENT_SECRET',
-      redirectUri: process.env.REACT_APP_EBAY_REDIRECT_URI || 'http://main.dhpq8vit86dyp.amplifyapp.com/ebay/callback',
-      ruName: process.env.REACT_APP_EBAY_RU_NAME || 'David_Jacobs-DavidJac-ListEa-axnzczn'
+      // Get these from your eBay Developer Account at https://developer.ebay.com/my/keys
+      clientId: process.env.REACT_APP_EBAY_CLIENT_ID || 'YOUR_ACTUAL_EBAY_CLIENT_ID',
+      clientSecret: process.env.REACT_APP_EBAY_CLIENT_SECRET || 'YOUR_ACTUAL_EBAY_CLIENT_SECRET',
+      
+      // This MUST match EXACTLY what you configured in your eBay app
+      redirectUri: process.env.REACT_APP_EBAY_REDIRECT_URI || window.location.origin + '/ebay/callback',
+      
+      // Get this from your eBay Developer Account - it's the RuName you created
+      ruName: process.env.REACT_APP_EBAY_RU_NAME || 'YOUR_ACTUAL_RU_NAME'
     };
     
     // Required scopes for business policies
@@ -34,6 +39,63 @@ class EbayOAuthService {
       'https://api.ebay.com/oauth/api_scope/sell.account.readonly',
       'https://api.ebay.com/oauth/api_scope/commerce.identity.readonly'
     ];
+    
+    // Validate configuration on construction
+    this.validateConfiguration();
+  }
+
+  /**
+   * Validate that all required credentials are configured
+   */
+  validateConfiguration() {
+    const required = ['clientId', 'clientSecret', 'redirectUri', 'ruName'];
+    const missing = required.filter(key => 
+      !this.credentials[key] || 
+      this.credentials[key].startsWith('YOUR_') ||
+      this.credentials[key] === ''
+    );
+    
+    if (missing.length > 0) {
+      console.error('eBay OAuth Configuration Error: Missing or invalid credentials:', missing);
+      console.error('Please check your eBay Developer Account and update the following:');
+      missing.forEach(key => {
+        console.error(`- ${key}: ${this.credentials[key]}`);
+      });
+      
+      // Don't throw an error, just log it so the app doesn't crash
+      this.configurationValid = false;
+    } else {
+      this.configurationValid = true;
+      console.log('eBay OAuth configuration validated successfully');
+    }
+  }
+
+  /**
+   * Check if the service is properly configured
+   */
+  isConfigured() {
+    return this.configurationValid;
+  }
+
+  /**
+   * Get configuration instructions for the user
+   */
+  getConfigurationInstructions() {
+    return {
+      step1: "Go to https://developer.ebay.com/my/keys",
+      step2: "Create a new application or use an existing one",
+      step3: "Copy your Client ID and Client Secret",
+      step4: "Create a RuName (Redirect URL Name) with your callback URL",
+      step5: "Set environment variables or update the credentials in EbayOAuthService.js",
+      environment: this.environment,
+      redirectUri: this.credentials.redirectUri,
+      requiredEnvVars: [
+        'REACT_APP_EBAY_CLIENT_ID',
+        'REACT_APP_EBAY_CLIENT_SECRET', 
+        'REACT_APP_EBAY_REDIRECT_URI',
+        'REACT_APP_EBAY_RU_NAME'
+      ]
+    };
   }
 
   /**
@@ -47,6 +109,10 @@ class EbayOAuthService {
    * Generate the eBay OAuth authorization URL
    */
   generateAuthUrl(state = null) {
+    if (!this.isConfigured()) {
+      throw new Error('eBay OAuth service is not properly configured. Please check your credentials.');
+    }
+
     const urls = this.getApiUrls();
     const params = new URLSearchParams({
       client_id: this.credentials.clientId,
@@ -56,16 +122,24 @@ class EbayOAuthService {
       ...(state && { state })
     });
 
-    return `${urls.authUrl}?${params.toString()}`;
+    const authUrl = `${urls.authUrl}?${params.toString()}`;
+    console.log('Generated eBay auth URL:', authUrl);
+    return authUrl;
   }
 
   /**
    * Exchange authorization code for access token
    */
   async exchangeCodeForToken(authorizationCode) {
+    if (!this.isConfigured()) {
+      throw new Error('eBay OAuth service is not properly configured.');
+    }
+
     const urls = this.getApiUrls();
     
     try {
+      console.log('Exchanging authorization code for token...');
+      
       const response = await fetch(urls.tokenUrl, {
         method: 'POST',
         headers: {
@@ -79,16 +153,25 @@ class EbayOAuthService {
         })
       });
 
+      const responseText = await response.text();
+      console.log('Token exchange response status:', response.status);
+      console.log('Token exchange response:', responseText);
+
       if (!response.ok) {
-        const errorData = await response.text();
-        throw new Error(`Token exchange failed: ${response.status} - ${errorData}`);
+        let errorMessage = `Token exchange failed: ${response.status}`;
+        try {
+          const errorData = JSON.parse(responseText);
+          errorMessage += ` - ${errorData.error_description || errorData.error || responseText}`;
+        } catch (e) {
+          errorMessage += ` - ${responseText}`;
+        }
+        throw new Error(errorMessage);
       }
 
-      const tokenData = await response.json();
-      
-      // Store tokens securely (in a real app, use secure storage)
+      const tokenData = JSON.parse(responseText);
       this.storeTokens(tokenData);
       
+      console.log('Token exchange successful');
       return tokenData;
     } catch (error) {
       console.error('Error exchanging code for token:', error);
@@ -111,6 +194,7 @@ class EbayOAuthService {
     };
     
     localStorage.setItem('ebay_tokens', JSON.stringify(tokens));
+    console.log('Tokens stored successfully');
     return tokens;
   }
 
@@ -149,6 +233,8 @@ class EbayOAuthService {
     const urls = this.getApiUrls();
 
     try {
+      console.log('Refreshing access token...');
+      
       const response = await fetch(urls.tokenUrl, {
         method: 'POST',
         headers: {
@@ -164,12 +250,14 @@ class EbayOAuthService {
 
       if (!response.ok) {
         const errorData = await response.text();
+        console.error('Token refresh failed:', response.status, errorData);
         throw new Error(`Token refresh failed: ${response.status} - ${errorData}`);
       }
 
       const tokenData = await response.json();
       this.storeTokens(tokenData);
       
+      console.log('Token refresh successful');
       return tokenData;
     } catch (error) {
       console.error('Error refreshing token:', error);
@@ -201,6 +289,10 @@ class EbayOAuthService {
    * Make authenticated API request to eBay
    */
   async makeApiRequest(endpoint, options = {}) {
+    if (!this.isConfigured()) {
+      throw new Error('eBay OAuth service is not properly configured.');
+    }
+
     const accessToken = await this.getValidAccessToken();
     const urls = this.getApiUrls();
 
@@ -220,11 +312,14 @@ class EbayOAuthService {
     };
 
     try {
+      console.log(`Making eBay API request to: ${urls.apiUrl}${endpoint}`);
+      
       const response = await fetch(`${urls.apiUrl}${endpoint}`, requestOptions);
 
       if (response.status === 401) {
         // Token might be invalid, try refreshing
         try {
+          console.log('Received 401, attempting token refresh...');
           await this.refreshAccessToken();
           const newAccessToken = await this.getValidAccessToken();
           
@@ -246,10 +341,13 @@ class EbayOAuthService {
 
       if (!response.ok) {
         const errorData = await response.text();
+        console.error('API request failed:', response.status, errorData);
         throw new Error(`API request failed: ${response.status} - ${errorData}`);
       }
 
-      return await response.json();
+      const responseData = await response.json();
+      console.log('API request successful');
+      return responseData;
     } catch (error) {
       console.error('API request error:', error);
       throw error;
@@ -261,17 +359,31 @@ class EbayOAuthService {
    */
   async getBusinessPolicies() {
     try {
-      const response = await this.makeApiRequest('/sell/account/v1/fulfillment_policy');
-      const fulfillmentPolicies = response.fulfillmentPolicies || [];
+      console.log('Fetching business policies...');
+      
+      const [fulfillmentResponse, paymentResponse, returnResponse] = await Promise.allSettled([
+        this.makeApiRequest('/sell/account/v1/fulfillment_policy'),
+        this.makeApiRequest('/sell/account/v1/payment_policy'),
+        this.makeApiRequest('/sell/account/v1/return_policy')
+      ]);
 
-      const paymentResponse = await this.makeApiRequest('/sell/account/v1/payment_policy');
-      const paymentPolicies = paymentResponse.paymentPolicies || [];
+      const fulfillmentPolicies = fulfillmentResponse.status === 'fulfilled' ? 
+        (fulfillmentResponse.value.fulfillmentPolicies || []) : [];
+      
+      const paymentPolicies = paymentResponse.status === 'fulfilled' ? 
+        (paymentResponse.value.paymentPolicies || []) : [];
+      
+      const returnPolicies = returnResponse.status === 'fulfilled' ? 
+        (returnResponse.value.returnPolicies || []) : [];
 
-      const returnResponse = await this.makeApiRequest('/sell/account/v1/return_policy');
-      const returnPolicies = returnResponse.returnPolicies || [];
+      console.log('Business policies fetched successfully:', {
+        fulfillment: fulfillmentPolicies.length,
+        payment: paymentPolicies.length,
+        return: returnPolicies.length
+      });
 
       return {
-        fulfillmentPolicies, // Shipping policies
+        fulfillmentPolicies,
         paymentPolicies,
         returnPolicies,
         success: true
@@ -314,6 +426,7 @@ class EbayOAuthService {
    */
   logout() {
     localStorage.removeItem('ebay_tokens');
+    console.log('User logged out, tokens cleared');
   }
 
   /**

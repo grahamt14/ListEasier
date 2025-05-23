@@ -1481,9 +1481,65 @@ function AppContent() {
     </div>
   );
 }
+// eBay Callback Handler Component
+const EbayCallback = () => {
+  const { handleAuthCallback } = useEbayAuth();
 
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const authCode = urlParams.get('code');
+    const error = urlParams.get('error');
+
+    if (error) {
+      console.error('eBay OAuth error:', error);
+      // Redirect back to main app with error
+      window.location.href = '/?ebay_error=' + encodeURIComponent(error);
+      return;
+    }
+
+    if (authCode) {
+      handleAuthCallback(authCode).then(success => {
+        if (success) {
+          // Redirect back to main app on success
+          window.location.href = '/?ebay_connected=true';
+        } else {
+          // Redirect back with error
+          window.location.href = '/?ebay_error=authentication_failed';
+        }
+      });
+    } else {
+      // No code or error, redirect back to main app
+      window.location.href = '/';
+    }
+  }, [handleAuthCallback]);
+
+  return (
+    <div style={{ 
+      display: 'flex', 
+      justifyContent: 'center', 
+      alignItems: 'center', 
+      height: '100vh',
+      flexDirection: 'column'
+    }}>
+      <div className="spinner">
+        <div className="spinner-circle"></div>
+      </div>
+      <p>Processing eBay authentication...</p>
+    </div>
+  );
+};
 // Main App with Both Providers
 function App() {
+  // Check if this is the eBay callback URL
+  if (window.location.pathname === '/ebay/callback') {
+    return (
+      <EbayAuthProvider>
+        <EbayCallback />
+      </EbayAuthProvider>
+    );
+  }
+
+  // Normal app rendering
   return (
     <EbayAuthProvider>
       <AppStateProvider>

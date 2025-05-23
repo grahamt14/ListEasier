@@ -1,4 +1,4 @@
-// EbayOAuthService.js - Updated with better debugging and error handling
+// EbayOAuthService.js - Updated for AWS Amplify with better environment variable handling
 class EbayOAuthService {
   constructor() {
     // eBay API Configuration
@@ -20,12 +20,20 @@ class EbayOAuthService {
     // Set environment (change to 'production' for live)
     this.environment = 'sandbox'; // or 'production'
     
-    // Your eBay app credentials
+    // Debug environment variables first
+    console.log('Environment Variables Debug:');
+    console.log('REACT_APP_EBAY_CLIENT_ID:', process.env.REACT_APP_EBAY_CLIENT_ID);
+    console.log('REACT_APP_EBAY_CLIENT_SECRET:', process.env.REACT_APP_EBAY_CLIENT_SECRET ? '[SET]' : '[NOT SET]');
+    console.log('REACT_APP_EBAY_REDIRECT_URI:', process.env.REACT_APP_EBAY_REDIRECT_URI);
+    console.log('REACT_APP_EBAY_RU_NAME:', process.env.REACT_APP_EBAY_RU_NAME);
+    
+    // Your eBay app credentials - REPLACE THESE WITH YOUR ACTUAL VALUES FOR AMPLIFY
     this.credentials = {
-      clientId: process.env.REACT_APP_EBAY_CLIENT_ID || 'YOUR_ACTUAL_EBAY_CLIENT_ID',
-      clientSecret: process.env.REACT_APP_EBAY_CLIENT_SECRET || 'YOUR_ACTUAL_EBAY_CLIENT_SECRET',
-      redirectUri: process.env.REACT_APP_EBAY_REDIRECT_URI || window.location.origin + '/ebay/callback',
-      ruName: process.env.REACT_APP_EBAY_RU_NAME || 'YOUR_ACTUAL_RU_NAME'
+      // For AWS Amplify, you might need to set these directly instead of using env vars
+      clientId: process.env.REACT_APP_EBAY_CLIENT_ID || 'PASTE_YOUR_ACTUAL_CLIENT_ID_HERE',
+      clientSecret: process.env.REACT_APP_EBAY_CLIENT_SECRET || 'PASTE_YOUR_ACTUAL_CLIENT_SECRET_HERE',
+      redirectUri: process.env.REACT_APP_EBAY_REDIRECT_URI || 'https://main.dhpq8vit86dyp.amplifyapp.com/ebay/callback',
+      ruName: process.env.REACT_APP_EBAY_RU_NAME || 'PASTE_YOUR_ACTUAL_RU_NAME_HERE'
     };
     
     // Updated scopes - using more specific scopes that are commonly approved
@@ -37,10 +45,10 @@ class EbayOAuthService {
     // Debug logging
     console.log('eBay OAuth Service Configuration:');
     console.log('Environment:', this.environment);
-    console.log('Client ID:', this.credentials.clientId ? 'Set ✓' : 'Missing ✗');
-    console.log('Client Secret:', this.credentials.clientSecret ? 'Set ✓' : 'Missing ✗');
+    console.log('Client ID:', this.credentials.clientId);
+    console.log('Client Secret:', this.credentials.clientSecret ? '[SET]' : '[NOT SET]');
     console.log('Redirect URI:', this.credentials.redirectUri);
-    console.log('RuName:', this.credentials.ruName ? 'Set ✓' : 'Missing ✗');
+    console.log('RuName:', this.credentials.ruName);
     console.log('Scopes:', this.scopes);
     
     // Validate configuration on construction
@@ -52,15 +60,20 @@ class EbayOAuthService {
    */
   validateConfiguration() {
     const required = ['clientId', 'clientSecret', 'redirectUri'];
-    const missing = required.filter(key => 
-      !this.credentials[key] || 
-      this.credentials[key].startsWith('YOUR_') ||
-      this.credentials[key] === ''
-    );
+    const missing = required.filter(key => {
+      const value = this.credentials[key];
+      return !value || 
+             value === '' ||
+             value.startsWith('YOUR_') ||
+             value.startsWith('PASTE_YOUR_');
+    });
     
-    // RuName is sometimes optional depending on eBay app setup
-    if (!this.credentials.ruName || this.credentials.ruName.startsWith('YOUR_')) {
-      console.warn('RuName not set - this might be required depending on your eBay app configuration');
+    // RuName validation
+    if (!this.credentials.ruName || 
+        this.credentials.ruName.startsWith('YOUR_') ||
+        this.credentials.ruName.startsWith('PASTE_YOUR_')) {
+      console.warn('RuName not properly set - this might be required depending on your eBay app configuration');
+      missing.push('ruName');
     }
     
     if (missing.length > 0) {
@@ -82,6 +95,34 @@ class EbayOAuthService {
    */
   isConfigured() {
     return this.configurationValid;
+  }
+
+  /**
+   * Get configuration instructions for the user
+   */
+  getConfigurationInstructions() {
+    return {
+      step1: "Go to https://developer.ebay.com/my/keys",
+      step2: "Create a new application or use an existing one",
+      step3: "Copy your Client ID and Client Secret",
+      step4: "Create a RuName (Redirect URL Name) with your callback URL",
+      step5: "For AWS Amplify: Set environment variables in the Amplify console OR update credentials directly in code",
+      environment: this.environment,
+      redirectUri: this.credentials.redirectUri,
+      amplifyInstructions: [
+        "1. Go to AWS Amplify Console",
+        "2. Select your app",
+        "3. Go to Environment Variables",
+        "4. Add the required variables",
+        "5. Redeploy your app"
+      ],
+      requiredEnvVars: [
+        'REACT_APP_EBAY_CLIENT_ID',
+        'REACT_APP_EBAY_CLIENT_SECRET', 
+        'REACT_APP_EBAY_REDIRECT_URI',
+        'REACT_APP_EBAY_RU_NAME'
+      ]
+    };
   }
 
   /**

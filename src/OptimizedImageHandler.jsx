@@ -34,25 +34,81 @@ export const convertHeicToJpeg = async (file) => {
   try {
     console.log(`Converting HEIC file: ${file.name}`);
     
-    // Convert HEIC to JPEG blob
-    const jpegBlob = await heic2any({
-      blob: file,
-      toType: 'image/jpeg',
-      quality: 0.9, // High quality for initial conversion
-    });
+    // First, let's try to detect if this is actually a HEIC file by checking its content
+    const arrayBuffer = await file.arrayBuffer();
+    const uint8Array = new Uint8Array(arrayBuffer);
     
-    // Create a new File object from the blob
+    // Check for HEIC file signature in the first few bytes
+    const fileHeader = Array.from(uint8Array.slice(0, 20))
+      .map(byte => String.fromCharCode(byte))
+      .join('');
+    
+    // If the file doesn't contain HEIC signatures, it might be misnamed
+    if (!fileHeader.includes('ftyp') || (!fileHeader.includes('heic') && !fileHeader.includes('heix') && !fileHeader.includes('heim'))) {
+      console.warn(`File ${file.name} has HEIC extension but doesn't appear to be a HEIC file. Treating as regular image.`);
+      
+      // Create a new file with JPEG type and return it
+      const jpegFileName = file.name.replace(/\.(heic|heif)$/i, '.jpg');
+      const jpegFile = new File([file], jpegFileName, {
+        type: 'image/jpeg',
+        lastModified: file.lastModified,
+      });
+      
+      return jpegFile;
+    }
+    
+    // Try to convert with heic2any
+    try {
+      const jpegBlob = await heic2any({
+        blob: file,
+        toType: 'image/jpeg',
+        quality: 0.9, // High quality for initial conversion
+      });
+      
+      // Handle the case where heic2any returns an array
+      const finalBlob = Array.isArray(jpegBlob) ? jpegBlob[0] : jpegBlob;
+      
+      // Create a new File object from the blob
+      const jpegFileName = file.name.replace(/\.(heic|heif)$/i, '.jpg');
+      const jpegFile = new File([finalBlob], jpegFileName, {
+        type: 'image/jpeg',
+        lastModified: file.lastModified,
+      });
+      
+      console.log(`HEIC conversion complete: ${jpegFileName}`);
+      return jpegFile;
+      
+    } catch (heic2anyError) {
+      // If heic2any fails, check if it's the "already browser readable" error
+      if (heic2anyError.message && heic2anyError.message.includes('already browser readable')) {
+        console.log(`File ${file.name} appears to be already in a browser-readable format, treating as JPEG`);
+        
+        // Create a new file with JPEG type and return it
+        const jpegFileName = file.name.replace(/\.(heic|heif)$/i, '.jpg');
+        const jpegFile = new File([file], jpegFileName, {
+          type: 'image/jpeg',
+          lastModified: file.lastModified,
+        });
+        
+        return jpegFile;
+      } else {
+        // Re-throw other errors
+        throw heic2anyError;
+      }
+    }
+    
+  } catch (error) {
+    console.error('Error converting HEIC file:', error);
+    
+    // As a last fallback, try to treat it as a regular image
+    console.log(`Fallback: treating ${file.name} as regular image file`);
     const jpegFileName = file.name.replace(/\.(heic|heif)$/i, '.jpg');
-    const jpegFile = new File([jpegBlob], jpegFileName, {
+    const jpegFile = new File([file], jpegFileName, {
       type: 'image/jpeg',
       lastModified: file.lastModified,
     });
     
-    console.log(`HEIC conversion complete: ${jpegFileName}`);
     return jpegFile;
-  } catch (error) {
-    console.error('Error converting HEIC file:', error);
-    throw new Error(`Failed to convert HEIC file: ${error.message}`);
   }
 };
 

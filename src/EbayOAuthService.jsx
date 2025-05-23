@@ -27,14 +27,12 @@ class EbayOAuthService {
     console.log('REACT_APP_EBAY_REDIRECT_URI:', process.env.REACT_APP_EBAY_REDIRECT_URI);
     console.log('REACT_APP_EBAY_RU_NAME:', process.env.REACT_APP_EBAY_RU_NAME);
     
-    // Your eBay app credentials - REPLACE THESE WITH YOUR ACTUAL VALUES FOR AMPLIFY
-    this.credentials = {
-      // For AWS Amplify, you might need to set these directly instead of using env vars
-      clientId: process.env.REACT_APP_EBAY_CLIENT_ID || 'PASTE_YOUR_ACTUAL_CLIENT_ID_HERE',
-      clientSecret: process.env.REACT_APP_EBAY_CLIENT_SECRET || 'PASTE_YOUR_ACTUAL_CLIENT_SECRET_HERE',
-      redirectUri: process.env.REACT_APP_EBAY_REDIRECT_URI || 'https://main.dhpq8vit86dyp.amplifyapp.com/ebay/callback',
-      ruName: process.env.REACT_APP_EBAY_RU_NAME || 'PASTE_YOUR_ACTUAL_RU_NAME_HERE'
-    };
+this.credentials = {
+  clientId: 'DavidJac-ListEasi-SBX-50e7167ce-0d788b93',
+  clientSecret: 'SBX-0e7167ce0d788b93-8b89-4ac9-ba7f-5818',
+  redirectUri: 'https://main.dhpq8vit86dyp.amplifyapp.com/ebay/callback',
+  ruName: 'David_Jacobs-DavidJac-ListEa-gkelan'
+};
     
     // Updated scopes - using more specific scopes that are commonly approved
     this.scopes = [

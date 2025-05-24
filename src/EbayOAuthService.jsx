@@ -494,48 +494,84 @@ async makeApiRequest(endpoint, options = {}) {
   /**
    * Get user's business policies (payment, shipping, return)
    */
-  async getBusinessPolicies() {
-    try {
-      console.log('Fetching business policies...');
-      
-      const [fulfillmentResponse, paymentResponse, returnResponse] = await Promise.allSettled([
-        this.makeApiRequest('/sell/account/v1/fulfillment_policy'),
-        this.makeApiRequest('/sell/account/v1/payment_policy'),
-        this.makeApiRequest('/sell/account/v1/return_policy')
-      ]);
+ // Update getBusinessPolicies in EbayOAuthService.js to handle this error gracefully
 
-      const fulfillmentPolicies = fulfillmentResponse.status === 'fulfilled' ? 
-        (fulfillmentResponse.value.fulfillmentPolicies || []) : [];
-      
-      const paymentPolicies = paymentResponse.status === 'fulfilled' ? 
-        (paymentResponse.value.paymentPolicies || []) : [];
-      
-      const returnPolicies = returnResponse.status === 'fulfilled' ? 
-        (returnResponse.value.returnPolicies || []) : [];
+async getBusinessPolicies() {
+  try {
+    console.log('Fetching business policies...');
+    
+    const [fulfillmentResponse, paymentResponse, returnResponse] = await Promise.allSettled([
+      this.makeApiRequest('/sell/account/v1/fulfillment_policy'),
+      this.makeApiRequest('/sell/account/v1/payment_policy'), 
+      this.makeApiRequest('/sell/account/v1/return_policy')
+    ]);
 
-      console.log('Business policies fetched:', {
-        fulfillment: fulfillmentPolicies.length,
-        payment: paymentPolicies.length,
-        return: returnPolicies.length
-      });
+    // Check if user is not eligible for business policies
+    const checkNotEligible = (response) => {
+      if (response.status === 'rejected') {
+        const error = response.reason;
+        if (error.data && error.data.errors) {
+          const notEligible = error.data.errors.some(e => 
+            e.errorId === 20403 || 
+            e.longMessage?.includes('not eligible for Business Policy')
+          );
+          if (notEligible) {
+            console.log('User is not eligible for business policies in this environment');
+            return true;
+          }
+        }
+      }
+      return false;
+    };
 
-      return {
-        fulfillmentPolicies,
-        paymentPolicies,
-        returnPolicies,
-        success: true
-      };
-    } catch (error) {
-      console.error('Error fetching business policies:', error);
+    // If user is not eligible for business policies, return empty but valid response
+    if (checkNotEligible(fulfillmentResponse) || 
+        checkNotEligible(paymentResponse) || 
+        checkNotEligible(returnResponse)) {
+      
+      console.log('Business policies not available for this account');
       return {
         fulfillmentPolicies: [],
         paymentPolicies: [],
         returnPolicies: [],
-        error: error.message,
-        success: false
+        notEligible: true,
+        message: 'Business policies are not enabled for this account. You can still create listings without them.',
+        success: true
       };
     }
+
+    const fulfillmentPolicies = fulfillmentResponse.status === 'fulfilled' ? 
+      (fulfillmentResponse.value.fulfillmentPolicies || []) : [];
+    
+    const paymentPolicies = paymentResponse.status === 'fulfilled' ? 
+      (paymentResponse.value.paymentPolicies || []) : [];
+    
+    const returnPolicies = returnResponse.status === 'fulfilled' ? 
+      (returnResponse.value.returnPolicies || []) : [];
+
+    console.log('Business policies fetched:', {
+      fulfillment: fulfillmentPolicies.length,
+      payment: paymentPolicies.length,
+      return: returnPolicies.length
+    });
+
+    return {
+      fulfillmentPolicies,
+      paymentPolicies,
+      returnPolicies,
+      success: true
+    };
+  } catch (error) {
+    console.error('Error fetching business policies:', error);
+    return {
+      fulfillmentPolicies: [],
+      paymentPolicies: [],
+      returnPolicies: [],
+      error: error.message,
+      success: false
+    };
   }
+}
 
   /**
    * Check if user is authenticated

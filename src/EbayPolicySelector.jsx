@@ -1,3 +1,5 @@
+// Updated EbayPolicySelector.jsx to handle no business policies case
+
 import React from 'react';
 import { useEbayAuth } from './EbayAuthContext';
 
@@ -14,6 +16,30 @@ const EbayPolicySelector = ({ onPolicyChange }) => {
       <div className="policy-selector-container">
         <div className="policy-selector-placeholder">
           <p>eBay policies will appear here once you connect your account.</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Check if user is not eligible for business policies
+  if (businessPolicies.notEligible) {
+    return (
+      <div className="policy-selector-container">
+        <h4>eBay Business Policies</h4>
+        <div className="policy-not-eligible-message">
+          <p style={{ color: '#666', fontStyle: 'italic' }}>
+            {businessPolicies.message || 'Business policies are not enabled for this account.'}
+          </p>
+          <p style={{ color: '#888', fontSize: '0.9rem', marginTop: '10px' }}>
+            You can still create listings without business policies. The CSV export will work, 
+            but you'll need to set up payment, shipping, and return policies directly in eBay.
+          </p>
+          {businessPolicies.environment === 'sandbox' && (
+            <p style={{ color: '#0066cc', fontSize: '0.85rem', marginTop: '10px' }}>
+              💡 Tip: To test with business policies, switch to your production eBay account 
+              or enable business policies in your sandbox account settings.
+            </p>
+          )}
         </div>
       </div>
     );

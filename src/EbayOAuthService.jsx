@@ -163,8 +163,8 @@ class EbayOAuthService {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Accept': 'application/json',
-          'Cache-Control': 'no-cache' // Prevent caching
+          'Accept': 'application/json'
+          // Removed Cache-Control header to avoid CORS issues
         },
         body: JSON.stringify(requestBody)
       });

@@ -24,6 +24,27 @@ class EbayOAuthService {
     this.lambdaTokenEndpoint = 'https://xospzjj5da.execute-api.us-east-2.amazonaws.com/prod/ebay-token-exchange';
     this.lambdaApiProxyEndpoint = 'https://xospzjj5da.execute-api.us-east-2.amazonaws.com/prod/ebay-api-proxy';
     
+    // eBay Marketplace configurations
+    this.marketplaces = {
+      'EBAY_US': { siteId: 0, globalId: 'EBAY-US', currency: 'USD', name: 'United States' },
+      'EBAY_CA': { siteId: 2, globalId: 'EBAY-ENCA', currency: 'CAD', name: 'Canada' },
+      'EBAY_UK': { siteId: 3, globalId: 'EBAY-GB', currency: 'GBP', name: 'United Kingdom' },
+      'EBAY_AU': { siteId: 15, globalId: 'EBAY-AU', currency: 'AUD', name: 'Australia' },
+      'EBAY_DE': { siteId: 77, globalId: 'EBAY-DE', currency: 'EUR', name: 'Germany' },
+      'EBAY_FR': { siteId: 71, globalId: 'EBAY-FR', currency: 'EUR', name: 'France' },
+      'EBAY_IT': { siteId: 101, globalId: 'EBAY-IT', currency: 'EUR', name: 'Italy' },
+      'EBAY_ES': { siteId: 186, globalId: 'EBAY-ES', currency: 'EUR', name: 'Spain' },
+      'EBAY_NL': { siteId: 146, globalId: 'EBAY-NL', currency: 'EUR', name: 'Netherlands' },
+      'EBAY_BE': { siteId: 123, globalId: 'EBAY-FRBE', currency: 'EUR', name: 'Belgium' },
+      'EBAY_CH': { siteId: 193, globalId: 'EBAY-CH', currency: 'CHF', name: 'Switzerland' },
+      'EBAY_IE': { siteId: 205, globalId: 'EBAY-IE', currency: 'EUR', name: 'Ireland' },
+      'EBAY_PL': { siteId: 212, globalId: 'EBAY-PL', currency: 'PLN', name: 'Poland' },
+      'EBAY_AT': { siteId: 16, globalId: 'EBAY-AT', currency: 'EUR', name: 'Austria' }
+    };
+    
+    // Default marketplace (can be overridden)
+    this.selectedMarketplace = 'EBAY_US';
+    
     // Debug environment variables
     console.log('Environment Variables Debug:');
     console.log('REACT_APP_EBAY_CLIENT_ID:', process.env.REACT_APP_EBAY_CLIENT_ID);
@@ -57,6 +78,45 @@ class EbayOAuthService {
     
     // Validate configuration on construction
     this.validateConfiguration();
+  }
+
+  /**
+   * Set the current marketplace
+   */
+  setMarketplace(marketplaceId) {
+    if (this.marketplaces[marketplaceId]) {
+      this.selectedMarketplace = marketplaceId;
+      localStorage.setItem('ebay_marketplace', marketplaceId);
+      console.log(`Marketplace set to: ${this.marketplaces[marketplaceId].name}`);
+    } else {
+      console.error(`Invalid marketplace ID: ${marketplaceId}`);
+    }
+  }
+
+  /**
+   * Get the current marketplace
+   */
+  getMarketplace() {
+    // Try to get from localStorage first
+    const savedMarketplace = localStorage.getItem('ebay_marketplace');
+    if (savedMarketplace && this.marketplaces[savedMarketplace]) {
+      this.selectedMarketplace = savedMarketplace;
+    }
+    return this.selectedMarketplace;
+  }
+
+  /**
+   * Get marketplace details
+   */
+  getMarketplaceDetails() {
+    return this.marketplaces[this.getMarketplace()];
+  }
+
+  /**
+   * Get all available marketplaces
+   */
+  getAllMarketplaces() {
+    return this.marketplaces;
   }
 
   /**
@@ -404,174 +464,176 @@ class EbayOAuthService {
     return tokens.access_token;
   }
 
- // Update the makeApiRequest method in EbayOAuthService.js to add more debugging
-
-async makeApiRequest(endpoint, options = {}) {
-  if (!this.isConfigured()) {
-    throw new Error('eBay OAuth service is not properly configured.');
-  }
-
-  try {
-    const accessToken = await this.getValidAccessToken();
-    
-    console.log(`Making eBay API request via Lambda proxy to: ${endpoint}`);
-    
-    const proxyRequest = {
-      endpoint: endpoint,
-      method: options.method || 'GET',
-      accessToken: accessToken,
-      environment: this.environment,
-      headers: options.headers || {},
-      requestBody: options.body || null
-    };
-
-    const response = await fetch(this.lambdaApiProxyEndpoint, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Accept': 'application/json'
-      },
-      body: JSON.stringify(proxyRequest)
-    });
-
-    console.log('Lambda proxy response status:', response.status);
-
-    if (!response.ok) {
-      let errorMessage = `API proxy request failed: ${response.status}`;
-      try {
-        const errorData = await response.json();
-        errorMessage = `API proxy request failed: ${errorData.error || errorData.message || response.statusText}`;
-      } catch (e) {
-        // If we can't parse the error, use the default message
-      }
-      
-      console.error('API proxy request error:', errorMessage);
-      throw new Error(errorMessage);
+  /**
+   * Make authenticated API request to eBay
+   */
+  async makeApiRequest(endpoint, options = {}) {
+    if (!this.isConfigured()) {
+      throw new Error('eBay OAuth service is not properly configured.');
     }
 
-    const proxyResponse = await response.json();
-    
-    // LOG THE FULL RESPONSE FOR DEBUGGING
-    console.log('Full proxy response:', JSON.stringify(proxyResponse, null, 2));
-    
-    // Check if the proxied request was successful
-    if (!proxyResponse.success) {
-      // Check for auth errors
-      if (proxyResponse.statusCode === 401) {
-        console.log('Received 401 from eBay, attempting token refresh...');
-        
-        try {
-          await this.refreshAccessToken();
-          // Retry the request with new token
-          return this.makeApiRequest(endpoint, options);
-        } catch (refreshError) {
-          console.error('Token refresh failed:', refreshError);
-          throw new Error('Authentication failed. Please log in again.');
-        }
-      }
+    try {
+      const accessToken = await this.getValidAccessToken();
       
-      // LOG MORE DETAILS ABOUT THE ERROR
-      console.error('eBay API error details:', {
-        statusCode: proxyResponse.statusCode,
-        error: proxyResponse.error,
-        data: proxyResponse.data
+      console.log(`Making eBay API request via Lambda proxy to: ${endpoint}`);
+      
+      const proxyRequest = {
+        endpoint: endpoint,
+        method: options.method || 'GET',
+        accessToken: accessToken,
+        environment: this.environment,
+        headers: {
+          'X-EBAY-C-MARKETPLACE-ID': this.getMarketplace(),
+          ...options.headers
+        },
+        requestBody: options.body || null
+      };
+
+      const response = await fetch(this.lambdaApiProxyEndpoint, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        },
+        body: JSON.stringify(proxyRequest)
       });
+
+      console.log('Lambda proxy response status:', response.status);
+
+      if (!response.ok) {
+        let errorMessage = `API proxy request failed: ${response.status}`;
+        try {
+          const errorData = await response.json();
+          errorMessage = `API proxy request failed: ${errorData.error || errorData.message || response.statusText}`;
+        } catch (e) {
+          // If we can't parse the error, use the default message
+        }
+        
+        console.error('API proxy request error:', errorMessage);
+        throw new Error(errorMessage);
+      }
+
+      const proxyResponse = await response.json();
       
-      const error = new Error(`eBay API error: ${proxyResponse.error || JSON.stringify(proxyResponse.data) || 'Unknown error'}`);
-      error.statusCode = proxyResponse.statusCode;
-      error.data = proxyResponse.data;
+      // LOG THE FULL RESPONSE FOR DEBUGGING
+      console.log('Full proxy response:', JSON.stringify(proxyResponse, null, 2));
+      
+      // Check if the proxied request was successful
+      if (!proxyResponse.success) {
+        // Check for auth errors
+        if (proxyResponse.statusCode === 401) {
+          console.log('Received 401 from eBay, attempting token refresh...');
+          
+          try {
+            await this.refreshAccessToken();
+            // Retry the request with new token
+            return this.makeApiRequest(endpoint, options);
+          } catch (refreshError) {
+            console.error('Token refresh failed:', refreshError);
+            throw new Error('Authentication failed. Please log in again.');
+          }
+        }
+        
+        // LOG MORE DETAILS ABOUT THE ERROR
+        console.error('eBay API error details:', {
+          statusCode: proxyResponse.statusCode,
+          error: proxyResponse.error,
+          data: proxyResponse.data
+        });
+        
+        const error = new Error(`eBay API error: ${proxyResponse.error || JSON.stringify(proxyResponse.data) || 'Unknown error'}`);
+        error.statusCode = proxyResponse.statusCode;
+        error.data = proxyResponse.data;
+        throw error;
+      }
+
+      console.log('API request successful');
+      return proxyResponse.data;
+    } catch (error) {
+      console.error('API request error:', error);
       throw error;
     }
-
-    console.log('API request successful');
-    return proxyResponse.data;
-  } catch (error) {
-    console.error('API request error:', error);
-    throw error;
   }
-}
 
   /**
    * Get user's business policies (payment, shipping, return)
    */
- // Update getBusinessPolicies in EbayOAuthService.js to handle this error gracefully
+  async getBusinessPolicies() {
+    try {
+      console.log('Fetching business policies...');
+      
+      const [fulfillmentResponse, paymentResponse, returnResponse] = await Promise.allSettled([
+        this.makeApiRequest('/sell/account/v1/fulfillment_policy'),
+        this.makeApiRequest('/sell/account/v1/payment_policy'), 
+        this.makeApiRequest('/sell/account/v1/return_policy')
+      ]);
 
-async getBusinessPolicies() {
-  try {
-    console.log('Fetching business policies...');
-    
-    const [fulfillmentResponse, paymentResponse, returnResponse] = await Promise.allSettled([
-      this.makeApiRequest('/sell/account/v1/fulfillment_policy'),
-      this.makeApiRequest('/sell/account/v1/payment_policy'), 
-      this.makeApiRequest('/sell/account/v1/return_policy')
-    ]);
-
-    // Check if user is not eligible for business policies
-    const checkNotEligible = (response) => {
-      if (response.status === 'rejected') {
-        const error = response.reason;
-        if (error.data && error.data.errors) {
-          const notEligible = error.data.errors.some(e => 
-            e.errorId === 20403 || 
-            e.longMessage?.includes('not eligible for Business Policy')
-          );
-          if (notEligible) {
-            console.log('User is not eligible for business policies in this environment');
-            return true;
+      // Check if user is not eligible for business policies
+      const checkNotEligible = (response) => {
+        if (response.status === 'rejected') {
+          const error = response.reason;
+          if (error.data && error.data.errors) {
+            const notEligible = error.data.errors.some(e => 
+              e.errorId === 20403 || 
+              e.longMessage?.includes('not eligible for Business Policy')
+            );
+            if (notEligible) {
+              console.log('User is not eligible for business policies in this environment');
+              return true;
+            }
           }
         }
-      }
-      return false;
-    };
+        return false;
+      };
 
-    // If user is not eligible for business policies, return empty but valid response
-    if (checkNotEligible(fulfillmentResponse) || 
-        checkNotEligible(paymentResponse) || 
-        checkNotEligible(returnResponse)) {
+      // If user is not eligible for business policies, return empty but valid response
+      if (checkNotEligible(fulfillmentResponse) || 
+          checkNotEligible(paymentResponse) || 
+          checkNotEligible(returnResponse)) {
+        
+        console.log('Business policies not available for this account');
+        return {
+          fulfillmentPolicies: [],
+          paymentPolicies: [],
+          returnPolicies: [],
+          notEligible: true,
+          message: 'Business policies are not enabled for this account. You can still create listings without them.',
+          success: true
+        };
+      }
+
+      const fulfillmentPolicies = fulfillmentResponse.status === 'fulfilled' ? 
+        (fulfillmentResponse.value.fulfillmentPolicies || []) : [];
       
-      console.log('Business policies not available for this account');
+      const paymentPolicies = paymentResponse.status === 'fulfilled' ? 
+        (paymentResponse.value.paymentPolicies || []) : [];
+      
+      const returnPolicies = returnResponse.status === 'fulfilled' ? 
+        (returnResponse.value.returnPolicies || []) : [];
+
+      console.log('Business policies fetched:', {
+        fulfillment: fulfillmentPolicies.length,
+        payment: paymentPolicies.length,
+        return: returnPolicies.length
+      });
+
+      return {
+        fulfillmentPolicies,
+        paymentPolicies,
+        returnPolicies,
+        success: true
+      };
+    } catch (error) {
+      console.error('Error fetching business policies:', error);
       return {
         fulfillmentPolicies: [],
         paymentPolicies: [],
         returnPolicies: [],
-        notEligible: true,
-        message: 'Business policies are not enabled for this account. You can still create listings without them.',
-        success: true
+        error: error.message,
+        success: false
       };
     }
-
-    const fulfillmentPolicies = fulfillmentResponse.status === 'fulfilled' ? 
-      (fulfillmentResponse.value.fulfillmentPolicies || []) : [];
-    
-    const paymentPolicies = paymentResponse.status === 'fulfilled' ? 
-      (paymentResponse.value.paymentPolicies || []) : [];
-    
-    const returnPolicies = returnResponse.status === 'fulfilled' ? 
-      (returnResponse.value.returnPolicies || []) : [];
-
-    console.log('Business policies fetched:', {
-      fulfillment: fulfillmentPolicies.length,
-      payment: paymentPolicies.length,
-      return: returnPolicies.length
-    });
-
-    return {
-      fulfillmentPolicies,
-      paymentPolicies,
-      returnPolicies,
-      success: true
-    };
-  } catch (error) {
-    console.error('Error fetching business policies:', error);
-    return {
-      fulfillmentPolicies: [],
-      paymentPolicies: [],
-      returnPolicies: [],
-      error: error.message,
-      success: false
-    };
   }
-}
 
   /**
    * Check if user is authenticated
@@ -596,7 +658,7 @@ async getBusinessPolicies() {
     try {
       const response = await this.makeApiRequest('/commerce/identity/v1/user', {
         headers: {
-          'X-EBAY-C-MARKETPLACE-ID': 'EBAY_US'
+          'X-EBAY-C-MARKETPLACE-ID': this.getMarketplace()
         }
       });
       

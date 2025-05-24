@@ -28,8 +28,8 @@ function PreviewSection({ categoryFields = [] }) {
     fieldSelections
   } = state;
   
-  // Get current marketplace details
-  const marketplaceDetails = ebayService?.getMarketplaceDetails() || { siteId: 0, currency: 'USD', globalId: 'EBAY-US' };
+  // Get current marketplace details - with safety check
+  const marketplaceDetails = ebayService?.getMarketplaceDetails?.() || { siteId: 0, currency: 'USD', globalId: 'EBAY-US' };
   
   // Use new processing status for consistent display
   const { isProcessing, processTotal, processCompleted } = processingStatus || { isProcessing: false, processTotal: 0, processCompleted: 0 };

@@ -1467,8 +1467,6 @@
 }
 
 /* Responsive adjustments */
-
-<style jsx>{`
   .create-ebay-listings-button {
     background: linear-gradient(135deg, #0654ba, #4a90e2);
     color: white;
@@ -1526,4 +1524,4 @@
     background: #ccc;
     cursor: not-allowed;
   }
-}</style>
+}

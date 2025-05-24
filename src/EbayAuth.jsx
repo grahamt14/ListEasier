@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import EbayOAuthService from './EbayOAuthService';
+import EbayMarketplaceSelector from './EbayMarketplaceSelector';
 
 const EbayAuth = ({ onAuthSuccess, onAuthError }) => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);

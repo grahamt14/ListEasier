@@ -16,6 +16,7 @@ const initialState = {
     fulfillmentPolicyId: null,
     returnPolicyId: null
   },
+  selectedMarketplace: 'EBAY_US',
   error: null,
   isConfigured: false
 };

@@ -13,8 +13,11 @@ import OptimizedImageUploader from './OptimizedImageUploader';
 import { processImagesInBatch, isHeicFile, convertHeicToJpeg } from './OptimizedImageHandler';
 import EbayAuth from './EbayAuth';
 import EbayPolicySelector from './EbayPolicySelector';
+import EbayMarketplaceSelector from './EbayMarketplaceSelector';
 import './OptimizedUploaderStyles.css';
 import './EbayAuth.css';
+
+
 
 export const getSelectedCategoryOptionsJSON = (fieldSelections, price, sku, ebayPolicies = null) => {
   const output = {};

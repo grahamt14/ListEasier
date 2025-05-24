@@ -8,10 +8,9 @@ import { fromCognitoIdentityPool } from "@aws-sdk/credential-provider-cognito-id
 import { AppStateProvider, useAppState } from './StateContext';
 import { EbayAuthProvider, useEbayAuth } from './EbayAuthContext';
 
-// Updated PreviewSection component with editable title and description
 function PreviewSection({ categoryFields = [] }) {
   const { state, dispatch } = useAppState();
-  const { selectedPolicies } = useEbayAuth(); // Get eBay policies
+  const { selectedPolicies, ebayService } = useEbayAuth(); // Get eBay policies and service
   const { 
     imageGroups, 
     s3ImageGroups,
@@ -28,6 +27,9 @@ function PreviewSection({ categoryFields = [] }) {
     groupMetadata,
     fieldSelections
   } = state;
+  
+  // Get current marketplace details
+  const marketplaceDetails = ebayService?.getMarketplaceDetails() || { siteId: 0, currency: 'USD', globalId: 'EBAY-US' };
   
   // Use new processing status for consistent display
   const { isProcessing, processTotal, processCompleted } = processingStatus || { isProcessing: false, processTotal: 0, processCompleted: 0 };

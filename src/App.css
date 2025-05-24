@@ -1418,3 +1418,52 @@
     min-height: 50px;
   }
 }
+
+/* Marketplace Selector Styles */
+.marketplace-selector {
+  margin-top: 15px;
+  padding-top: 15px;
+  border-top: 1px solid #eee;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.marketplace-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 500;
+  color: #333;
+  font-size: 0.9rem;
+}
+
+.marketplace-icon {
+  font-size: 1.1rem;
+}
+
+.marketplace-select {
+  flex: 1;
+  padding: 8px 12px;
+  border: 1px solid #ced4da;
+  border-radius: 6px;
+  font-size: 0.9rem;
+  background-color: white;
+  color: #333;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  max-width: 250px;
+}
+
+.marketplace-select:focus {
+  outline: none;
+  border-color: #0654ba;
+  box-shadow: 0 0 0 2px rgba(6, 84, 186, 0.1);
+}
+
+.marketplace-select:disabled {
+  background-color: #f8f9fa;
+  color: #6c757d;
+  cursor: not-allowed;
+}
+
+/* Responsive adjustments */

@@ -1,4 +1,4 @@
-// EbayOAuthService.js - Enhanced with debugging for invalid_grant issue
+// EbayOAuthService.js - Updated with better error handling and debugging
 class EbayOAuthService {
   constructor() {
     // eBay API Configuration
@@ -24,17 +24,17 @@ class EbayOAuthService {
     this.lambdaTokenEndpoint = 'https://xospzjj5da.execute-api.us-east-2.amazonaws.com/prod/ebay-token-exchange';
     this.lambdaApiProxyEndpoint = 'https://xospzjj5da.execute-api.us-east-2.amazonaws.com/prod/ebay-api-proxy';
     
-    // Store auth state to prevent reuse
-    this.authState = {
-      lastAuthCode: null,
-      lastAuthTime: null,
-      pendingExchange: false
-    };
+    // Debug environment variables
+    console.log('Environment Variables Debug:');
+    console.log('REACT_APP_EBAY_CLIENT_ID:', process.env.REACT_APP_EBAY_CLIENT_ID);
+    console.log('REACT_APP_EBAY_CLIENT_SECRET:', process.env.REACT_APP_EBAY_CLIENT_SECRET ? '[SET]' : '[NOT SET]');
+    console.log('REACT_APP_EBAY_REDIRECT_URI:', process.env.REACT_APP_EBAY_REDIRECT_URI);
+    console.log('REACT_APP_EBAY_RU_NAME:', process.env.REACT_APP_EBAY_RU_NAME);
     
     this.credentials = {
       clientId: 'DavidJac-ListEasi-SBX-50e7167ce-0d788b93',
       clientSecret: 'SBX-0e7167ce5ea2-8b89-4ac9-ba7f-5818',
-      redirectUri: 'https://main.dhpq8vit86dyp.amplifyapp.com/ebay/callback/',
+      redirectUri: 'https://main.dhpq8vit86dyp.amplifyapp.com/ebay/callback',
       ruName: 'David_Jacobs-DavidJac-ListEa-gkelan'
     };
     
@@ -48,21 +48,56 @@ class EbayOAuthService {
     console.log('eBay OAuth Service Configuration:');
     console.log('Environment:', this.environment);
     console.log('Client ID:', this.credentials.clientId);
+    console.log('Client Secret:', this.credentials.clientSecret ? '[SET]' : '[NOT SET]');
     console.log('Redirect URI:', this.credentials.redirectUri);
-    console.log('Lambda Endpoint:', this.lambdaTokenEndpoint);
+    console.log('RuName:', this.credentials.ruName);
+    console.log('Scopes:', this.scopes);
+    console.log('Lambda Token Endpoint:', this.lambdaTokenEndpoint);
+    console.log('Lambda API Proxy Endpoint:', this.lambdaApiProxyEndpoint);
     
+    // Validate configuration on construction
     this.validateConfiguration();
   }
 
+  /**
+   * Validate that all required credentials are configured
+   */
   validateConfiguration() {
     const required = ['clientId', 'clientSecret', 'redirectUri'];
     const missing = required.filter(key => {
       const value = this.credentials[key];
-      return !value || value === '' || value.startsWith('YOUR_') || value.startsWith('PASTE_YOUR_');
+      return !value || 
+             value === '' ||
+             value.startsWith('YOUR_') ||
+             value.startsWith('PASTE_YOUR_');
     });
     
+    // Check if Lambda endpoints are configured
+    if (this.lambdaTokenEndpoint.includes('YOUR_')) {
+      console.warn('Lambda token endpoint not configured - token exchange will fail');
+      missing.push('lambdaTokenEndpoint');
+    }
+
+    if (this.lambdaApiProxyEndpoint.includes('YOUR_')) {
+      console.warn('Lambda API proxy endpoint not configured - API calls will fail');
+      missing.push('lambdaApiProxyEndpoint');
+    }
+    
+    // RuName validation
+    if (!this.credentials.ruName || 
+        this.credentials.ruName.startsWith('YOUR_') ||
+        this.credentials.ruName.startsWith('PASTE_YOUR_')) {
+      console.warn('RuName not properly set - this might be required depending on your eBay app configuration');
+      missing.push('ruName');
+    }
+    
     if (missing.length > 0) {
-      console.error('eBay OAuth Configuration Error: Missing credentials:', missing);
+      console.error('eBay OAuth Configuration Error: Missing or invalid credentials:', missing);
+      console.error('Please check your eBay Developer Account and update the following:');
+      missing.forEach(key => {
+        console.error(`- ${key}: ${this.credentials[key]}`);
+      });
+      
       this.configurationValid = false;
     } else {
       this.configurationValid = true;
@@ -70,166 +105,185 @@ class EbayOAuthService {
     }
   }
 
+  /**
+   * Check if the service is properly configured
+   */
   isConfigured() {
     return this.configurationValid;
   }
 
+  /**
+   * Get configuration instructions for the user
+   */
+  getConfigurationInstructions() {
+    return {
+      step1: "Go to https://developer.ebay.com/my/keys",
+      step2: "Create a new application or use an existing one",
+      step3: "Copy your Client ID and Client Secret",
+      step4: "Create a RuName (Redirect URL Name) with your callback URL",
+      step5: "Deploy the Lambda functions for token exchange and API proxy",
+      environment: this.environment,
+      redirectUri: this.credentials.redirectUri,
+      lambdaTokenEndpoint: this.lambdaTokenEndpoint,
+      lambdaApiProxyEndpoint: this.lambdaApiProxyEndpoint,
+      requiredEnvVars: [
+        'REACT_APP_EBAY_CLIENT_ID',
+        'REACT_APP_EBAY_CLIENT_SECRET', 
+        'REACT_APP_EBAY_REDIRECT_URI',
+        'REACT_APP_EBAY_RU_NAME',
+        'REACT_APP_LAMBDA_TOKEN_ENDPOINT',
+        'REACT_APP_LAMBDA_API_PROXY_ENDPOINT'
+      ]
+    };
+  }
+
+  /**
+   * Get the current API URLs based on environment
+   */
   getApiUrls() {
     return this.config[this.environment];
   }
 
+  /**
+   * Generate the eBay OAuth authorization URL with better parameter validation
+   */
   generateAuthUrl(state = null) {
     if (!this.isConfigured()) {
-      throw new Error('eBay OAuth service is not properly configured.');
+      throw new Error('eBay OAuth service is not properly configured. Please check your credentials.');
     }
 
-    // Clear any pending exchange state when generating new auth URL
-    this.authState = {
-      lastAuthCode: null,
-      lastAuthTime: null,
-      pendingExchange: false
+    const urls = this.getApiUrls();
+    
+    // Validate redirect URI format
+    if (!this.credentials.redirectUri.startsWith('http')) {
+      throw new Error('Redirect URI must be a valid HTTP/HTTPS URL');
+    }
+    
+    // Build parameters object
+    const params = {
+      client_id: this.credentials.clientId,
+      redirect_uri: this.credentials.redirectUri,
+      response_type: 'code',
+      scope: this.scopes.join(' ')
     };
     
-    // Use eBay's legacy SignIn endpoint that works with the test button
-    const signInUrl = this.environment === 'sandbox' 
-      ? 'https://signin.sandbox.ebay.com/ws/eBayISAPI.dll'
-      : 'https://signin.ebay.com/ws/eBayISAPI.dll';
+    // Only add state if provided
+    if (state) {
+      params.state = state;
+    }
     
-    // Build parameters for legacy endpoint
-    const params = new URLSearchParams({
-      SignIn: '',
-      runame: this.credentials.ruName,
-      SessID: 'SESSION_ID' // This might need to be dynamically generated
+    // Debug the parameters being sent
+    console.log('eBay OAuth Parameters:');
+    console.log('Auth URL:', urls.authUrl);
+    console.log('Parameters:', params);
+    
+    // Create URL with proper encoding
+    const urlParams = new URLSearchParams();
+    Object.entries(params).forEach(([key, value]) => {
+      urlParams.append(key, value);
     });
     
-    const authUrl = `${signInUrl}?${params.toString()}`;
-    console.log('Generated eBay auth URL (legacy):', authUrl);
+    const authUrl = `${urls.authUrl}?${urlParams.toString()}`;
+    console.log('Generated eBay auth URL:', authUrl);
     
     return authUrl;
   }
 
+  /**
+   * Exchange authorization code for access token using Lambda proxy
+   */
   async exchangeCodeForToken(authorizationCode) {
     if (!this.isConfigured()) {
       throw new Error('eBay OAuth service is not properly configured.');
     }
 
-    // Check if we're already processing this code
-    if (this.authState.pendingExchange) {
-      console.warn('Token exchange already in progress, preventing duplicate request');
-      throw new Error('Token exchange already in progress');
-    }
-
-    // Check if this code was already used
-    if (this.authState.lastAuthCode === authorizationCode) {
-      const timeSinceLastAuth = Date.now() - this.authState.lastAuthTime;
-      console.error(`Authorization code was already used ${timeSinceLastAuth}ms ago`);
-      throw new Error('Authorization code has already been used');
-    }
-
-    // Mark exchange as pending
-    this.authState.pendingExchange = true;
-    this.authState.lastAuthCode = authorizationCode;
-    this.authState.lastAuthTime = Date.now();
-
     try {
       console.log('=== TOKEN EXCHANGE VIA LAMBDA ===');
-      console.log('Authorization code (raw):', authorizationCode);
-      console.log('Authorization code (URL encoded):', encodeURIComponent(authorizationCode));
-      console.log('Code length:', authorizationCode.length);
+      console.log('Authorization code received:', authorizationCode);
       console.log('Lambda endpoint:', this.lambdaTokenEndpoint);
       console.log('Environment:', this.environment);
-      console.log('Timestamp:', new Date().toISOString());
-      
-      // Check if the code needs decoding
-      const decodedCode = decodeURIComponent(authorizationCode);
-      if (decodedCode !== authorizationCode) {
-        console.log('Code appears to be URL encoded, using decoded version');
-        authorizationCode = decodedCode;
-      }
-      
-      // Check stored state
-      const storedState = sessionStorage.getItem('ebay_oauth_state');
-      console.log('Stored OAuth state:', storedState);
       
       const requestBody = {
         authorizationCode: authorizationCode,
         environment: this.environment,
-        timestamp: Date.now() // Add timestamp to prevent caching
+        timestamp: new Date().toISOString()
       };
       
-      console.log('Request body:', JSON.stringify(requestBody, null, 2));
+      console.log('Request body:', requestBody);
       
       const response = await fetch(this.lambdaTokenEndpoint, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Accept': 'application/json'
-          // Removed Cache-Control header to avoid CORS issues
         },
         body: JSON.stringify(requestBody)
       });
 
       console.log('Lambda response status:', response.status);
+      console.log('Lambda response headers:', Object.fromEntries(response.headers.entries()));
+
       const responseText = await response.text();
       console.log('Lambda response body:', responseText);
 
+      // First check if the response is OK
       if (!response.ok) {
-        // Parse error details
-        let errorDetails;
+        // Try to parse any error details
         try {
-          errorDetails = JSON.parse(responseText);
-          console.error('Lambda error details:', errorDetails);
-          
-          // Check for specific eBay error codes
-          if (errorDetails.error && errorDetails.error.includes('invalid_grant')) {
-            console.error('Invalid grant error - authorization code issue');
-            // Clear stored tokens to force re-authentication
-            this.logout();
-          }
-        } catch (e) {
-          errorDetails = { error: responseText };
+          const errorData = JSON.parse(responseText);
+          throw new Error(`Lambda function error: ${response.status} - ${errorData.error || responseText}`);
+        } catch (parseError) {
+          // If can't parse JSON, just use the text
+          throw new Error(`Lambda function error: ${response.status} - ${responseText}`);
         }
-        
-        throw new Error(`Lambda function error: ${response.status} - ${responseText}`);
       }
 
-      // Parse successful response
+      // Parse the successful response
       let responseData;
       try {
         responseData = JSON.parse(responseText);
+        
+        // Check if response contains a nested JSON response (common issue with API Gateway)
+        if (responseData.body && typeof responseData.body === 'string') {
+          try {
+            responseData = JSON.parse(responseData.body);
+          } catch (nestedError) {
+            console.log('Could not parse nested body, using original response');
+          }
+        }
+        
+        // Ensure we have tokenData
         const tokenData = responseData.tokenData || responseData;
         
-        if (!tokenData || !tokenData.access_token) {
+        if (!tokenData || (!tokenData.access_token && !tokenData.refresh_token)) {
           throw new Error('Invalid token data received from Lambda');
         }
         
         console.log('=== TOKEN EXCHANGE SUCCESS ===');
         console.log('Token type:', tokenData.token_type);
         console.log('Expires in:', tokenData.expires_in, 'seconds');
-        console.log('Has refresh token:', !!tokenData.refresh_token);
+        console.log('Access token length:', tokenData.access_token?.length || 0);
+        console.log('Refresh token present:', !!tokenData.refresh_token);
         
         this.storeTokens(tokenData);
-        
-        // Clear OAuth state after successful exchange
-        sessionStorage.removeItem('ebay_oauth_state');
+        console.log('Tokens stored successfully');
         
         return tokenData;
       } catch (parseError) {
-        console.error('Error parsing token response:', parseError);
-        throw new Error(`Invalid response from Lambda: ${responseText}`);
+        console.error('Error parsing JSON response:', parseError);
+        throw new Error(`Invalid JSON response from Lambda: ${responseText}`);
       }
     } catch (error) {
       console.error('=== TOKEN EXCHANGE ERROR ===');
-      console.error('Full error:', error);
+      console.error('Error details:', error);
+      console.error('Error message:', error.message);
       throw error;
-    } finally {
-      // Clear pending state after a delay to prevent rapid retries
-      setTimeout(() => {
-        this.authState.pendingExchange = false;
-      }, 2000);
     }
   }
 
+  /**
+   * Store tokens securely
+   */
   storeTokens(tokenData) {
     const tokens = {
       access_token: tokenData.access_token,
@@ -237,27 +291,31 @@ class EbayOAuthService {
       expires_in: tokenData.expires_in,
       token_type: tokenData.token_type,
       expires_at: Date.now() + (tokenData.expires_in * 1000),
-      stored_at: Date.now()
+      stored_at: new Date().toISOString()
     };
     
     localStorage.setItem('ebay_tokens', JSON.stringify(tokens));
-    console.log('Tokens stored at:', new Date().toISOString());
+    console.log('Tokens stored successfully at:', tokens.stored_at);
     return tokens;
   }
 
+  /**
+   * Get stored tokens
+   */
   getStoredTokens() {
     const stored = localStorage.getItem('ebay_tokens');
     if (!stored) return null;
     
     try {
       const tokens = JSON.parse(stored);
-      console.log('Retrieved tokens, stored at:', new Date(tokens.stored_at).toISOString());
+      
+      console.log('Retrieved tokens, stored at:', tokens.stored_at);
       
       // Check if tokens are expired
       if (Date.now() >= tokens.expires_at) {
-        console.log('Tokens expired, clearing storage');
-        localStorage.removeItem('ebay_tokens');
-        return null;
+        console.log('Tokens expired, need to refresh');
+        // Don't automatically clear - let refresh token flow handle it
+        return tokens; // Return expired tokens so refresh can be attempted
       }
       
       return tokens;
@@ -267,48 +325,69 @@ class EbayOAuthService {
     }
   }
 
+  /**
+   * Refresh access token using refresh token via Lambda proxy
+   */
   async refreshAccessToken() {
     const tokens = this.getStoredTokens();
     if (!tokens || !tokens.refresh_token) {
       throw new Error('No refresh token available');
     }
 
-    const urls = this.getApiUrls();
-
     try {
-      console.log('Refreshing access token...');
+      console.log('Refreshing access token via Lambda proxy...');
       
-      const response = await fetch(urls.tokenUrl, {
+      const response = await fetch(this.lambdaApiProxyEndpoint, {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/x-www-form-urlencoded',
-          'Authorization': `Basic ${btoa(`${this.credentials.clientId}:${this.credentials.clientSecret}`)}`
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
         },
-        body: new URLSearchParams({
-          grant_type: 'refresh_token',
-          refresh_token: tokens.refresh_token,
-          scope: this.scopes.join(' ')
+        body: JSON.stringify({
+          endpoint: '/identity/v1/oauth2/token',
+          method: 'POST',
+          environment: this.environment,
+          headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+            'Authorization': `Basic ${btoa(`${this.credentials.clientId}:${this.credentials.clientSecret}`)}`
+          },
+          requestBody: {
+            grant_type: 'refresh_token',
+            refresh_token: tokens.refresh_token,
+            scope: this.scopes.join(' ')
+          }
         })
       });
 
       if (!response.ok) {
         const errorData = await response.text();
-        console.error('Token refresh failed:', response.status, errorData);
+        console.error('Token refresh proxy failed:', response.status, errorData);
         throw new Error(`Token refresh failed: ${response.status} - ${errorData}`);
       }
 
-      const tokenData = await response.json();
+      const proxyResponse = await response.json();
+      
+      if (!proxyResponse.success) {
+        console.error('Token refresh failed:', proxyResponse);
+        throw new Error(`Token refresh failed: ${proxyResponse.error || 'Unknown error'}`);
+      }
+
+      const tokenData = proxyResponse.data;
       this.storeTokens(tokenData);
       
       console.log('Token refresh successful');
       return tokenData;
     } catch (error) {
       console.error('Error refreshing token:', error);
+      // Clear tokens on refresh failure
       localStorage.removeItem('ebay_tokens');
       throw error;
     }
   }
 
+  /**
+   * Get valid access token (refresh if needed)
+   */
   async getValidAccessToken() {
     let tokens = this.getStoredTokens();
     
@@ -318,101 +397,94 @@ class EbayOAuthService {
 
     // If token expires in less than 5 minutes, refresh it
     if (Date.now() >= (tokens.expires_at - 300000)) {
+      console.log('Token expiring soon or expired, refreshing...');
       tokens = await this.refreshAccessToken();
     }
 
     return tokens.access_token;
   }
 
+  /**
+   * Make authenticated API request to eBay via Lambda proxy
+   */
   async makeApiRequest(endpoint, options = {}) {
     if (!this.isConfigured()) {
       throw new Error('eBay OAuth service is not properly configured.');
     }
 
-    const accessToken = await this.getValidAccessToken();
-    
-    // Use Lambda proxy for API calls to avoid CORS issues
-    if (this.lambdaApiProxyEndpoint) {
+    try {
+      const accessToken = await this.getValidAccessToken();
+      
       console.log(`Making eBay API request via Lambda proxy to: ${endpoint}`);
       
-      try {
-        const response = await fetch(this.lambdaApiProxyEndpoint, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Accept': 'application/json'
-          },
-          body: JSON.stringify({
-            endpoint: endpoint,
-            method: options.method || 'GET',
-            accessToken: accessToken,
-            environment: this.environment,
-            requestBody: options.body,
-            headers: options.headers || {}
-          })
-        });
+      const proxyRequest = {
+        endpoint: endpoint,
+        method: options.method || 'GET',
+        accessToken: accessToken,
+        environment: this.environment,
+        headers: options.headers || {},
+        requestBody: options.body || null
+      };
 
-        const responseData = await response.json();
-        
-        if (!response.ok || !responseData.success) {
-          throw new Error(`API request failed: ${responseData.error || 'Unknown error'}`);
+      const response = await fetch(this.lambdaApiProxyEndpoint, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        },
+        body: JSON.stringify(proxyRequest)
+      });
+
+      console.log('Lambda proxy response status:', response.status);
+
+      if (!response.ok) {
+        let errorMessage = `API proxy request failed: ${response.status}`;
+        try {
+          const errorData = await response.json();
+          errorMessage = `API proxy request failed: ${errorData.error || errorData.message || response.statusText}`;
+        } catch (e) {
+          // If we can't parse the error, use the default message
         }
         
-        // Check if eBay returned an error
-        if (responseData.statusCode >= 400) {
-          // If it's a 401, try to refresh token
-          if (responseData.statusCode === 401) {
-            console.log('Received 401, attempting token refresh...');
+        console.error('API proxy request error:', errorMessage);
+        throw new Error(errorMessage);
+      }
+
+      const proxyResponse = await response.json();
+      
+      // Check if the proxied request was successful
+      if (!proxyResponse.success) {
+        // Check for auth errors
+        if (proxyResponse.statusCode === 401) {
+          console.log('Received 401 from eBay, attempting token refresh...');
+          
+          try {
             await this.refreshAccessToken();
             // Retry the request with new token
             return this.makeApiRequest(endpoint, options);
+          } catch (refreshError) {
+            console.error('Token refresh failed:', refreshError);
+            throw new Error('Authentication failed. Please log in again.');
           }
-          
-          throw new Error(`eBay API error: ${responseData.statusCode} - ${JSON.stringify(responseData.data)}`);
         }
         
-        console.log('API request successful');
-        return responseData.data;
-        
-      } catch (error) {
-        console.error('API proxy request error:', error);
+        const error = new Error(`eBay API error: ${proxyResponse.error || 'Unknown error'}`);
+        error.statusCode = proxyResponse.statusCode;
+        error.data = proxyResponse.data;
         throw error;
       }
-    }
-    
-    // Fallback to direct API call (will fail due to CORS in browser)
-    const urls = this.getApiUrls();
-    const defaultHeaders = {
-      'Authorization': `Bearer ${accessToken}`,
-      'Content-Type': 'application/json',
-      'X-EBAY-C-MARKETPLACE-ID': 'EBAY_US'
-    };
 
-    const requestOptions = {
-      method: 'GET',
-      ...options,
-      headers: {
-        ...defaultHeaders,
-        ...options.headers
-      }
-    };
-
-    try {
-      console.log(`Making direct eBay API request to: ${urls.apiUrl}${endpoint}`);
-      const response = await fetch(`${urls.apiUrl}${endpoint}`, requestOptions);
-      
-      if (!response.ok) {
-        const errorData = await response.text();
-        throw new Error(`API request failed: ${response.status} - ${errorData}`);
-      }
-
-      return await response.json();
+      console.log('API request successful');
+      return proxyResponse.data;
     } catch (error) {
-      console.error('Direct API request error:', error);
+      console.error('API request error:', error);
       throw error;
     }
   }
 
+  /**
+   * Get user's business policies (payment, shipping, return)
+   */
   async getBusinessPolicies() {
     try {
       console.log('Fetching business policies...');
@@ -456,22 +528,25 @@ class EbayOAuthService {
     }
   }
 
+  /**
+   * Check if user is authenticated
+   */
   isAuthenticated() {
     const tokens = this.getStoredTokens();
     return tokens !== null;
   }
 
+  /**
+   * Logout user (clear tokens)
+   */
   logout() {
     localStorage.removeItem('ebay_tokens');
-    sessionStorage.removeItem('ebay_oauth_state');
-    this.authState = {
-      lastAuthCode: null,
-      lastAuthTime: null,
-      pendingExchange: false
-    };
-    console.log('User logged out, tokens and state cleared');
+    console.log('User logged out, tokens cleared');
   }
 
+  /**
+   * Get user profile information
+   */
   async getUserProfile() {
     try {
       const response = await this.makeApiRequest('/commerce/identity/v1/user', {
@@ -485,26 +560,6 @@ class EbayOAuthService {
       console.error('Error fetching user profile:', error);
       throw error;
     }
-  }
-
-  getConfigurationInstructions() {
-    return {
-      step1: "Go to https://developer.ebay.com/my/keys",
-      step2: "Create a new application or use an existing one",
-      step3: "Copy your Client ID and Client Secret",
-      step4: "Create a RuName (Redirect URL Name) with your callback URL",
-      step5: "Deploy the Lambda function for token exchange",
-      environment: this.environment,
-      redirectUri: this.credentials.redirectUri,
-      lambdaEndpoint: this.lambdaTokenEndpoint,
-      requiredEnvVars: [
-        'REACT_APP_EBAY_CLIENT_ID',
-        'REACT_APP_EBAY_CLIENT_SECRET', 
-        'REACT_APP_EBAY_REDIRECT_URI',
-        'REACT_APP_EBAY_RU_NAME',
-        'REACT_APP_LAMBDA_TOKEN_ENDPOINT'
-      ]
-    };
   }
 }
 

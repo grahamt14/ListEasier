@@ -7,10 +7,17 @@ import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { fromCognitoIdentityPool } from "@aws-sdk/credential-provider-cognito-identity";
 import { AppStateProvider, useAppState } from './StateContext';
 import { EbayAuthProvider, useEbayAuth } from './EbayAuthContext';
+import EbayListingManager from './EbayListingManager';
 
 function PreviewSection({ categoryFields = [] }) {
   const { state, dispatch } = useAppState();
+  const [showListingManager, setShowListingManager] = useState(false);
   const { selectedPolicies, ebayService } = useEbayAuth(); // Get eBay policies and service
+  
+  const canCreateEbayListings = () => {
+  return ebayAuthenticated && hasValidListings && state.categoryID;
+};
+  
   const { 
     imageGroups, 
     s3ImageGroups,
@@ -742,40 +749,53 @@ Action(SiteID=US|Country=US|Currency=USD|Version=1193|CC=UTF-8),Custom label (SK
   return (
     <section className="preview-section">
       <div className="section-header">
-        <div className="header-left">
-          <h2>Image Groups & Listings</h2>
-          {/* View Toggle Button */}
-          <div className="view-toggle">
-            <button 
-              className={`view-toggle-btn ${viewMode === 'grid' ? 'active' : ''}`}
-              onClick={() => setViewMode('grid')}
-              title="Grid View"
-            >
-              <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
-                <path d="M1 2.5A1.5 1.5 0 0 1 2.5 1h3A1.5 1.5 0 0 1 7 2.5v3A1.5 1.5 0 0 1 5.5 7h-3A1.5 1.5 0 0 1 1 5.5v-3zM2.5 2a.5.5 0 0 0-.5.5v3a.5.5 0 0 0 .5.5h3a.5.5 0 0 0 .5-.5v-3a.5.5 0 0 0-.5-.5h-3zm6.5.5A1.5 1.5 0 0 1 10.5 1h3A1.5 1.5 0 0 1 15 2.5v3A1.5 1.5 0 0 1 13.5 7h-3A1.5 1.5 0 0 1 9 5.5v-3zm1.5-.5a.5.5 0 0 0-.5.5v3a.5.5 0 0 0 .5.5h3a.5.5 0 0 0 .5-.5v-3a.5.5 0 0 0-.5-.5h-3zM1 10.5A1.5 1.5 0 0 1 2.5 9h3A1.5 1.5 0 0 1 7 10.5v3A1.5 1.5 0 0 1 5.5 15h-3A1.5 1.5 0 0 1 1 13.5v-3zm1.5-.5a.5.5 0 0 0-.5.5v3a.5.5 0 0 0 .5.5h3a.5.5 0 0 0 .5-.5v-3a.5.5 0 0 0-.5-.5h-3zm6.5.5A1.5 1.5 0 0 1 10.5 9h3a1.5 1.5 0 0 1 1.5 1.5v3a1.5 1.5 0 0 1-1.5 1.5h-3A1.5 1.5 0 0 1 9 13.5v-3zm1.5-.5a.5.5 0 0 0-.5.5v3a.5.5 0 0 0 .5.5h3a.5.5 0 0 0 .5-.5v-3a.5.5 0 0 0-.5-.5h-3z"/>
-              </svg>
-            </button>
-            <button 
-              className={`view-toggle-btn ${viewMode === 'row' ? 'active' : ''}`}
-              onClick={() => setViewMode('row')}
-              title="Row View"
-            >
-              <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
-                <path d="M2.5 12a.5.5 0 0 1 .5-.5h10a.5.5 0 0 1 0 1H3a.5.5 0 0 1-.5-.5zm0-4a.5.5 0 0 1 .5-.5h10a.5.5 0 0 1 0 1H3a.5.5 0 0 1-.5-.5zm0-4a.5.5 0 0 1 .5-.5h10a.5.5 0 0 1 0 1H3a.5.5 0 0 1-.5-.5z"/>
-              </svg>
-            </button>
-          </div>
-        </div>
-        {hasValidListings && (
+  <div className="header-left">
+    <h2>Image Groups & Listings</h2>
+    {/* View Toggle Button */}
+    <div className="view-toggle">
+      <button 
+        className={`view-toggle-btn ${viewMode === 'grid' ? 'active' : ''}`}
+        onClick={() => setViewMode('grid')}
+        title="Grid View"
+      >
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+          <path d="M1 2.5A1.5 1.5 0 0 1 2.5 1h3A1.5 1.5 0 0 1 7 2.5v3A1.5 1.5 0 0 1 5.5 7h-3A1.5 1.5 0 0 1 1 5.5v-3zM2.5 2a.5.5 0 0 0-.5.5v3a.5.5 0 0 0 .5.5h3a.5.5 0 0 0 .5-.5v-3a.5.5 0 0 0-.5-.5h-3zm6.5.5A1.5 1.5 0 0 1 10.5 1h3A1.5 1.5 0 0 1 15 2.5v3A1.5 1.5 0 0 1 13.5 7h-3A1.5 1.5 0 0 1 9 5.5v-3zm1.5-.5a.5.5 0 0 0-.5.5v3a.5.5 0 0 0 .5.5h3a.5.5 0 0 0 .5-.5v-3a.5.5 0 0 0-.5-.5h-3zM1 10.5A1.5 1.5 0 0 1 2.5 9h3A1.5 1.5 0 0 1 7 10.5v3A1.5 1.5 0 0 1 5.5 15h-3A1.5 1.5 0 0 1 1 13.5v-3zm1.5-.5a.5.5 0 0 0-.5.5v3a.5.5 0 0 0 .5.5h3a.5.5 0 0 0 .5-.5v-3a.5.5 0 0 0-.5-.5h-3zm6.5.5A1.5 1.5 0 0 1 10.5 9h3a1.5 1.5 0 0 1 1.5 1.5v3a1.5 1.5 0 0 1-1.5 1.5h-3A1.5 1.5 0 0 1 9 13.5v-3zm1.5-.5a.5.5 0 0 0-.5.5v3a.5.5 0 0 0 .5.5h3a.5.5 0 0 0 .5-.5v-3a.5.5 0 0 0-.5-.5h-3z"/>
+        </svg>
+      </button>
+      <button 
+        className={`view-toggle-btn ${viewMode === 'row' ? 'active' : ''}`}
+        onClick={() => setViewMode('row')}
+        title="Row View"
+      >
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+          <path d="M2.5 12a.5.5 0 0 1 .5-.5h10a.5.5 0 0 1 0 1H3a.5.5 0 0 1-.5-.5zm0-4a.5.5 0 0 1 .5-.5h10a.5.5 0 0 1 0 1H3a.5.5 0 0 1-.5-.5zm0-4a.5.5 0 0 1 .5-.5h10a.5.5 0 0 1 0 1H3a.5.5 0 0 1-.5-.5z"/>
+        </svg>
+      </button>
+    </div>
+  </div>
+  <div className="header-buttons">
+    {hasValidListings && (
+      <>
+        <button 
+          className="download-button"
+          onClick={downloadListingsAsCsv}
+          disabled={displayIsLoading}
+        >
+          Download CSV
+        </button>
+        {canCreateEbayListings() && (
           <button 
-            className="download-button"
-            onClick={downloadListingsAsCsv}
+            className="create-ebay-listings-button"
+            onClick={() => setShowListingManager(true)}
             disabled={displayIsLoading}
           >
-            Download All Listings
+            Create eBay Listings
           </button>
         )}
-      </div>
+      </>
+    )}
+  </div>
+</div>
       
       {displayIsLoading && (
         <div className="loading-progress">
@@ -859,6 +879,27 @@ Action(SiteID=US|Country=US|Currency=USD|Version=1193|CC=UTF-8),Custom label (SK
                     </div>
                   )}
                 </div>
+				{canCreateEbayListings() && responseData[gi] && !responseData[gi].error && (
+  <div className="card-actions">
+    <button 
+      className="download-single-button"
+      onClick={() => downloadSingleListing(gi)}
+    >
+      Download CSV
+    </button>
+    <button 
+      className="create-single-listing-button"
+      onClick={() => {
+        setShowListingManager(true);
+        // You'll need to pass the group index to the listing manager
+        // This requires a small modification to the EbayListingManager
+      }}
+      disabled={processingGroups[gi]}
+    >
+      List on eBay
+    </button>
+  </div>
+)}
               </div>
             );
           })}
@@ -1119,6 +1160,15 @@ Action(SiteID=US|Country=US|Currency=USD|Version=1193|CC=UTF-8),Custom label (SK
           )}
         </div>
       )}
+	  {showListingManager && (
+  <div className="listing-modal-overlay">
+    <div className="listing-modal">
+      <EbayListingManager 
+        onClose={() => setShowListingManager(false)}
+      />
+    </div>
+  </div>
+)}
     </section>
   );
 }

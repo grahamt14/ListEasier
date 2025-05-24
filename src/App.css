@@ -1467,3 +1467,63 @@
 }
 
 /* Responsive adjustments */
+
+<style jsx>{`
+  .create-ebay-listings-button {
+    background: linear-gradient(135deg, #0654ba, #4a90e2);
+    color: white;
+    padding: 10px 20px;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    font-weight: 600;
+    transition: all 0.3s ease;
+    margin-left: 10px;
+  }
+
+  .create-ebay-listings-button:hover:not(:disabled) {
+    background: linear-gradient(135deg, #0545a0, #3a7bc8);
+    transform: translateY(-1px);
+    box-shadow: 0 6px 20px rgba(6, 84, 186, 0.3);
+  }
+
+  .create-ebay-listings-button:disabled {
+    background: #ccc;
+    cursor: not-allowed;
+  }
+
+  .header-buttons {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .card-actions {
+    display: flex;
+    gap: 10px;
+    padding: 15px;
+    border-top: 1px solid #eee;
+    background: #f8f9fa;
+  }
+
+  .create-single-listing-button {
+    background: #0654ba;
+    color: white;
+    padding: 8px 16px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.9rem;
+    flex: 1;
+    transition: all 0.2s;
+  }
+
+  .create-single-listing-button:hover:not(:disabled) {
+    background: #0545a0;
+  }
+
+  .create-single-listing-button:disabled {
+    background: #ccc;
+    cursor: not-allowed;
+  }
+`}</style>

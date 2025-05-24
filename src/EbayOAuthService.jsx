@@ -91,11 +91,14 @@ class EbayOAuthService {
       pendingExchange: false
     };
     
+    // Use RuName-based URL format like eBay's test sign-in
     const params = {
       client_id: this.credentials.clientId,
       redirect_uri: this.credentials.redirectUri,
       response_type: 'code',
-      scope: this.scopes.join(' ')
+      scope: this.scopes.join(' '),
+      // Add RuName parameter
+      ru_name: this.credentials.ruName
     };
     
     if (state) {
@@ -112,6 +115,7 @@ class EbayOAuthService {
     const authUrl = `${urls.authUrl}?${urlParams.toString()}`;
     console.log('Generated eBay auth URL:', authUrl);
     console.log('State parameter:', state);
+    console.log('RuName:', this.credentials.ruName);
     
     return authUrl;
   }
@@ -141,11 +145,19 @@ class EbayOAuthService {
 
     try {
       console.log('=== TOKEN EXCHANGE VIA LAMBDA ===');
-      console.log('Authorization code:', authorizationCode);
+      console.log('Authorization code (raw):', authorizationCode);
+      console.log('Authorization code (URL encoded):', encodeURIComponent(authorizationCode));
       console.log('Code length:', authorizationCode.length);
       console.log('Lambda endpoint:', this.lambdaTokenEndpoint);
       console.log('Environment:', this.environment);
       console.log('Timestamp:', new Date().toISOString());
+      
+      // Check if the code needs decoding
+      const decodedCode = decodeURIComponent(authorizationCode);
+      if (decodedCode !== authorizationCode) {
+        console.log('Code appears to be URL encoded, using decoded version');
+        authorizationCode = decodedCode;
+      }
       
       // Check stored state
       const storedState = sessionStorage.getItem('ebay_oauth_state');

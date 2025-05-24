@@ -1622,10 +1622,10 @@ const EbayCallback = () => {
     </div>
   );
 };
-// Main App with Both Providers
+
 function App() {
-  // Check if this is the eBay callback URL
-  if (window.location.pathname === '/ebay/callback') {
+  const pathname = window.location.pathname;
+  if (pathname === '/ebay/callback' || pathname === '/ebay/callback/') {
     return (
       <EbayAuthProvider>
         <EbayCallback />

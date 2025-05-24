@@ -1540,7 +1540,7 @@ const EbayCallback = () => {
         }
       }).catch(callbackError => {
         console.error('handleAuthCallback threw an error:', callbackError);
-        window.location.href = '/?ebay_error=callback_error';
+        window.location.href = '/?ebay_error=' + encodeURIComponent(callbackError.message || 'callback_error');
       });
     } else {
       console.warn('=== NO CODE OR ERROR RECEIVED ===');

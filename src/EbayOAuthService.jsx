@@ -201,6 +201,7 @@ class EbayOAuthService {
       
       console.log('Request body:', requestBody);
       
+      // Make sure we're using the POST method here
       const response = await fetch(this.lambdaTokenEndpoint, {
         method: 'POST',
         headers: {
@@ -216,6 +217,19 @@ class EbayOAuthService {
       const responseText = await response.text();
       console.log('Lambda response body:', responseText);
 
+      // First check if the response is OK
+      if (!response.ok) {
+        // Try to parse any error details
+        try {
+          const errorData = JSON.parse(responseText);
+          throw new Error(`Lambda function error: ${response.status} - ${errorData.error || responseText}`);
+        } catch (parseError) {
+          // If can't parse JSON, just use the text
+          throw new Error(`Lambda function error: ${response.status} - ${responseText}`);
+        }
+      }
+
+      // Parse the successful response
       let responseData;
       try {
         responseData = JSON.parse(responseText);
@@ -223,59 +237,33 @@ class EbayOAuthService {
         // Check if response contains a nested JSON response (common issue with API Gateway)
         if (responseData.body && typeof responseData.body === 'string') {
           try {
-            const nestedBody = JSON.parse(responseData.body);
-            
-            // If we have a nested error, throw it
-            if (nestedBody.error) {
-              throw new Error(`Lambda function error: ${nestedBody.error}`);
-            }
-            
-            // Otherwise, try to use the nested body
-            responseData = nestedBody;
+            responseData = JSON.parse(responseData.body);
           } catch (nestedError) {
-            // If parsing the nested body fails, continue with the original response
             console.log('Could not parse nested body, using original response');
           }
         }
         
-        // Check if direct error in response
-        if (responseData.error) {
-          throw new Error(`Token exchange failed: ${responseData.error}`);
-        }
-        
-        // If response is not OK, throw error
-        if (!response.ok) {
-          throw new Error(`Lambda function error: ${response.status} - ${responseText}`);
-        }
-        
-        // If success is explicitly false, throw error
-        if (responseData.success === false) {
-          throw new Error(`Token exchange failed: ${responseData.error || 'Unknown error'}`);
-        }
-        
         // Ensure we have tokenData
-        if (!responseData.tokenData && !responseData.access_token) {
-          throw new Error('Token data missing from response');
-        }
-        
-        // Normalize response format
         const tokenData = responseData.tokenData || responseData;
         
+        if (!tokenData || (!tokenData.access_token && !tokenData.refresh_token)) {
+          throw new Error('Invalid token data received from Lambda');
+        }
+        
+        console.log('=== TOKEN EXCHANGE SUCCESS ===');
+        console.log('Token type:', tokenData.token_type);
+        console.log('Expires in:', tokenData.expires_in, 'seconds');
+        console.log('Access token length:', tokenData.access_token?.length || 0);
+        console.log('Refresh token present:', !!tokenData.refresh_token);
+        
+        this.storeTokens(tokenData);
+        console.log('Tokens stored successfully');
+        
+        return tokenData;
       } catch (parseError) {
+        console.error('Error parsing JSON response:', parseError);
         throw new Error(`Invalid JSON response from Lambda: ${responseText}`);
       }
-
-      const tokenData = responseData.tokenData || responseData;
-      console.log('=== TOKEN EXCHANGE SUCCESS ===');
-      console.log('Token type:', tokenData.token_type);
-      console.log('Expires in:', tokenData.expires_in, 'seconds');
-      console.log('Access token length:', tokenData.access_token?.length || 0);
-      console.log('Refresh token present:', !!tokenData.refresh_token);
-      
-      this.storeTokens(tokenData);
-      console.log('Tokens stored successfully');
-      
-      return tokenData;
     } catch (error) {
       console.error('=== TOKEN EXCHANGE ERROR ===');
       console.error('Error details:', error);

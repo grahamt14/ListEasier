@@ -1481,14 +1481,15 @@ function AppContent() {
     </div>
   );
 }
+// Updated EbayCallback component in App.jsx
 const EbayCallback = () => {
   const { handleAuthCallback } = useEbayAuth();
+  const [error, setError] = useState(null);
 
   useEffect(() => {
     console.log('=== EBAY CALLBACK COMPONENT MOUNTED ===');
     console.log('Current URL:', window.location.href);
-    console.log('URL search params:', window.location.search);
-    console.log('URL pathname:', window.location.pathname);
+    console.log('Timestamp:', new Date().toISOString());
     
     const urlParams = new URLSearchParams(window.location.search);
     const authCode = urlParams.get('code');
@@ -1497,21 +1498,32 @@ const EbayCallback = () => {
     const errorDescription = urlParams.get('error_description');
     
     console.log('URL Parameters parsed:');
-    console.log('  code:', authCode);
+    console.log('  code:', authCode ? `${authCode.substring(0, 10)}... (${authCode.length} chars)` : 'null');
     console.log('  error:', error);
     console.log('  state:', state);
     console.log('  error_description:', errorDescription);
     
-    // Log all URL parameters for debugging
-    console.log('All URL parameters:');
-    for (const [key, value] of urlParams) {
-      console.log(`  ${key}: ${value}`);
+    // Check if we've already processed this callback
+    const processedKey = `ebay_callback_processed_${authCode || error || 'unknown'}`;
+    const alreadyProcessed = sessionStorage.getItem(processedKey);
+    
+    if (alreadyProcessed) {
+      console.warn('=== CALLBACK ALREADY PROCESSED ===');
+      console.warn('This callback was already handled. Redirecting to home...');
+      setError('This authorization has already been processed. Please try logging in again.');
+      setTimeout(() => {
+        window.location.href = '/';
+      }, 3000);
+      return;
     }
 
     if (error) {
       console.error('=== OAUTH ERROR RECEIVED ===');
       console.error('Error:', error);
       console.error('Error Description:', errorDescription);
+      
+      // Mark as processed
+      sessionStorage.setItem(processedKey, 'true');
       
       // Redirect back to main app with error
       const errorParam = encodeURIComponent(errorDescription || error);
@@ -1522,32 +1534,55 @@ const EbayCallback = () => {
 
     if (authCode) {
       console.log('=== AUTHORIZATION CODE RECEIVED ===');
-      console.log('Authorization code:', authCode);
-      console.log('Authorization code length:', authCode.length);
-      console.log('State parameter:', state);
+      console.log('Processing authorization code...');
       
-      console.log('Calling handleAuthCallback...');
+      // Mark as processed immediately to prevent double processing
+      sessionStorage.setItem(processedKey, 'true');
+      
+      // Set a timeout for the exchange process
+      const exchangeTimeout = setTimeout(() => {
+        console.error('Token exchange timeout after 30 seconds');
+        setError('The authentication process timed out. Please try again.');
+        setTimeout(() => {
+          window.location.href = '/?ebay_error=timeout';
+        }, 3000);
+      }, 30000); // 30 second timeout
+      
       handleAuthCallback(authCode).then(success => {
+        clearTimeout(exchangeTimeout);
         console.log('handleAuthCallback completed, success:', success);
+        
         if (success) {
           console.log('Authentication successful, redirecting to main app');
-          // Redirect back to main app on success
-          window.location.href = '/?ebay_connected=true';
+          // Small delay to ensure tokens are stored
+          setTimeout(() => {
+            window.location.href = '/?ebay_connected=true';
+          }, 100);
         } else {
           console.log('Authentication failed, redirecting with error');
-          // Redirect back with error
           window.location.href = '/?ebay_error=authentication_failed';
         }
       }).catch(callbackError => {
+        clearTimeout(exchangeTimeout);
         console.error('handleAuthCallback threw an error:', callbackError);
-        window.location.href = '/?ebay_error=' + encodeURIComponent(callbackError.message || 'callback_error');
+        
+        // Check for specific error types
+        if (callbackError.message.includes('already been used')) {
+          setError('This authorization code has already been used. Please log in again.');
+        } else if (callbackError.message.includes('invalid_grant')) {
+          setError('The authorization has expired or is invalid. Please try logging in again.');
+        } else {
+          setError(`Authentication failed: ${callbackError.message}`);
+        }
+        
+        setTimeout(() => {
+          window.location.href = '/?ebay_error=' + encodeURIComponent(callbackError.message || 'callback_error');
+        }, 3000);
       });
     } else {
       console.warn('=== NO CODE OR ERROR RECEIVED ===');
-      console.warn('This might indicate an issue with the OAuth flow');
-      console.warn('Redirecting back to main app');
-      // No code or error, redirect back to main app
-      window.location.href = '/';
+      console.warn('Invalid callback state');
+      window.location.href = '/?ebay_error=invalid_callback';
     }
   }, [handleAuthCallback]);
 
@@ -1557,15 +1592,33 @@ const EbayCallback = () => {
       justifyContent: 'center', 
       alignItems: 'center', 
       height: '100vh',
-      flexDirection: 'column'
+      flexDirection: 'column',
+      padding: '20px'
     }}>
-      <div className="spinner">
-        <div className="spinner-circle"></div>
-      </div>
-      <p>Processing eBay authentication...</p>
-      <p style={{ fontSize: '0.8rem', color: '#666', marginTop: '1rem' }}>
-        Check the browser console for detailed debugging information
-      </p>
+      {error ? (
+        <>
+          <div style={{
+            color: '#dc3545',
+            fontSize: '1.2rem',
+            marginBottom: '1rem',
+            textAlign: 'center',
+            maxWidth: '500px'
+          }}>
+            {error}
+          </div>
+          <p style={{ color: '#666' }}>Redirecting...</p>
+        </>
+      ) : (
+        <>
+          <div className="spinner">
+            <div className="spinner-circle"></div>
+          </div>
+          <p>Processing eBay authentication...</p>
+          <p style={{ fontSize: '0.8rem', color: '#666', marginTop: '1rem' }}>
+            This may take a few seconds...
+          </p>
+        </>
+      )}
     </div>
   );
 };

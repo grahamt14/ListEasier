@@ -20,8 +20,9 @@ class EbayOAuthService {
     // Set environment (change to 'production' for live)
     this.environment = 'sandbox'; // or 'production'
     
-    // Lambda function URL for token exchange
+    // Lambda function URLs
     this.lambdaTokenEndpoint = 'https://xospzjj5da.execute-api.us-east-2.amazonaws.com/prod/ebay-token-exchange';
+    this.lambdaApiProxyEndpoint = 'https://xospzjj5da.execute-api.us-east-2.amazonaws.com/prod/ebay-api-proxy';
     
     // Store auth state to prevent reuse
     this.authState = {
@@ -82,8 +83,6 @@ class EbayOAuthService {
       throw new Error('eBay OAuth service is not properly configured.');
     }
 
-    const urls = this.getApiUrls();
-    
     // Clear any pending exchange state when generating new auth URL
     this.authState = {
       lastAuthCode: null,
@@ -91,31 +90,20 @@ class EbayOAuthService {
       pendingExchange: false
     };
     
-    // Use RuName-based URL format like eBay's test sign-in
-    const params = {
-      client_id: this.credentials.clientId,
-      redirect_uri: this.credentials.redirectUri,
-      response_type: 'code',
-      scope: this.scopes.join(' '),
-      // Add RuName parameter
-      ru_name: this.credentials.ruName
-    };
+    // Use eBay's legacy SignIn endpoint that works with the test button
+    const signInUrl = this.environment === 'sandbox' 
+      ? 'https://signin.sandbox.ebay.com/ws/eBayISAPI.dll'
+      : 'https://signin.ebay.com/ws/eBayISAPI.dll';
     
-    if (state) {
-      params.state = state;
-      // Store state for verification
-      sessionStorage.setItem('ebay_oauth_state', state);
-    }
-    
-    const urlParams = new URLSearchParams();
-    Object.entries(params).forEach(([key, value]) => {
-      urlParams.append(key, value);
+    // Build parameters for legacy endpoint
+    const params = new URLSearchParams({
+      SignIn: '',
+      runame: this.credentials.ruName,
+      SessID: 'SESSION_ID' // This might need to be dynamically generated
     });
     
-    const authUrl = `${urls.authUrl}?${urlParams.toString()}`;
-    console.log('Generated eBay auth URL:', authUrl);
-    console.log('State parameter:', state);
-    console.log('RuName:', this.credentials.ruName);
+    const authUrl = `${signInUrl}?${params.toString()}`;
+    console.log('Generated eBay auth URL (legacy):', authUrl);
     
     return authUrl;
   }
@@ -342,8 +330,58 @@ class EbayOAuthService {
     }
 
     const accessToken = await this.getValidAccessToken();
-    const urls = this.getApiUrls();
+    
+    // Use Lambda proxy for API calls to avoid CORS issues
+    if (this.lambdaApiProxyEndpoint) {
+      console.log(`Making eBay API request via Lambda proxy to: ${endpoint}`);
+      
+      try {
+        const response = await fetch(this.lambdaApiProxyEndpoint, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json'
+          },
+          body: JSON.stringify({
+            endpoint: endpoint,
+            method: options.method || 'GET',
+            accessToken: accessToken,
+            environment: this.environment,
+            requestBody: options.body,
+            headers: options.headers || {}
+          })
+        });
 
+        const responseData = await response.json();
+        
+        if (!response.ok || !responseData.success) {
+          throw new Error(`API request failed: ${responseData.error || 'Unknown error'}`);
+        }
+        
+        // Check if eBay returned an error
+        if (responseData.statusCode >= 400) {
+          // If it's a 401, try to refresh token
+          if (responseData.statusCode === 401) {
+            console.log('Received 401, attempting token refresh...');
+            await this.refreshAccessToken();
+            // Retry the request with new token
+            return this.makeApiRequest(endpoint, options);
+          }
+          
+          throw new Error(`eBay API error: ${responseData.statusCode} - ${JSON.stringify(responseData.data)}`);
+        }
+        
+        console.log('API request successful');
+        return responseData.data;
+        
+      } catch (error) {
+        console.error('API proxy request error:', error);
+        throw error;
+      }
+    }
+    
+    // Fallback to direct API call (will fail due to CORS in browser)
+    const urls = this.getApiUrls();
     const defaultHeaders = {
       'Authorization': `Bearer ${accessToken}`,
       'Content-Type': 'application/json',
@@ -360,42 +398,17 @@ class EbayOAuthService {
     };
 
     try {
-      console.log(`Making eBay API request to: ${urls.apiUrl}${endpoint}`);
-      
+      console.log(`Making direct eBay API request to: ${urls.apiUrl}${endpoint}`);
       const response = await fetch(`${urls.apiUrl}${endpoint}`, requestOptions);
-
-      if (response.status === 401) {
-        try {
-          console.log('Received 401, attempting token refresh...');
-          await this.refreshAccessToken();
-          const newAccessToken = await this.getValidAccessToken();
-          
-          requestOptions.headers.Authorization = `Bearer ${newAccessToken}`;
-          const retryResponse = await fetch(`${urls.apiUrl}${endpoint}`, requestOptions);
-          
-          if (!retryResponse.ok) {
-            const errorData = await retryResponse.text();
-            throw new Error(`API request failed after token refresh: ${retryResponse.status} - ${errorData}`);
-          }
-          
-          return await retryResponse.json();
-        } catch (refreshError) {
-          console.error('Token refresh failed:', refreshError);
-          throw new Error('Authentication failed. Please log in again.');
-        }
-      }
-
+      
       if (!response.ok) {
         const errorData = await response.text();
-        console.error('API request failed:', response.status, errorData);
         throw new Error(`API request failed: ${response.status} - ${errorData}`);
       }
 
-      const responseData = await response.json();
-      console.log('API request successful');
-      return responseData;
+      return await response.json();
     } catch (error) {
-      console.error('API request error:', error);
+      console.error('Direct API request error:', error);
       throw error;
     }
   }

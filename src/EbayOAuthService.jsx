@@ -404,83 +404,92 @@ class EbayOAuthService {
     return tokens.access_token;
   }
 
-  /**
-   * Make authenticated API request to eBay via Lambda proxy
-   */
-  async makeApiRequest(endpoint, options = {}) {
-    if (!this.isConfigured()) {
-      throw new Error('eBay OAuth service is not properly configured.');
+ // Update the makeApiRequest method in EbayOAuthService.js to add more debugging
+
+async makeApiRequest(endpoint, options = {}) {
+  if (!this.isConfigured()) {
+    throw new Error('eBay OAuth service is not properly configured.');
+  }
+
+  try {
+    const accessToken = await this.getValidAccessToken();
+    
+    console.log(`Making eBay API request via Lambda proxy to: ${endpoint}`);
+    
+    const proxyRequest = {
+      endpoint: endpoint,
+      method: options.method || 'GET',
+      accessToken: accessToken,
+      environment: this.environment,
+      headers: options.headers || {},
+      requestBody: options.body || null
+    };
+
+    const response = await fetch(this.lambdaApiProxyEndpoint, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json'
+      },
+      body: JSON.stringify(proxyRequest)
+    });
+
+    console.log('Lambda proxy response status:', response.status);
+
+    if (!response.ok) {
+      let errorMessage = `API proxy request failed: ${response.status}`;
+      try {
+        const errorData = await response.json();
+        errorMessage = `API proxy request failed: ${errorData.error || errorData.message || response.statusText}`;
+      } catch (e) {
+        // If we can't parse the error, use the default message
+      }
+      
+      console.error('API proxy request error:', errorMessage);
+      throw new Error(errorMessage);
     }
 
-    try {
-      const accessToken = await this.getValidAccessToken();
-      
-      console.log(`Making eBay API request via Lambda proxy to: ${endpoint}`);
-      
-      const proxyRequest = {
-        endpoint: endpoint,
-        method: options.method || 'GET',
-        accessToken: accessToken,
-        environment: this.environment,
-        headers: options.headers || {},
-        requestBody: options.body || null
-      };
-
-      const response = await fetch(this.lambdaApiProxyEndpoint, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json'
-        },
-        body: JSON.stringify(proxyRequest)
-      });
-
-      console.log('Lambda proxy response status:', response.status);
-
-      if (!response.ok) {
-        let errorMessage = `API proxy request failed: ${response.status}`;
+    const proxyResponse = await response.json();
+    
+    // LOG THE FULL RESPONSE FOR DEBUGGING
+    console.log('Full proxy response:', JSON.stringify(proxyResponse, null, 2));
+    
+    // Check if the proxied request was successful
+    if (!proxyResponse.success) {
+      // Check for auth errors
+      if (proxyResponse.statusCode === 401) {
+        console.log('Received 401 from eBay, attempting token refresh...');
+        
         try {
-          const errorData = await response.json();
-          errorMessage = `API proxy request failed: ${errorData.error || errorData.message || response.statusText}`;
-        } catch (e) {
-          // If we can't parse the error, use the default message
+          await this.refreshAccessToken();
+          // Retry the request with new token
+          return this.makeApiRequest(endpoint, options);
+        } catch (refreshError) {
+          console.error('Token refresh failed:', refreshError);
+          throw new Error('Authentication failed. Please log in again.');
         }
-        
-        console.error('API proxy request error:', errorMessage);
-        throw new Error(errorMessage);
       }
-
-      const proxyResponse = await response.json();
       
-      // Check if the proxied request was successful
-      if (!proxyResponse.success) {
-        // Check for auth errors
-        if (proxyResponse.statusCode === 401) {
-          console.log('Received 401 from eBay, attempting token refresh...');
-          
-          try {
-            await this.refreshAccessToken();
-            // Retry the request with new token
-            return this.makeApiRequest(endpoint, options);
-          } catch (refreshError) {
-            console.error('Token refresh failed:', refreshError);
-            throw new Error('Authentication failed. Please log in again.');
-          }
-        }
-        
-        const error = new Error(`eBay API error: ${proxyResponse.error || 'Unknown error'}`);
-        error.statusCode = proxyResponse.statusCode;
-        error.data = proxyResponse.data;
-        throw error;
-      }
-
-      console.log('API request successful');
-      return proxyResponse.data;
-    } catch (error) {
-      console.error('API request error:', error);
+      // LOG MORE DETAILS ABOUT THE ERROR
+      console.error('eBay API error details:', {
+        statusCode: proxyResponse.statusCode,
+        error: proxyResponse.error,
+        data: proxyResponse.data
+      });
+      
+      const error = new Error(`eBay API error: ${proxyResponse.error || JSON.stringify(proxyResponse.data) || 'Unknown error'}`);
+      error.statusCode = proxyResponse.statusCode;
+      error.data = proxyResponse.data;
       throw error;
     }
+
+    console.log('API request successful');
+    return proxyResponse.data;
+  } catch (error) {
+    console.error('API request error:', error);
+    throw error;
   }
+}
 
   /**
    * Get user's business policies (payment, shipping, return)

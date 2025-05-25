@@ -1,4 +1,4 @@
-// EbayListingService.jsx - Fixed version with proper location management
+// EbayListingService.jsx - Bypass location management for sandbox accounts
 import EbayOAuthService from './EbayOAuthService';
 
 class EbayListingService {
@@ -7,86 +7,6 @@ class EbayListingService {
     this.createListingEndpoint = 'https://xospzjj5da.execute-api.us-east-2.amazonaws.com/prod/ebay-create-listing';
     this.batchSize = 5; // Process listings in batches to avoid rate limits
     this.delayBetweenListings = 1000; // 1 second delay between listings
-    this.defaultLocationKey = 'warehouse-001'; // Use a consistent location key
-  }
-
-  /**
-   * Ensure the seller has a valid inventory location set up
-   * This is required before creating any offers
-   */
-  async ensureInventoryLocation() {
-    try {
-      console.log('Checking for existing inventory locations...');
-      
-      // First, check if we already have locations
-      const locations = await this.ebayOAuthService.makeApiRequest('/sell/inventory/v1/location');
-      
-      if (locations && locations.locations && locations.locations.length > 0) {
-        console.log(`Found ${locations.locations.length} existing inventory locations`);
-        
-        // Check if our default location exists
-        const defaultLocation = locations.locations.find(loc => 
-          loc.merchantLocationKey === this.defaultLocationKey
-        );
-        
-        if (defaultLocation) {
-          console.log('Default location already exists:', this.defaultLocationKey);
-          return this.defaultLocationKey;
-        }
-        
-        // Use the first available location
-        const firstLocation = locations.locations[0];
-        console.log('Using existing location:', firstLocation.merchantLocationKey);
-        return firstLocation.merchantLocationKey;
-      }
-      
-      // No locations exist, create a default warehouse location
-      console.log('No inventory locations found, creating default location...');
-      
-      const locationData = {
-        name: 'Default Warehouse Location',
-        locationTypes: ['WAREHOUSE'],
-        address: {
-          addressLine1: '123 Main Street',
-          city: 'San Jose',
-          stateOrProvince: 'CA',
-          postalCode: '95101',
-          country: 'US'
-        },
-        merchantLocationStatus: 'ENABLED'
-      };
-      
-      // Create the location
-      await this.ebayOAuthService.makeApiRequest(
-        `/sell/inventory/v1/location/${this.defaultLocationKey}`,
-        {
-          method: 'POST',
-          body: locationData
-        }
-      );
-      
-      console.log('Successfully created default inventory location:', this.defaultLocationKey);
-      return this.defaultLocationKey;
-      
-    } catch (error) {
-      console.error('Error managing inventory location:', error);
-      
-      // If location creation fails, try to use any existing location
-      try {
-        const locations = await this.ebayOAuthService.makeApiRequest('/sell/inventory/v1/location');
-        if (locations && locations.locations && locations.locations.length > 0) {
-          const fallbackLocation = locations.locations[0].merchantLocationKey;
-          console.log('Using fallback location:', fallbackLocation);
-          return fallbackLocation;
-        }
-      } catch (fallbackError) {
-        console.error('Could not retrieve fallback locations:', fallbackError);
-      }
-      
-      // Last resort: use the default key and hope it works
-      console.warn('Using default location key without verification:', this.defaultLocationKey);
-      return this.defaultLocationKey;
-    }
   }
 
   /**
@@ -126,12 +46,20 @@ class EbayListingService {
         fulfillmentPolicyId: selectedPolicies.fulfillmentPolicyId,
         returnPolicyId: selectedPolicies.returnPolicyId
       },
-      aspectsData: aspectsData
+      aspectsData: aspectsData,
+      // Add location info that Lambda will use to create location if needed
+      location: {
+        country: 'US',
+        postalCode: '95101',
+        city: 'San Jose',
+        stateOrProvince: 'CA',
+        addressLine1: '123 Main Street'
+      }
     };
   }
 
   /**
-   * Create a single eBay listing with proper location management
+   * Create a single eBay listing - Let Lambda handle all location management
    * @param {Object} listingData - Formatted listing data
    * @returns {Promise<Object>} - Result of listing creation
    */
@@ -141,21 +69,7 @@ class EbayListingService {
       const environment = this.ebayOAuthService.environment;
       const marketplaceId = this.ebayOAuthService.getMarketplace();
 
-      // Ensure we have a valid inventory location before proceeding
-      const merchantLocationKey = await this.ensureInventoryLocation();
-
-      // Enhanced listing data with proper location
-      const enhancedListingData = {
-        ...listingData,
-        merchantLocationKey: merchantLocationKey,
-        // Add location-specific data
-        location: {
-          country: 'US', // This should match your inventory location
-          postalCode: '95101' // This should match your inventory location
-        }
-      };
-
-      console.log('Creating listing with location:', merchantLocationKey);
+      console.log('Creating listing via Lambda (no location management in frontend)');
 
       const response = await fetch(this.createListingEndpoint, {
         method: 'POST',
@@ -167,7 +81,7 @@ class EbayListingService {
           accessToken,
           environment,
           marketplaceId,
-          listingData: enhancedListingData
+          listingData
         })
       });
 
@@ -224,14 +138,6 @@ class EbayListingService {
       );
 
     results.total = validListings.length;
-
-    // Ensure inventory location is set up before processing any listings
-    try {
-      await this.ensureInventoryLocation();
-    } catch (error) {
-      console.error('Failed to ensure inventory location:', error);
-      // Continue anyway - the individual listing creation will handle this
-    }
 
     // Process listings in batches
     for (let i = 0; i < validListings.length; i += this.batchSize) {

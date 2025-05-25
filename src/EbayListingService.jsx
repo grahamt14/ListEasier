@@ -1,22 +1,16 @@
-// EbayListingService.jsx - Bypass location management for sandbox accounts
+// EbayListingService.jsx - Fixed version with proper location handling
 import EbayOAuthService from './EbayOAuthService';
 
 class EbayListingService {
   constructor() {
     this.ebayOAuthService = new EbayOAuthService();
     this.createListingEndpoint = 'https://xospzjj5da.execute-api.us-east-2.amazonaws.com/prod/ebay-create-listing';
-    this.batchSize = 5; // Process listings in batches to avoid rate limits
-    this.delayBetweenListings = 1000; // 1 second delay between listings
+    this.batchSize = 5;
+    this.delayBetweenListings = 1000;
   }
 
   /**
    * Parse CSV data from the PreviewSection component
-   * @param {Object} listing - Single listing data from responseData
-   * @param {Array} imageUrls - S3 URLs for the listing images
-   * @param {Object} metadata - Price and SKU metadata
-   * @param {string} categoryId - eBay category ID
-   * @param {Object} selectedPolicies - eBay business policies
-   * @returns {Object} - Formatted listing data for eBay API
    */
   formatListingForEbay(listing, imageUrls, metadata, categoryId, selectedPolicies) {
     // Extract category fields and convert to eBay aspects format
@@ -24,10 +18,8 @@ class EbayListingService {
     
     if (listing.storedFieldSelections) {
       Object.entries(listing.storedFieldSelections).forEach(([key, value]) => {
-        // Skip price and SKU as they're handled separately
         if (key !== 'price' && key !== 'sku' && value && value !== '-- Select --') {
-          // eBay expects aspects as key-value pairs
-          aspectsData[key] = [value]; // eBay expects array of values
+          aspectsData[key] = [value];
         }
       });
     }
@@ -40,28 +32,24 @@ class EbayListingService {
       price: parseFloat(metadata.price) || 9.99,
       quantity: 1,
       imageUrls: imageUrls.filter(url => url && url.includes('http')),
-      condition: 'NEW', // Default to NEW, can be made configurable
+      condition: 'NEW',
       policies: {
-        paymentPolicyId: selectedPolicies.paymentPolicyId,
-        fulfillmentPolicyId: selectedPolicies.fulfillmentPolicyId,
-        returnPolicyId: selectedPolicies.returnPolicyId
+        paymentPolicyId: selectedPolicies?.paymentPolicyId,
+        fulfillmentPolicyId: selectedPolicies?.fulfillmentPolicyId,
+        returnPolicyId: selectedPolicies?.returnPolicyId
       },
       aspectsData: aspectsData,
-      // Add location info that Lambda will use to create location if needed
+      // Add proper location data - this is crucial for eBay
       location: {
         country: 'US',
-        postalCode: '95101',
-        city: 'San Jose',
-        stateOrProvince: 'CA',
-        addressLine1: '123 Main Street'
+        postalCode: '90210', // Default US postal code
+        stateOrProvince: 'CA'
       }
     };
   }
 
   /**
-   * Create a single eBay listing - Let Lambda handle all location management
-   * @param {Object} listingData - Formatted listing data
-   * @returns {Promise<Object>} - Result of listing creation
+   * Create a single eBay listing
    */
   async createSingleListing(listingData) {
     try {
@@ -69,7 +57,14 @@ class EbayListingService {
       const environment = this.ebayOAuthService.environment;
       const marketplaceId = this.ebayOAuthService.getMarketplace();
 
-      console.log('Creating listing via Lambda (no location management in frontend)');
+      console.log('Creating eBay listing with data:', {
+        sku: listingData.sku,
+        title: listingData.title?.substring(0, 50) + '...',
+        categoryId: listingData.categoryId,
+        price: listingData.price,
+        hasLocation: !!listingData.location,
+        policies: listingData.policies
+      });
 
       const response = await fetch(this.createListingEndpoint, {
         method: 'POST',
@@ -85,10 +80,17 @@ class EbayListingService {
         })
       });
 
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('HTTP Error:', response.status, errorText);
+        throw new Error(`HTTP ${response.status}: ${errorText}`);
+      }
+
       const result = await response.json();
       
-      if (!response.ok || !result.success) {
-        throw new Error(result.error || 'Failed to create listing');
+      if (!result.success) {
+        console.error('eBay API Error:', result);
+        throw new Error(result.error || result.message || 'Failed to create listing');
       }
 
       return {
@@ -109,8 +111,6 @@ class EbayListingService {
 
   /**
    * Create multiple eBay listings from app state data
-   * @param {Object} params - Parameters including listings data
-   * @returns {Promise<Object>} - Results of all listing creations
    */
   async createMultipleListings({
     responseData,
@@ -138,6 +138,12 @@ class EbayListingService {
       );
 
     results.total = validListings.length;
+
+    if (results.total === 0) {
+      throw new Error('No valid listings found to create');
+    }
+
+    console.log(`Creating ${results.total} eBay listings...`);
 
     // Process listings in batches
     for (let i = 0; i < validListings.length; i += this.batchSize) {
@@ -184,9 +190,6 @@ class EbayListingService {
 
   /**
    * Create a single listing from a specific group index
-   * @param {number} groupIndex - Index of the group to list
-   * @param {Object} appState - Current app state
-   * @returns {Promise<Object>} - Result of listing creation
    */
   async createListingFromGroup(groupIndex, appState) {
     const {
@@ -222,7 +225,6 @@ class EbayListingService {
 
   /**
    * Validate if the service is ready to create listings
-   * @returns {Object} - Validation result
    */
   validateReadiness() {
     const issues = [];

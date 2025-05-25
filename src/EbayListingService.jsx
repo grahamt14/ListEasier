@@ -106,14 +106,34 @@ class EbayListingService {
       if (!response.ok) {
         const errorText = await response.text();
         console.error(`HTTP Error: ${response.status}`, errorText);
-        throw new Error(`HTTP ${response.status}: ${errorText}`);
+        
+        // Parse specific error types
+        let errorMessage = `HTTP ${response.status}`;
+        try {
+          const errorData = JSON.parse(errorText);
+          if (errorData.error) {
+            errorMessage = errorData.error;
+          }
+        } catch (e) {
+          errorMessage = errorText;
+        }
+        
+        throw new Error(errorMessage);
       }
 
       const result = await response.json();
       
       if (!result.success) {
         console.error('eBay API Error:', result);
-        throw new Error(result.error || 'Failed to create listing');
+        
+        // Extract meaningful error message
+        let errorMessage = result.error || 'Failed to create listing';
+        if (result.details && result.details.data && result.details.data.errors) {
+          const ebayErrors = result.details.data.errors.map(err => err.message).join('; ');
+          errorMessage = `eBay Error: ${ebayErrors}`;
+        }
+        
+        throw new Error(errorMessage);
       }
 
       console.log('✅ Listing created successfully:', {
@@ -129,10 +149,27 @@ class EbayListingService {
       };
     } catch (error) {
       console.error('Error creating listing:', error);
+      
+      // Categorize errors for better user experience
+      let userFriendlyError = error.message;
+      
+      if (error.message.includes('Invalid category')) {
+        userFriendlyError = 'Category not valid for eBay marketplace';
+      } else if (error.message.includes('image')) {
+        userFriendlyError = 'Image upload failed - check image URLs';
+      } else if (error.message.includes('policy')) {
+        userFriendlyError = 'Business policy error - using default policies';
+      } else if (error.message.includes('token') || error.message.includes('unauthorized')) {
+        userFriendlyError = 'eBay authentication expired - please reconnect';
+      } else if (error.message.includes('rate limit')) {
+        userFriendlyError = 'eBay rate limit reached - please wait and try again';
+      }
+      
       return {
         success: false,
-        error: error.message,
-        sku: listingData.sku
+        error: userFriendlyError,
+        sku: listingData.sku,
+        originalError: error.message
       };
     }
   }

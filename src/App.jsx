@@ -465,6 +465,30 @@ Action(SiteID=US|Country=US|Currency=USD|Version=1193|CC=UTF-8),Custom label (SK
     }
   };
 
+  // NEW: Function to merge AI resolved fields into storedFieldSelections
+  const mergeAiResolvedFields = (responseItem, originalFieldSelections) => {
+    if (!responseItem.aiResolvedFields || typeof responseItem.aiResolvedFields !== 'object') {
+      return originalFieldSelections;
+    }
+
+    const merged = { ...originalFieldSelections };
+    
+    // Only merge fields that were empty or had default values
+    Object.entries(responseItem.aiResolvedFields).forEach(([fieldName, aiValue]) => {
+      const currentValue = originalFieldSelections[fieldName];
+      
+      // Only use AI value if the field was empty or had a default value
+      if (!currentValue || currentValue === "-- Select --" || currentValue.trim() === "") {
+        if (aiValue && aiValue !== "Unknown" && aiValue !== "Not Specified" && aiValue.trim() !== "") {
+          merged[fieldName] = aiValue.trim();
+          console.log(`AI resolved field '${fieldName}': '${aiValue}'`);
+        }
+      }
+    });
+
+    return merged;
+  };
+
   // Updated renderResponseData function with editable title and description
   const renderResponseData = (index) => {
     const response = responseData[index];
@@ -573,12 +597,34 @@ Action(SiteID=US|Country=US|Currency=USD|Version=1193|CC=UTF-8),Custom label (SK
             </div>
           )}
           
+          {/* NEW: Show AI resolved fields notification if any */}
+          {response.aiResolvedFields && Object.keys(response.aiResolvedFields).length > 0 && (
+            <div className="ai-resolved-notification" style={{
+              background: 'linear-gradient(135deg, #e8f4f8 0%, #d1edff 100%)',
+              border: '1px solid #4a90e2',
+              borderRadius: '6px',
+              padding: '12px',
+              margin: '8px 0',
+              fontSize: '0.9rem'
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+                <span style={{ fontSize: '1.2em' }}>🤖</span>
+                <strong style={{ color: '#0654ba' }}>AI Resolved Fields</strong>
+              </div>
+              <div style={{ fontSize: '0.85rem', color: '#333' }}>
+                AI automatically filled in {Object.keys(response.aiResolvedFields).length} category field(s) based on the images. 
+                You can review and edit these values below.
+              </div>
+            </div>
+          )}
+          
           {/* Add other response fields excluding title, description and stored fields */}
           {Object.entries(response)
             .filter(([key]) => 
               key !== 'title' && 
               key !== 'description' && 
               key !== 'storedFieldSelections' && 
+              key !== 'aiResolvedFields' && // NEW: Exclude AI resolved fields from display here
               !key.startsWith('error') && 
               !key.startsWith('raw_')
             )
@@ -642,14 +688,28 @@ Action(SiteID=US|Country=US|Currency=USD|Version=1193|CC=UTF-8),Custom label (SK
                 // Get the original field definition to show options
                 const fieldDefinition = categoryFields.find(field => field.FieldLabel === label);
                 const options = fieldDefinition?.CategoryOptions ? 
-                  fieldDefinition.CategoryOptions.split(';').map(opt => opt.trim()) : [];
+                  fieldDefinition.CategoryOptions.split(';').map(opt => opt.trim()).filter(opt => opt) : [];
                 
                 // Display empty string instead of "-- Select --" for default values
                 const displayValue = (value === "-- Select --" || !value) ? "" : value;
                 
+                // NEW: Check if this field was AI resolved
+                const wasAiResolved = response.aiResolvedFields && response.aiResolvedFields[label];
+                
                 return (
-                  <div key={label} className="response-field listing-metadata editable-field">
-                    <strong style={{ color: '#000' }}>{label}:</strong>
+                  <div key={label} className={`response-field listing-metadata editable-field ${wasAiResolved ? 'ai-resolved-field' : ''}`}>
+                    <strong style={{ color: '#000', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      {label}:
+                      {/* NEW: Show AI icon if field was resolved by AI */}
+                      {wasAiResolved && (
+                        <span 
+                          title="This field was automatically filled by AI" 
+                          style={{ fontSize: '0.8em', opacity: 0.7 }}
+                        >
+                          🤖
+                        </span>
+                      )}
+                    </strong>
                     {options.length > 0 ? (
                       // If we have options, show an editable dropdown using datalist
                       <div style={{ position: 'relative', marginLeft: '8px' }}>
@@ -661,9 +721,9 @@ Action(SiteID=US|Country=US|Currency=USD|Version=1193|CC=UTF-8),Custom label (SK
                           list={`${label}-${index}-options`}
                           style={{
                             padding: '4px 8px',
-                            border: '1px solid #ccc',
+                            border: wasAiResolved ? '2px solid #4a90e2' : '1px solid #ccc', // NEW: Highlight AI resolved fields
                             borderRadius: '4px',
-                            backgroundColor: '#fff',
+                            backgroundColor: wasAiResolved ? '#f0f7ff' : '#fff', // NEW: Light blue background for AI fields
                             color: '#000',
                             fontSize: '0.9rem',
                             minWidth: '200px'
@@ -685,9 +745,9 @@ Action(SiteID=US|Country=US|Currency=USD|Version=1193|CC=UTF-8),Custom label (SK
                         style={{
                           marginLeft: '8px',
                           padding: '4px 8px',
-                          border: '1px solid #ccc',
+                          border: wasAiResolved ? '2px solid #4a90e2' : '1px solid #ccc', // NEW: Highlight AI resolved fields
                           borderRadius: '4px',
-                          backgroundColor: '#fff',
+                          backgroundColor: wasAiResolved ? '#f0f7ff' : '#fff', // NEW: Light blue background for AI fields
                           color: '#000',
                           fontSize: '0.9rem',
                           minWidth: '150px'
@@ -1007,6 +1067,24 @@ Action(SiteID=US|Country=US|Currency=USD|Version=1193|CC=UTF-8),Custom label (SK
                           ) : (group.length > 0 && !responseData[gi]) ? (
                             <div className="status-indicator new">NEW</div>
                           ) : null}
+                          {/* NEW: Show AI indicator if this listing has AI resolved fields */}
+                          {response && response.aiResolvedFields && Object.keys(response.aiResolvedFields).length > 0 && (
+                            <div 
+                              className="status-indicator ai-resolved" 
+                              title={`AI resolved ${Object.keys(response.aiResolvedFields).length} field(s)`}
+                              style={{
+                                backgroundColor: '#4a90e2',
+                                color: 'white',
+                                fontSize: '10px',
+                                borderRadius: '10px',
+                                padding: '2px 6px',
+                                width: 'auto',
+                                height: 'auto'
+                              }}
+                            >
+                              🤖AI
+                            </div>
+                          )}
                         </div>
                         <div className="row-thumbs">
                           {group.map((src, xi) => (
@@ -1128,6 +1206,9 @@ Action(SiteID=US|Country=US|Currency=USD|Version=1193|CC=UTF-8),Custom label (SK
                       const displayValue = (listingFieldSelections[label] === "-- Select --" || !listingFieldSelections[label]) ? 
                         "" : listingFieldSelections[label];
                       
+                      // NEW: Check if this field was AI resolved
+                      const wasAiResolved = response && response.aiResolvedFields && response.aiResolvedFields[label];
+                      
                       return (
                         <div key={label} className="row-cell field-cell">
                           {options.length > 0 ? (
@@ -1139,7 +1220,12 @@ Action(SiteID=US|Country=US|Currency=USD|Version=1193|CC=UTF-8),Custom label (SK
                                 placeholder="Select or enter"
                                 list={`${label}-${gi}-row-options`}
                                 className="row-input field-input"
-                                style={{ color: '#000' }}
+                                style={{ 
+                                  color: '#000',
+                                  border: wasAiResolved ? '2px solid #4a90e2' : '1px solid #ccc', // NEW: Highlight AI resolved fields
+                                  backgroundColor: wasAiResolved ? '#f0f7ff' : '#fff' // NEW: Light blue background for AI fields
+                                }}
+                                title={wasAiResolved ? 'This field was automatically filled by AI' : ''}
                               />
                               <datalist id={`${label}-${gi}-row-options`}>
                                 {options.map((opt, idx) => (
@@ -1154,7 +1240,12 @@ Action(SiteID=US|Country=US|Currency=USD|Version=1193|CC=UTF-8),Custom label (SK
                               onChange={(e) => updateListingFieldSelection(gi, label, e.target.value)}
                               placeholder="Enter value"
                               className="row-input field-input"
-                              style={{ color: '#000' }}
+                              style={{ 
+                                color: '#000',
+                                border: wasAiResolved ? '2px solid #4a90e2' : '1px solid #ccc', // NEW: Highlight AI resolved fields
+                                backgroundColor: wasAiResolved ? '#f0f7ff' : '#fff' // NEW: Light blue background for AI fields
+                              }}
+                              title={wasAiResolved ? 'This field was automatically filled by AI' : ''}
                             />
                           )}
                         </div>
@@ -1201,8 +1292,32 @@ function AppContent() {
     }),
   });
 
-  // Modified handleGenerateListing to include eBay policies
-  const handleGenerateListing = async () => {
+  // NEW: Function to merge AI resolved fields into stored field selections
+  const mergeAiResolvedFields = (responseItem, originalFieldSelections) => {
+    if (!responseItem.aiResolvedFields || typeof responseItem.aiResolvedFields !== 'object') {
+      return originalFieldSelections;
+    }
+
+    const merged = { ...originalFieldSelections };
+    
+    // Only merge fields that were empty or had default values
+    Object.entries(responseItem.aiResolvedFields).forEach(([fieldName, aiValue]) => {
+      const currentValue = originalFieldSelections[fieldName];
+      
+      // Only use AI value if the field was empty or had a default value
+      if (!currentValue || currentValue === "-- Select --" || currentValue.trim() === "") {
+        if (aiValue && aiValue !== "Unknown" && aiValue !== "Not Specified" && aiValue.trim() !== "") {
+          merged[fieldName] = aiValue.trim();
+          console.log(`AI resolved field '${fieldName}': '${aiValue}'`);
+        }
+      }
+    });
+
+    return merged;
+  };
+
+  // NEW: Modified handleGenerateListing to include AI category fields resolution and eBay policies
+  const handleGenerateListing = async (aiResolveCategoryFields = false, categoryFields = []) => {
     try {
       const { imageGroups, filesBase64, batchSize, processedGroupIndices, fieldSelections } = state;
    
@@ -1328,8 +1443,16 @@ function AppContent() {
       dispatch({ type: 'SET_IS_DIRTY', payload: false });
       dispatch({ type: 'SET_PROCESSING_GROUPS', payload: updatedProcessingGroups });
 
-      // Prepare options for API call - include eBay policies
+      // NEW: Prepare options for API call - include eBay policies AND AI settings
       const selectedCategoryOptions = getSelectedCategoryOptionsJSON(fieldSelections, price, sku, selectedPolicies);   
+      
+      // NEW: Add AI resolution settings to the request
+      if (aiResolveCategoryFields) {
+        selectedCategoryOptions._aiResolveCategoryFields = true;
+        selectedCategoryOptions._categoryFields = categoryFields;
+        console.log(`AI category fields resolution enabled with ${categoryFields.length} fields`);
+      }
+      
       // Save current field selections to use in listings (including all fields with default values)
       const currentFieldSelections = {...fieldSelections};
 
@@ -1353,7 +1476,7 @@ function AppContent() {
                 category,
                 subCategory,
                 Base64Key: [group],
-                SelectedCategoryOptions: selectedCategoryOptions // Now includes eBay policies
+                SelectedCategoryOptions: selectedCategoryOptions // Now includes eBay policies AND AI settings
               })
             }
           );
@@ -1445,15 +1568,23 @@ function AppContent() {
         
         // Update UI with the results so far
         batchResults.forEach(({ index, result }) => {
-          // Update response data with ALL field selections (including default values)
+          // NEW: Handle AI resolved fields if present
+          let finalStoredSelections = { ...currentFieldSelections };
+          
+          if (aiResolveCategoryFields && result.aiResolvedFields) {
+            console.log(`Processing AI resolved fields for group ${index}:`, result.aiResolvedFields);
+            finalStoredSelections = mergeAiResolvedFields(result, currentFieldSelections);
+          }
+          
+          // Update response data with ALL field selections (including AI resolved ones)
           dispatch({
             type: 'UPDATE_RESPONSE_DATA',
             payload: { 
               index, 
               value: {
                 ...result,
-                // Store ALL the field selections with the response (including defaults)
-                storedFieldSelections: currentFieldSelections
+                // Store the merged field selections (original + AI resolved)
+                storedFieldSelections: finalStoredSelections
               }
             }
           });
@@ -1491,6 +1622,27 @@ function AppContent() {
       // Clear the image pool
       if (filesBase64.length > 0) {
         dispatch({ type: 'SET_FILES_BASE64', payload: [] });
+      }
+      
+      // NEW: Log AI resolution results if enabled
+      if (aiResolveCategoryFields) {
+        const aiResolvedCount = results.filter(r => r.result && r.result.aiResolvedFields).length;
+        const totalFieldsResolved = results.reduce((total, r) => {
+          if (r.result && r.result.aiResolvedFields) {
+            return total + Object.keys(r.result.aiResolvedFields).length;
+          }
+          return total;
+        }, 0);
+        
+        console.log(`AI Resolution Summary: ${aiResolvedCount}/${results.length} listings had AI resolved fields`);
+        console.log(`Total fields resolved: ${totalFieldsResolved}`);
+        
+        if (aiResolvedCount > 0) {
+          // Show a brief notification to the user
+          setTimeout(() => {
+            alert(`🤖 AI successfully resolved ${totalFieldsResolved} category fields across ${aiResolvedCount} listings. You can review and edit these values in the listings.`);
+          }, 1000);
+        }
       }
       
       // Short delay before resetting status to allow UI to show 100% completion
@@ -1540,6 +1692,7 @@ function AppContent() {
     </div>
   );
 }
+
 // Updated EbayCallback component in App.jsx
 const EbayCallback = () => {
   const { handleAuthCallback } = useEbayAuth();

@@ -1,4 +1,4 @@
-// FormSection.jsx - Enhanced with Caching and Performance Improvements
+// FormSection.jsx - Enhanced with AI Category Fields Resolution
 import { useState, useRef, useEffect } from 'react';
 import { DynamoDBClient, QueryCommand } from '@aws-sdk/client-dynamodb';
 import { unmarshall } from '@aws-sdk/util-dynamodb';
@@ -40,6 +40,41 @@ export const getSelectedCategoryOptionsJSON = (fieldSelections, price, sku, ebay
   return output;
 };
 
+// NEW: Function to prepare enhanced category fields prompt
+const buildEnhancedCategoryFieldsPrompt = (categoryFields, fieldSelections) => {
+  // Filter out fields that already have user-provided values
+  const emptyFields = categoryFields.filter(field => {
+    const currentValue = fieldSelections[field.FieldLabel];
+    return !currentValue || currentValue === "-- Select --" || currentValue.trim() === "";
+  });
+
+  if (emptyFields.length === 0) {
+    return ""; // No empty fields to resolve
+  }
+
+  let prompt = "\n\nADDITIONAL TASK: Based on the images and any existing information, please attempt to determine appropriate values for the following category fields that the user has not filled in:\n\n";
+
+  emptyFields.forEach(field => {
+    prompt += `**${field.FieldLabel}**:\n`;
+    
+    if (field.CategoryOptions && field.CategoryOptions.trim()) {
+      const options = field.CategoryOptions.split(';').map(opt => opt.trim()).filter(opt => opt);
+      if (options.length > 0 && options.length <= 20) {
+        prompt += `- Choose from: ${options.join(', ')}\n`;
+      } else if (options.length > 20) {
+        prompt += `- Choose from available options (there are ${options.length} total options)\n`;
+      }
+    } else {
+      prompt += `- Provide an appropriate value\n`;
+    }
+    prompt += `- If you cannot determine a value from the images, use "Unknown" or "Not Specified"\n\n`;
+  });
+
+  prompt += `Please include these determined values in your JSON response under the existing field names. Only provide values for fields you can reasonably determine from the images. If you cannot determine a value with confidence, use "Unknown" or leave the field unchanged.\n`;
+
+  return prompt;
+};
+
 function FormSection({ onGenerateListing, onCategoryFieldsChange }) {
   // Get state from context
   const { state, dispatch } = useAppState();
@@ -79,6 +114,9 @@ function FormSection({ onGenerateListing, onCategoryFieldsChange }) {
   const [autoRotateEnabled, setAutoRotateEnabled] = useState(false);
   const [showEbayAuth, setShowEbayAuth] = useState(false);
 
+  // NEW: State for AI category fields resolution
+  const [aiResolveCategoryFields, setAiResolveCategoryFields] = useState(false);
+
   // Cache performance tracking
   const [cacheStats, setCacheStats] = useState(null);
 
@@ -106,6 +144,11 @@ function FormSection({ onGenerateListing, onCategoryFieldsChange }) {
     setAutoRotateEnabled(e.target.checked);
   };
 
+  // NEW: Handle AI category fields toggle
+  const handleAiResolveCategoryFieldsToggle = (e) => {
+    setAiResolveCategoryFields(e.target.checked);
+  };
+
   const docClient = DynamoDBDocumentClient.from(client);
   
   const s3Client = new S3Client({
@@ -124,6 +167,7 @@ function FormSection({ onGenerateListing, onCategoryFieldsChange }) {
     setSubcategories(categories["--"] || ["--"]);
     setCategoryFields([]);
     setAutoRotateEnabled(false);
+    setAiResolveCategoryFields(false); // NEW: Reset AI toggle
     
     // Reset global state and clear processed groups tracking
     dispatch({ type: 'CLEAR_ALL' });
@@ -681,6 +725,7 @@ const fetchEbayCategoryID = async (category, subCategory) => {
   }
 };
   
+// NEW: Enhanced handleGenerateListingWithUpload with AI category fields resolution
 const handleGenerateListingWithUpload = async () => {
   try {
     // Reset status indicators
@@ -728,11 +773,11 @@ const handleGenerateListingWithUpload = async () => {
         if (validFiles.length > 0) {
           allRawFiles = validFiles;
         } else {
-          await onGenerateListing();
+          await onGenerateListing(aiResolveCategoryFields, categoryFields); // NEW: Pass AI flag and category fields
           return;
         }
       } else {
-        await onGenerateListing();
+        await onGenerateListing(aiResolveCategoryFields, categoryFields); // NEW: Pass AI flag and category fields
         return;
       }
     }
@@ -1088,8 +1133,8 @@ const handleGenerateListingWithUpload = async () => {
       } 
     });
     
-    // Now call handleGenerateListing
-    await onGenerateListing();
+    // NEW: Call handleGenerateListing with AI flag and category fields
+    await onGenerateListing(aiResolveCategoryFields, categoryFields);
     
   } catch (error) {
     console.error('Error during upload process:', error);
@@ -1153,6 +1198,19 @@ const uploadToS3 = async (file) => {
     const hasUnprocessedPoolImages = filesBase64.length > 0 && batchSize > 0;
     
     return hasUnprocessedGroups || hasUnprocessedPoolImages;
+  };
+
+  // NEW: Check if AI category fields resolution should be enabled
+  const shouldShowAiToggle = () => {
+    // Only show if we have category fields and at least some are empty
+    if (categoryFields.length === 0) return false;
+    
+    const emptyFields = categoryFields.filter(field => {
+      const currentValue = fieldSelections[field.FieldLabel];
+      return !currentValue || currentValue === "-- Select --" || currentValue.trim() === "";
+    });
+    
+    return emptyFields.length > 0;
   };
 
   // Spinner component
@@ -1359,6 +1417,26 @@ const uploadToS3 = async (file) => {
         </label>
       </div>
 
+      {/* NEW: AI Category Fields Resolution Toggle */}
+      {shouldShowAiToggle() && (
+        <div className="form-group ai-category-fields-option">
+          <input 
+            type="checkbox" 
+            id="ai-resolve-category-fields" 
+            checked={aiResolveCategoryFields} 
+            onChange={handleAiResolveCategoryFieldsToggle} 
+          />
+          <label htmlFor="ai-resolve-category-fields">
+            🤖 Let AI attempt to determine empty category fields from images
+          </label>
+          <div className="field-help-text">
+            <small style={{ color: '#666', display: 'block', marginTop: '4px' }}>
+              AI will analyze images to suggest values for unfilled category fields. You can review and edit these suggestions after generation.
+            </small>
+          </div>
+        </div>
+      )}
+
       <div className="form-group">
         <label>Images Per Item</label>
         <select 
@@ -1418,7 +1496,21 @@ const uploadToS3 = async (file) => {
                 `(${uploadStatus.uploadCompleted}/${uploadStatus.uploadTotal})`
               }
             </span>
-          ) : hasNewGroupsToProcess() ? 'Generate Listing' : 'Generate Listing'}
+          ) : hasNewGroupsToProcess() ? (
+            <>
+              Generate Listing
+              {aiResolveCategoryFields && shouldShowAiToggle() && (
+                <span style={{ fontSize: '0.8rem', marginLeft: '5px' }}>🤖</span>
+              )}
+            </>
+          ) : (
+            <>
+              Generate Listing
+              {aiResolveCategoryFields && shouldShowAiToggle() && (
+                <span style={{ fontSize: '0.8rem', marginLeft: '5px' }}>🤖</span>
+              )}
+            </>
+          )}
         </button>
         {showTooltip && <span className="tooltip">Please select a valid category and subcategory.</span>}
       </div>

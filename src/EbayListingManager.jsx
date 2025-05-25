@@ -1,37 +1,13 @@
-// EbayListingManager.jsx - Complete with Draft Support
+// EbayListingManager.jsx - Complete with Environment-Aware URLs
 import React, { useState } from 'react';
 import { useAppState } from './StateContext';
 import { useEbayAuth } from './EbayAuthContext';
 import EbayListingService from './EbayListingService';
 import './EbayListingManager.css';
 
-// Add this function at the top of your EbayListingManager component
-const getEbayUrls = () => {
-  // Check if we're in sandbox mode by looking at the eBay service environment
-  // You can get this from your EbayAuthContext if available
-  const isSandbox = true; // Set this based on your environment
-  
-  if (isSandbox) {
-    return {
-      viewListing: (listingId) => `https://www.sandbox.ebay.com/itm/${listingId}`,
-      drafts: 'https://www.sandbox.ebay.com/sh/lst/drafts',
-      active: 'https://www.sandbox.ebay.com/sh/lst/active'
-    };
-  } else {
-    return {
-      viewListing: (listingId) => `https://www.ebay.com/itm/${listingId}`,
-      drafts: 'https://www.ebay.com/sh/lst/drafts',
-      active: 'https://www.ebay.com/sh/lst/active'
-    };
-  }
-};
-
-
-const ebayUrls = getEbayUrls();
-
 const EbayListingManager = ({ onClose }) => {
   const { state } = useAppState();
-  const { isAuthenticated, selectedPolicies } = useEbayAuth();
+  const { isAuthenticated, selectedPolicies, ebayService } = useEbayAuth();
   const [listingStatus, setListingStatus] = useState({
     isListing: false,
     progress: 0,
@@ -42,6 +18,27 @@ const EbayListingManager = ({ onClose }) => {
   });
   
   const listingService = new EbayListingService();
+
+  // Get environment-aware eBay URLs
+  const getEbayUrls = () => {
+    const isSandbox = ebayService?.environment === 'sandbox';
+    
+    if (isSandbox) {
+      return {
+        viewListing: (listingId) => `https://www.sandbox.ebay.com/itm/${listingId}`,
+        drafts: 'https://www.sandbox.ebay.com/sh/lst/drafts',
+        active: 'https://www.sandbox.ebay.com/sh/lst/active'
+      };
+    } else {
+      return {
+        viewListing: (listingId) => `https://www.ebay.com/itm/${listingId}`,
+        drafts: 'https://www.ebay.com/sh/lst/drafts',
+        active: 'https://www.ebay.com/sh/lst/active'
+      };
+    }
+  };
+
+  const ebayUrls = getEbayUrls();
 
   // Check if we can create listings
   const canCreateListings = () => {
@@ -90,6 +87,7 @@ const EbayListingManager = ({ onClose }) => {
 
       // Debug logging
       console.log('=== LISTING RESULTS DEBUG ===');
+      console.log('Environment:', ebayService?.environment || 'unknown');
       console.log('Full results object:', results);
       console.log('Successful array:', results.successful);
       console.log('Drafts array:', results.drafts);
@@ -98,6 +96,7 @@ const EbayListingManager = ({ onClose }) => {
       console.log('Drafts length:', results.drafts?.length || 0);
       console.log('Failed length:', results.failed?.length || 0);
       console.log('Summary:', results.summary);
+      console.log('eBay URLs:', ebayUrls);
       if (results.successful?.length > 0) {
         console.log('First successful item:', results.successful[0]);
       }
@@ -183,10 +182,11 @@ const EbayListingManager = ({ onClose }) => {
     const missingPolicies = getMissingPoliciesCount();
     
     if (missingPolicies > 0) {
+      const environmentNote = ebayService?.environment === 'sandbox' ? ' (in sandbox)' : '';
       return {
         type: 'warning',
         title: 'Business Policies Required',
-        message: `${missingPolicies} business policy type${missingPolicies > 1 ? 's are' : ' is'} missing. Listings will be created as drafts that you can complete in eBay Seller Hub.`,
+        message: `${missingPolicies} business policy type${missingPolicies > 1 ? 's are' : ' is'} missing. Listings will be created as drafts${environmentNote} that you can complete in eBay Seller Hub.`,
         icon: '⚠️'
       };
     }
@@ -229,6 +229,21 @@ const EbayListingManager = ({ onClose }) => {
             <h4>{statusMessage.title}</h4>
             <p>{statusMessage.message}</p>
             
+            {/* Show environment indicator */}
+            {ebayService?.environment && (
+              <div style={{ 
+                background: ebayService.environment === 'sandbox' ? '#fff3cd' : '#d1edff', 
+                border: `1px solid ${ebayService.environment === 'sandbox' ? '#ffc107' : '#0ea5e9'}`,
+                borderRadius: '6px', 
+                padding: '8px 12px', 
+                margin: '10px 0',
+                fontSize: '0.85rem',
+                color: ebayService.environment === 'sandbox' ? '#856404' : '#0c4a6e'
+              }}>
+                <strong>Environment:</strong> {ebayService.environment === 'sandbox' ? '🧪 Sandbox (Testing)' : '🌐 Production (Live)'}
+              </div>
+            )}
+            
             <div className="policy-summary">
               <h5>eBay Business Policies:</h5>
               <ul>
@@ -249,7 +264,7 @@ const EbayListingManager = ({ onClose }) => {
                 <span>💡</span>
                 <div>
                   <strong>Note:</strong> Listings without complete business policies will be created as drafts. 
-                  You can complete them later in eBay Seller Hub.
+                  You can complete them later in eBay Seller Hub{ebayService?.environment === 'sandbox' ? ' (sandbox)' : ''}.
                 </div>
               </div>
             )}
@@ -261,7 +276,7 @@ const EbayListingManager = ({ onClose }) => {
               onClick={handleCreateAllListings}
               disabled={listingStatus.isListing}
             >
-              Create {getValidListingsCount()} Listing{getValidListingsCount() > 1 ? 's' : ''} on eBay
+              Create {getValidListingsCount()} Listing{getValidListingsCount() > 1 ? 's' : ''} on eBay{ebayService?.environment === 'sandbox' ? ' (Sandbox)' : ''}
             </button>
           </div>
         </div>
@@ -269,7 +284,7 @@ const EbayListingManager = ({ onClose }) => {
 
       {listingStatus.isListing && (
         <div className="listing-progress">
-          <h4>Creating eBay Listings...</h4>
+          <h4>Creating eBay Listings{ebayService?.environment === 'sandbox' ? ' (Sandbox)' : ''}...</h4>
           <div className="progress-info">
             <p>Processing listing {listingStatus.currentIndex} of {listingStatus.total}</p>
             <div className="progress-bar-container">
@@ -304,11 +319,14 @@ const EbayListingManager = ({ onClose }) => {
           {/* Debug info - remove this in production */}
           <div style={{ background: '#f0f0f0', padding: '10px', margin: '10px 0', fontSize: '12px', borderRadius: '4px' }}>
             <strong>Debug Info:</strong><br/>
+            Environment: {ebayService?.environment || 'unknown'}<br/>
             Results object keys: {Object.keys(listingStatus.results || {}).join(', ')}<br/>
             Successful count: {listingStatus.results.successful?.length || 0}<br/>
             Drafts count: {listingStatus.results.drafts?.length || 0}<br/>
             Failed count: {listingStatus.results.failed?.length || 0}<br/>
-            Total created: {getTotalCreatedCount()}
+            Total created: {getTotalCreatedCount()}<br/>
+            Draft URLs: {ebayUrls.drafts}<br/>
+            Active URLs: {ebayUrls.active}
           </div>
 
           {/* Success message for any created listings (published or drafts) */}
@@ -316,7 +334,7 @@ const EbayListingManager = ({ onClose }) => {
             <div className="status-message success">
               <span>🎉</span>
               <div>
-                <strong>Success!</strong> {getTotalCreatedCount()} listing{getTotalCreatedCount() > 1 ? 's have' : ' has'} been created on eBay.
+                <strong>Success!</strong> {getTotalCreatedCount()} listing{getTotalCreatedCount() > 1 ? 's have' : ' has'} been created on eBay{ebayService?.environment === 'sandbox' ? ' sandbox' : ''}.
                 {listingStatus.results.drafts?.length > 0 ? (
                   <div style={{ marginTop: '8px', fontSize: '0.9rem' }}>
                     These are currently <strong>drafts</strong>. Complete them in eBay Seller Hub to make them live.
@@ -352,7 +370,7 @@ const EbayListingManager = ({ onClose }) => {
                       <div className="listing-status">Live Listing</div>
                       {item.listingId && (
                         <a 
-                          href={`https://www.ebay.com/itm/${item.listingId}`}
+                          href={ebayUrls.viewListing(item.listingId)}
                           target="_blank"
                           rel="noopener noreferrer"
                           className="view-listing-link"
@@ -389,7 +407,7 @@ const EbayListingManager = ({ onClose }) => {
                     <div className="listing-actions">
                       <div className="listing-status">Draft Created</div>
                       <a 
-                        href="https://www.ebay.com/sh/lst/drafts"
+                        href={ebayUrls.drafts}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="manage-draft-link"
@@ -408,42 +426,26 @@ const EbayListingManager = ({ onClose }) => {
           {getTotalCreatedCount() > 0 && (
             <div className="bulk-actions">
               {listingStatus.results.successful?.length > 0 && (
-                // Then use it in your JSX like this:
-
-// For the Complete Draft link:
-<a 
-  href={ebayUrls.drafts}
-  target="_blank"
-  rel="noopener noreferrer"
-  className="manage-draft-link"
-  title="Complete this draft in Seller Hub"
->
-  Complete Draft
-</a>
-
-// For the View on eBay link:
-{item.listingId && (
-  <a 
-    href={ebayUrls.viewListing(item.listingId)}
-    target="_blank"
-    rel="noopener noreferrer"
-    className="view-listing-link"
-    title="View listing on eBay"
-  >
-    View on eBay
-  </a>
-)}
-
-// For bulk actions:
-<a 
-  href={ebayUrls.drafts}
-  target="_blank"
-  rel="noopener noreferrer"
-  className="bulk-action-button manage-drafts"
->
-  <span>✏️</span>
-  Manage All Drafts
-</a>
+                <a 
+                  href={ebayUrls.active}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="bulk-action-button view-all-listings"
+                >
+                  <span>📋</span>
+                  View All My Listings
+                </a>
+              )}
+              {listingStatus.results.drafts?.length > 0 && (
+                <a 
+                  href={ebayUrls.drafts}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="bulk-action-button manage-drafts"
+                >
+                  <span>✏️</span>
+                  Manage All Drafts
+                </a>
               )}
             </div>
           )}

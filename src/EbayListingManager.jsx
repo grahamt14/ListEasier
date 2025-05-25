@@ -1,4 +1,4 @@
-// EbayListingManager.jsx - Complete with Enhanced UI
+// EbayListingManager.jsx - Complete with Draft Support
 import React, { useState } from 'react';
 import { useAppState } from './StateContext';
 import { useEbayAuth } from './EbayAuthContext';
@@ -64,6 +64,24 @@ const EbayListingManager = ({ onClose }) => {
         }
       });
 
+      // Debug logging
+      console.log('=== LISTING RESULTS DEBUG ===');
+      console.log('Full results object:', results);
+      console.log('Successful array:', results.successful);
+      console.log('Drafts array:', results.drafts);
+      console.log('Failed array:', results.failed);
+      console.log('Successful length:', results.successful?.length || 0);
+      console.log('Drafts length:', results.drafts?.length || 0);
+      console.log('Failed length:', results.failed?.length || 0);
+      console.log('Summary:', results.summary);
+      if (results.successful?.length > 0) {
+        console.log('First successful item:', results.successful[0]);
+      }
+      if (results.drafts?.length > 0) {
+        console.log('First draft item:', results.drafts[0]);
+      }
+      console.log('=== END DEBUG ===');
+
       setListingStatus(prev => ({
         ...prev,
         isListing: false,
@@ -99,7 +117,8 @@ const EbayListingManager = ({ onClose }) => {
         currentIndex: 1,
         total: 1,
         results: {
-          successful: result.success ? [result] : [],
+          successful: result.success && !result.isDraft ? [result] : [],
+          drafts: result.success && result.isDraft ? [result] : [],
           failed: result.success ? [] : [result],
           total: 1
         },
@@ -127,6 +146,11 @@ const EbayListingManager = ({ onClose }) => {
     if (!selectedPolicies.fulfillmentPolicyId) missing++;
     if (!selectedPolicies.returnPolicyId) missing++;
     return missing;
+  };
+
+  // Get total created count (successful + drafts)
+  const getTotalCreatedCount = () => {
+    return (listingStatus.results?.successful?.length || 0) + (listingStatus.results?.drafts?.length || 0);
   };
 
   // Determine what type of message to show
@@ -244,112 +268,150 @@ const EbayListingManager = ({ onClose }) => {
           
           <div className="results-summary">
             <div className="result-stat success">
-              <span className="stat-number">{listingStatus.results.successful.length}</span>
+              <span className="stat-number">{getTotalCreatedCount()}</span>
               <span className="stat-label">Created</span>
             </div>
             <div className="result-stat failed">
-              <span className="stat-number">{listingStatus.results.failed.length}</span>
+              <span className="stat-number">{listingStatus.results.failed?.length || 0}</span>
               <span className="stat-label">Failed</span>
             </div>
           </div>
 
-          {listingStatus.results.successful.length > 0 && (
-            <>
-              <div className="status-message success">
-                <span>🎉</span>
-                <div>
-                  <strong>Success!</strong> {listingStatus.results.successful.length} listing{listingStatus.results.successful.length > 1 ? 's have' : ' has'} been created on eBay.
-                  {getMissingPoliciesCount() > 0 ? (
-                    <div style={{ marginTop: '8px', fontSize: '0.9rem' }}>
-                      These are currently <strong>drafts</strong>. Complete them in eBay Seller Hub to make them live.
-                    </div>
-                  ) : (
-                    <div style={{ marginTop: '8px', fontSize: '0.9rem' }}>
-                      Your listings are now <strong>live</strong> on eBay and ready for buyers!
-                    </div>
-                  )}
-                  <div style={{ marginTop: '8px', fontSize: '0.85rem', color: '#065f46' }}>
-                    💡 Tip: You can view and manage all your listings using the buttons below.
+          {/* Debug info - remove this in production */}
+          <div style={{ background: '#f0f0f0', padding: '10px', margin: '10px 0', fontSize: '12px', borderRadius: '4px' }}>
+            <strong>Debug Info:</strong><br/>
+            Results object keys: {Object.keys(listingStatus.results || {}).join(', ')}<br/>
+            Successful count: {listingStatus.results.successful?.length || 0}<br/>
+            Drafts count: {listingStatus.results.drafts?.length || 0}<br/>
+            Failed count: {listingStatus.results.failed?.length || 0}<br/>
+            Total created: {getTotalCreatedCount()}
+          </div>
+
+          {/* Success message for any created listings (published or drafts) */}
+          {getTotalCreatedCount() > 0 && (
+            <div className="status-message success">
+              <span>🎉</span>
+              <div>
+                <strong>Success!</strong> {getTotalCreatedCount()} listing{getTotalCreatedCount() > 1 ? 's have' : ' has'} been created on eBay.
+                {listingStatus.results.drafts?.length > 0 ? (
+                  <div style={{ marginTop: '8px', fontSize: '0.9rem' }}>
+                    These are currently <strong>drafts</strong>. Complete them in eBay Seller Hub to make them live.
                   </div>
+                ) : (
+                  <div style={{ marginTop: '8px', fontSize: '0.9rem' }}>
+                    Your listings are now <strong>live</strong> on eBay and ready for buyers!
+                  </div>
+                )}
+                <div style={{ marginTop: '8px', fontSize: '0.85rem', color: '#065f46' }}>
+                  💡 Tip: You can view and manage all your listings using the buttons below.
                 </div>
               </div>
-
-              <div className="successful-listings">
-                <h5>Successfully Created Listings:</h5>
-                <ul>
-                  {listingStatus.results.successful.map((item, index) => (
-                    <li key={index}>
-                      <div>
-                        <div className="sku">{item.sku}</div>
-                        {item.listingId && (
-                          <div style={{ fontSize: '0.8rem', color: '#6b7280', marginTop: '4px' }}>
-                            Listing ID: {item.listingId}
-                          </div>
-                        )}
-                      </div>
-                      <div className="listing-actions">
-                        <div className="listing-status">
-                          {getMissingPoliciesCount() > 0 ? 'Draft Created' : 'Live Listing'}
-                        </div>
-                        {item.listingId && (
-                          <a 
-                            href={`https://www.ebay.com/itm/${item.listingId}`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="view-listing-link"
-                            title="View listing on eBay"
-                          >
-                            View on eBay
-                          </a>
-                        )}
-                        {item.offerId && getMissingPoliciesCount() > 0 && (
-                          <a 
-                            href="https://www.ebay.com/sh/lst/drafts"
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="manage-draft-link"
-                            title="Complete this draft in Seller Hub"
-                          >
-                            Complete Draft
-                          </a>
-                        )}
-                      </div>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-
-              {/* Add bulk action buttons */}
-              <div className="bulk-actions">
-                {listingStatus.results.successful.some(item => item.listingId) && (
-                  <a 
-                    href="https://www.ebay.com/sh/lst/active"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="bulk-action-button view-all-listings"
-                  >
-                    <span>📋</span>
-                    View All My Listings
-                  </a>
-                )}
-                {getMissingPoliciesCount() > 0 && listingStatus.results.successful.length > 0 && (
-                  <a 
-                    href="https://www.ebay.com/sh/lst/drafts"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="bulk-action-button manage-drafts"
-                  >
-                    <span>✏️</span>
-                    Manage All Drafts
-                  </a>
-                )}
-              </div>
-            </>
+            </div>
           )}
 
-          {listingStatus.results.failed.length > 0 && (
+          {/* Show published listings */}
+          {listingStatus.results.successful?.length > 0 && (
+            <div className="successful-listings">
+              <h5>✅ Published Listings:</h5>
+              <ul>
+                {listingStatus.results.successful.map((item, index) => (
+                  <li key={index}>
+                    <div>
+                      <div className="sku">{item.sku}</div>
+                      {item.listingId && (
+                        <div style={{ fontSize: '0.8rem', color: '#6b7280', marginTop: '4px' }}>
+                          Listing ID: {item.listingId}
+                        </div>
+                      )}
+                    </div>
+                    <div className="listing-actions">
+                      <div className="listing-status">Live Listing</div>
+                      {item.listingId && (
+                        <a 
+                          href={`https://www.ebay.com/itm/${item.listingId}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="view-listing-link"
+                          title="View listing on eBay"
+                        >
+                          View on eBay
+                        </a>
+                      )}
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {/* Show draft listings */}
+          {listingStatus.results.drafts?.length > 0 && (
+            <div className="successful-listings">
+              <h5>📝 Draft Listings Created:</h5>
+              <ul>
+                {listingStatus.results.drafts.map((item, index) => (
+                  <li key={index}>
+                    <div>
+                      <div className="sku">{item.sku}</div>
+                      {item.offerId && (
+                        <div style={{ fontSize: '0.8rem', color: '#6b7280', marginTop: '4px' }}>
+                          Offer ID: {item.offerId}
+                        </div>
+                      )}
+                      <div style={{ fontSize: '0.8rem', color: '#92400e', marginTop: '4px' }}>
+                        {item.message || 'Created as draft - complete in Seller Hub'}
+                      </div>
+                    </div>
+                    <div className="listing-actions">
+                      <div className="listing-status">Draft Created</div>
+                      <a 
+                        href="https://www.ebay.com/sh/lst/drafts"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="manage-draft-link"
+                        title="Complete this draft in Seller Hub"
+                      >
+                        Complete Draft
+                      </a>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {/* Bulk action buttons */}
+          {getTotalCreatedCount() > 0 && (
+            <div className="bulk-actions">
+              {listingStatus.results.successful?.length > 0 && (
+                <a 
+                  href="https://www.ebay.com/sh/lst/active"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="bulk-action-button view-all-listings"
+                >
+                  <span>📋</span>
+                  View All My Listings
+                </a>
+              )}
+              {listingStatus.results.drafts?.length > 0 && (
+                <a 
+                  href="https://www.ebay.com/sh/lst/drafts"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="bulk-action-button manage-drafts"
+                >
+                  <span>✏️</span>
+                  Manage All Drafts
+                </a>
+              )}
+            </div>
+          )}
+
+          {/* Show failed listings if any */}
+          {listingStatus.results.failed?.length > 0 && (
             <div className="failed-listings">
-              <h5>Failed to Create:</h5>
+              <h5>❌ Failed to Create:</h5>
               <ul>
                 {listingStatus.results.failed.map((item, index) => (
                   <li key={index}>

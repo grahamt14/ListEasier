@@ -245,36 +245,58 @@ class EbayListingService {
   generateTroubleshootingAdvice(result) {
     const advice = [];
     
-    // Business policy related issues
-    if (result.details?.businessPolicyStatus === 'not_available') {
-      advice.push('Enable business policies in your eBay account settings');
-      advice.push('Go to My eBay > Account > Site Preferences > Selling preferences');
+    // Shipping service related issues
+    if (result.error?.includes('shipping service') || result.error?.includes('Fulfillment policy')) {
+      advice.push('eBay requires proper shipping configuration for listings');
+      advice.push('Enable business policies in your eBay account for full shipping support');
+      advice.push('Go to My eBay → Account → Site Preferences → Selling preferences');
       advice.push('Turn on "Use business policies for my listings"');
+      advice.push('Create a shipping (fulfillment) policy with valid shipping services');
+    }
+    
+    // Business policy related issues
+    else if (result.details?.businessPolicyStatus === 'not_available') {
+      advice.push('Enable business policies in your eBay account settings');
+      advice.push('Go to My eBay → Account → Site Preferences → Selling preferences');
+      advice.push('Turn on "Use business policies for my listings"');
+      advice.push('Create payment, shipping, and return policies');
     }
     
     // Publishing issues
-    if (result.step === 'publish_offer') {
+    else if (result.step === 'publish_offer') {
       advice.push('The offer was created but could not be published');
       advice.push('Check eBay Seller Hub for the draft listing');
       advice.push('You may be able to publish it manually from eBay');
+      if (result.error?.includes('policy') || result.error?.includes('shipping')) {
+        advice.push('This is likely due to missing business policies');
+        advice.push('Enable business policies in your eBay account to resolve this');
+      }
     }
     
     // Category issues
-    if (result.step === 'offer_creation' && result.details?.suggestions) {
+    else if (result.step === 'offer_creation' && result.details?.suggestions) {
       advice.push(...result.details.suggestions);
     }
     
     // Network/API issues
-    if (result.step === 'network_error') {
+    else if (result.step === 'network_error') {
       advice.push('Check your internet connection');
       advice.push('eBay servers may be temporarily unavailable');
       advice.push('Try again in a few minutes');
     }
     
     // Token issues
-    if (result.error?.includes('token') || result.error?.includes('auth')) {
+    else if (result.error?.includes('token') || result.error?.includes('auth')) {
       advice.push('Your eBay authentication may have expired');
       advice.push('Try disconnecting and reconnecting your eBay account');
+    }
+    
+    // General policy advice if nothing else matches
+    if (advice.length === 0 && (result.error?.includes('policy') || result.isDraft)) {
+      advice.push('This appears to be a business policy related issue');
+      advice.push('Enable business policies in your eBay account');
+      advice.push('Go to My eBay → Account → Site Preferences → Selling preferences');
+      advice.push('Create payment, shipping, and return policies');
     }
     
     return advice.length > 0 ? advice : ['Contact support for assistance with this error'];

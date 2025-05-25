@@ -5,6 +5,30 @@ import { useEbayAuth } from './EbayAuthContext';
 import EbayListingService from './EbayListingService';
 import './EbayListingManager.css';
 
+// Add this function at the top of your EbayListingManager component
+const getEbayUrls = () => {
+  // Check if we're in sandbox mode by looking at the eBay service environment
+  // You can get this from your EbayAuthContext if available
+  const isSandbox = true; // Set this based on your environment
+  
+  if (isSandbox) {
+    return {
+      viewListing: (listingId) => `https://www.sandbox.ebay.com/itm/${listingId}`,
+      drafts: 'https://www.sandbox.ebay.com/sh/lst/drafts',
+      active: 'https://www.sandbox.ebay.com/sh/lst/active'
+    };
+  } else {
+    return {
+      viewListing: (listingId) => `https://www.ebay.com/itm/${listingId}`,
+      drafts: 'https://www.ebay.com/sh/lst/drafts',
+      active: 'https://www.ebay.com/sh/lst/active'
+    };
+  }
+};
+
+
+const ebayUrls = getEbayUrls();
+
 const EbayListingManager = ({ onClose }) => {
   const { state } = useAppState();
   const { isAuthenticated, selectedPolicies } = useEbayAuth();
@@ -384,26 +408,42 @@ const EbayListingManager = ({ onClose }) => {
           {getTotalCreatedCount() > 0 && (
             <div className="bulk-actions">
               {listingStatus.results.successful?.length > 0 && (
-                <a 
-                  href="https://www.ebay.com/sh/lst/active"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="bulk-action-button view-all-listings"
-                >
-                  <span>📋</span>
-                  View All My Listings
-                </a>
-              )}
-              {listingStatus.results.drafts?.length > 0 && (
-                <a 
-                  href="https://www.ebay.com/sh/lst/drafts"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="bulk-action-button manage-drafts"
-                >
-                  <span>✏️</span>
-                  Manage All Drafts
-                </a>
+                // Then use it in your JSX like this:
+
+// For the Complete Draft link:
+<a 
+  href={ebayUrls.drafts}
+  target="_blank"
+  rel="noopener noreferrer"
+  className="manage-draft-link"
+  title="Complete this draft in Seller Hub"
+>
+  Complete Draft
+</a>
+
+// For the View on eBay link:
+{item.listingId && (
+  <a 
+    href={ebayUrls.viewListing(item.listingId)}
+    target="_blank"
+    rel="noopener noreferrer"
+    className="view-listing-link"
+    title="View listing on eBay"
+  >
+    View on eBay
+  </a>
+)}
+
+// For bulk actions:
+<a 
+  href={ebayUrls.drafts}
+  target="_blank"
+  rel="noopener noreferrer"
+  className="bulk-action-button manage-drafts"
+>
+  <span>✏️</span>
+  Manage All Drafts
+</a>
               )}
             </div>
           )}

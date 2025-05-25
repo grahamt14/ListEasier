@@ -47,6 +47,11 @@ class EbayListingService {
         returnPolicyId: selectedPolicies.returnPolicyId
       },
       aspectsData: aspectsData
+	  location: {
+      // Add user's location data here
+      country: 'US', // Get from user settings
+      postalCode: '90210' // Get from user settings
+    }
     };
   }
 

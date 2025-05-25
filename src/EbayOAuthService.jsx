@@ -59,13 +59,14 @@ class EbayOAuthService {
       ruName: 'David_Jacobs-DavidJac-ListEa-gkelan'
     };
     
- // Updated scopes - including inventory management for listing creation
-    this.scopes = [
-      'https://api.ebay.com/oauth/api_scope/sell.account.readonly',
-      'https://api.ebay.com/oauth/api_scope/commerce.identity.readonly',
-      'https://api.ebay.com/oauth/api_scope/sell.inventory',
-      'https://api.ebay.com/oauth/api_scope/sell.account'
-    ];
+this.scopes = [
+  'https://api.ebay.com/oauth/api_scope/sell.account.readonly',
+  'https://api.ebay.com/oauth/api_scope/commerce.identity.readonly',
+  'https://api.ebay.com/oauth/api_scope/sell.inventory',
+  'https://api.ebay.com/oauth/api_scope/sell.account',
+  // Add this scope for full listing management:
+  'https://api.ebay.com/oauth/api_scope/sell.inventory.readonly'
+];
     
     // Debug logging
     console.log('eBay OAuth Service Configuration:');

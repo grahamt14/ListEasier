@@ -12,9 +12,16 @@ import EbayListingManager from './EbayListingManager';
 function PreviewSection({ categoryFields = [] }) {
   const { state, dispatch } = useAppState();
   const [showListingManager, setShowListingManager] = useState(false);
-  const { selectedPolicies, ebayService } = useEbayAuth(); // Get eBay policies and service
+  // Add isAuthenticated to the destructuring
+  const { 
+    isAuthenticated: ebayAuthenticated, // Add this line
+    selectedPolicies, 
+    ebayService 
+  } = useEbayAuth();
   
-  const canCreateEbayListings = () => {
+const canCreateEbayListings = () => {
+  // Add hasValidListings definition
+  const hasValidListings = responseData.some(item => item && !item.error);
   return ebayAuthenticated && hasValidListings && state.categoryID;
 };
   

@@ -1294,7 +1294,8 @@ function AppContent() {
 
   // NEW: Function to merge AI resolved fields into stored field selections
   const mergeAiResolvedFields = (responseItem, originalFieldSelections) => {
-    if (!responseItem.aiResolvedFields || typeof responseItem.aiResolvedFields !== 'object') {
+    // Safety check: ensure responseItem exists and has the right structure
+    if (!responseItem || typeof responseItem !== 'object' || !responseItem.aiResolvedFields || typeof responseItem.aiResolvedFields !== 'object') {
       return originalFieldSelections;
     }
 
@@ -1567,14 +1568,27 @@ function AppContent() {
         });
         
         // Update UI with the results so far
-        batchResults.forEach(({ index, result }) => {
-          // NEW: Handle AI resolved fields if present
+        batchResults.forEach(({ index, result, error, success }) => {
+          // NEW: Handle AI resolved fields if present - with comprehensive error checking
           let finalStoredSelections = { ...currentFieldSelections };
           
-          if (aiResolveCategoryFields && result.aiResolvedFields) {
+          // Only process if we have a successful result and AI resolution is enabled
+          if (aiResolveCategoryFields && success && result && typeof result === 'object' && result.aiResolvedFields) {
             console.log(`Processing AI resolved fields for group ${index}:`, result.aiResolvedFields);
-            finalStoredSelections = mergeAiResolvedFields(result, currentFieldSelections);
+            try {
+              finalStoredSelections = mergeAiResolvedFields(result, currentFieldSelections);
+            } catch (mergeError) {
+              console.error(`Error merging AI fields for group ${index}:`, mergeError);
+              // Continue with original field selections if merge fails
+            }
           }
+          
+          // Ensure we have a valid result object, even for errors
+          const safeResult = result || { 
+            error: error ? "Processing failed" : "Unknown error",
+            title: "",
+            description: ""
+          };
           
           // Update response data with ALL field selections (including AI resolved ones)
           dispatch({
@@ -1582,7 +1596,7 @@ function AppContent() {
             payload: { 
               index, 
               value: {
-                ...result,
+                ...safeResult,
                 // Store the merged field selections (original + AI resolved)
                 storedFieldSelections: finalStoredSelections
               }
@@ -1626,22 +1640,31 @@ function AppContent() {
       
       // NEW: Log AI resolution results if enabled
       if (aiResolveCategoryFields) {
-        const aiResolvedCount = results.filter(r => r.result && r.result.aiResolvedFields).length;
-        const totalFieldsResolved = results.reduce((total, r) => {
-          if (r.result && r.result.aiResolvedFields) {
-            return total + Object.keys(r.result.aiResolvedFields).length;
+        try {
+          const aiResolvedCount = results.filter(r => 
+            r && r.success && r.result && r.result.aiResolvedFields && 
+            Object.keys(r.result.aiResolvedFields).length > 0
+          ).length;
+          
+          const totalFieldsResolved = results.reduce((total, r) => {
+            if (r && r.success && r.result && r.result.aiResolvedFields) {
+              return total + Object.keys(r.result.aiResolvedFields).length;
+            }
+            return total;
+          }, 0);
+          
+          console.log(`AI Resolution Summary: ${aiResolvedCount}/${results.length} listings had AI resolved fields`);
+          console.log(`Total fields resolved: ${totalFieldsResolved}`);
+          
+          if (aiResolvedCount > 0) {
+            // Show a brief notification to the user
+            setTimeout(() => {
+              alert(`🤖 AI successfully resolved ${totalFieldsResolved} category fields across ${aiResolvedCount} listings. You can review and edit these values in the listings.`);
+            }, 1000);
           }
-          return total;
-        }, 0);
-        
-        console.log(`AI Resolution Summary: ${aiResolvedCount}/${results.length} listings had AI resolved fields`);
-        console.log(`Total fields resolved: ${totalFieldsResolved}`);
-        
-        if (aiResolvedCount > 0) {
-          // Show a brief notification to the user
-          setTimeout(() => {
-            alert(`🤖 AI successfully resolved ${totalFieldsResolved} category fields across ${aiResolvedCount} listings. You can review and edit these values in the listings.`);
-          }, 1000);
+        } catch (summaryError) {
+          console.error('Error generating AI resolution summary:', summaryError);
+          // Continue without showing summary if there's an error
         }
       }
       

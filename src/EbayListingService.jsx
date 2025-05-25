@@ -1,4 +1,4 @@
-// EbayListingService.jsx - Fixed version with better response handling
+// EbayListingService.jsx - Updated with better policy handling
 import EbayOAuthService from './EbayOAuthService';
 
 class EbayListingService {
@@ -32,6 +32,20 @@ class EbayListingService {
       });
     }
 
+    // Create policies object - only include if they exist and are valid
+    const policies = {};
+    if (selectedPolicies) {
+      if (selectedPolicies.paymentPolicyId && selectedPolicies.paymentPolicyId !== '') {
+        policies.paymentPolicyId = selectedPolicies.paymentPolicyId;
+      }
+      if (selectedPolicies.fulfillmentPolicyId && selectedPolicies.fulfillmentPolicyId !== '') {
+        policies.fulfillmentPolicyId = selectedPolicies.fulfillmentPolicyId;
+      }
+      if (selectedPolicies.returnPolicyId && selectedPolicies.returnPolicyId !== '') {
+        policies.returnPolicyId = selectedPolicies.returnPolicyId;
+      }
+    }
+
     return {
       sku: metadata.sku || `SKU-${Date.now()}`,
       title: listing.title || 'No Title',
@@ -41,16 +55,15 @@ class EbayListingService {
       quantity: 1,
       imageUrls: imageUrls.filter(url => url && url.includes('http')),
       condition: 'NEW', // Default to NEW, can be made configurable
-      policies: {
-        paymentPolicyId: selectedPolicies.paymentPolicyId,
-        fulfillmentPolicyId: selectedPolicies.fulfillmentPolicyId,
-        returnPolicyId: selectedPolicies.returnPolicyId
-      },
+      policies: policies,
       aspectsData: aspectsData,
       location: {
-        // Add user's location data here
-        country: 'US', // Get from user settings
-        postalCode: '90210' // Get from user settings
+        // Add user's location data here - you can make this configurable
+        country: 'US', 
+        state: 'CA',
+        city: 'Beverly Hills',
+        postalCode: '90210',
+        addressLine1: '123 Main Street'
       }
     };
   }
@@ -62,18 +75,19 @@ class EbayListingService {
    */
   async createSingleListing(listingData) {
     try {
-      console.log('Creating eBay listing with data:', {
-        sku: listingData.sku,
-        title: listingData.title.substring(0, 50) + '...',
-        categoryId: listingData.categoryId,
-        price: listingData.price,
-        hasLocation: !!listingData.location,
-        hasImages: listingData.imageUrls.length
-      });
-
       const accessToken = await this.ebayOAuthService.getValidAccessToken();
       const environment = this.ebayOAuthService.environment;
       const marketplaceId = this.ebayOAuthService.getMarketplace();
+
+      console.log('Creating listing with data:', {
+        sku: listingData.sku,
+        title: listingData.title?.substring(0, 50) + '...',
+        categoryId: listingData.categoryId,
+        price: listingData.price,
+        imageCount: listingData.imageUrls.length,
+        hasPolicies: Object.keys(listingData.policies).length > 0,
+        policies: listingData.policies
+      });
 
       const response = await fetch(this.createListingEndpoint, {
         method: 'POST',
@@ -96,49 +110,22 @@ class EbayListingService {
       }
 
       const result = await response.json();
-      console.log('Lambda response:', result);
       
       if (!result.success) {
+        console.error('eBay API Error:', result);
         throw new Error(result.error || 'Failed to create listing');
       }
 
-      // Enhanced listing ID extraction
-      let listingId = result.listingId;
-      
-      // Handle different response formats
-      if (!listingId && result.data && result.data.listingId) {
-        listingId = result.data.listingId;
-      }
-      
-      // Handle sandbox responses that might not have real listing IDs
-      if (!listingId && environment === 'sandbox') {
-        // For sandbox, we might get a successful response without a listing ID
-        // Check if we have raw response data
-        if (result.rawPublishResponse) {
-          console.log('Raw publish response:', result.rawPublishResponse);
-          
-          // Sometimes sandbox returns empty response but listing is created
-          if (result.offerId) {
-            listingId = `SANDBOX_${result.offerId}`;
-            console.log('Generated sandbox listing ID:', listingId);
-          }
-        }
-      }
-
-      // If still no listing ID, use a fallback
-      if (!listingId) {
-        listingId = `CREATED_${Date.now()}`;
-        console.warn('No listing ID returned, using fallback:', listingId);
-      }
+      console.log('✅ Listing created successfully:', {
+        listingId: result.listingId,
+        sku: result.sku
+      });
 
       return {
         success: true,
-        listingId: listingId,
-        offerId: result.offerId,
-        sku: result.sku || listingData.sku,
-        message: result.message || 'Listing created successfully',
-        environment: environment,
-        rawResponse: result // Keep raw response for debugging
+        listingId: result.listingId,
+        sku: result.sku,
+        message: result.message
       };
     } catch (error) {
       console.error('Error creating listing:', error);
@@ -176,21 +163,19 @@ class EbayListingService {
       .filter(item => 
         item.response && 
         !item.response.error && 
-        s3ImageGroups[item.index]?.length > 0
+        s3ImageGroups[item.index] && 
+        s3ImageGroups[item.index].length > 0
       );
 
     results.total = validListings.length;
 
-    if (validListings.length === 0) {
-      console.warn('No valid listings to create');
-      return results;
-    }
-
-    console.log(`Creating ${validListings.length} eBay listings...`);
+    console.log(`Starting creation of ${results.total} eBay listings`);
 
     // Process listings in batches
     for (let i = 0; i < validListings.length; i += this.batchSize) {
       const batch = validListings.slice(i, i + this.batchSize);
+      
+      console.log(`Processing batch ${Math.floor(i/this.batchSize) + 1}/${Math.ceil(validListings.length/this.batchSize)}`);
       
       // Process batch in parallel
       const batchPromises = batch.map(async ({ response, index }) => {
@@ -205,6 +190,7 @@ class EbayListingService {
           selectedPolicies
         );
 
+        console.log(`📦 Creating listing ${index + 1}/${results.total}: ${listingData.sku}`);
         return this.createSingleListing(listingData);
       });
 
@@ -216,11 +202,11 @@ class EbayListingService {
         progressCallback(listingIndex + 1, results.total);
         
         if (result.success) {
+          console.log(`✅ Successful listing ${listingIndex + 1}/${results.total}: ${result.sku}`);
           results.successful.push(result);
-          console.log(`✅ Created listing ${listingIndex + 1}/${results.total}: ${result.listingId}`);
         } else {
+          console.log(`❌ Failed listing ${listingIndex + 1}/${results.total}: ${result.error}`);
           results.failed.push(result);
-          console.error(`❌ Failed listing ${listingIndex + 1}/${results.total}: ${result.error}`);
         }
       });
 

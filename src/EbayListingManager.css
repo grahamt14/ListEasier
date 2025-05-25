@@ -372,9 +372,10 @@
   border-bottom: 1px solid #f3f4f6;
   display: flex;
   justify-content: space-between;
-  align-items: center;
+  align-items: flex-start;
   font-size: 0.95rem;
   transition: background 0.2s;
+  gap: 16px;
 }
 
 .successful-listings li:hover,
@@ -393,6 +394,117 @@
 
 .failed-listings li {
   border-left: 4px solid #ef4444;
+}
+
+.listing-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+  min-width: 140px;
+}
+
+.listing-status {
+  background: #eff6ff;
+  color: #0654ba;
+  padding: 4px 8px;
+  border-radius: 6px;
+  font-size: 0.85rem;
+  font-weight: 500;
+}
+
+.view-listing-link,
+.manage-draft-link {
+  background: linear-gradient(135deg, #0654ba, #4a90e2);
+  color: white;
+  text-decoration: none;
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: 0.8rem;
+  font-weight: 500;
+  transition: all 0.2s ease;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.view-listing-link:hover,
+.manage-draft-link:hover {
+  background: linear-gradient(135deg, #0545a0, #3a7bc8);
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(6, 84, 186, 0.3);
+  color: white;
+  text-decoration: none;
+}
+
+.manage-draft-link {
+  background: linear-gradient(135deg, #f59e0b, #d97706);
+}
+
+.manage-draft-link:hover {
+  background: linear-gradient(135deg, #d97706, #b45309);
+  box-shadow: 0 2px 8px rgba(245, 158, 11, 0.3);
+}
+
+.view-listing-link::before {
+  content: "👁️";
+  font-size: 0.8em;
+}
+
+.manage-draft-link::before {
+  content: "✏️";
+  font-size: 0.8em;
+}
+
+/* Bulk Actions */
+.bulk-actions {
+  display: flex;
+  justify-content: center;
+  gap: 16px;
+  margin-top: 24px;
+  padding-top: 20px;
+  border-top: 1px solid #e5e7eb;
+}
+
+.bulk-action-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 20px;
+  border-radius: 10px;
+  text-decoration: none;
+  font-weight: 600;
+  font-size: 0.95rem;
+  transition: all 0.3s ease;
+  border: 2px solid transparent;
+}
+
+.bulk-action-button.view-all-listings {
+  background: linear-gradient(135deg, #0654ba, #4a90e2);
+  color: white;
+  box-shadow: 0 4px 12px rgba(6, 84, 186, 0.2);
+}
+
+.bulk-action-button.view-all-listings:hover {
+  background: linear-gradient(135deg, #0545a0, #3a7bc8);
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(6, 84, 186, 0.3);
+  color: white;
+  text-decoration: none;
+}
+
+.bulk-action-button.manage-drafts {
+  background: linear-gradient(135deg, #f59e0b, #d97706);
+  color: white;
+  box-shadow: 0 4px 12px rgba(245, 158, 11, 0.2);
+}
+
+.bulk-action-button.manage-drafts:hover {
+  background: linear-gradient(135deg, #d97706, #b45309);
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(245, 158, 11, 0.3);
+  color: white;
+  text-decoration: none;
 }
 
 .sku {
@@ -594,5 +706,36 @@
   
   .stat-number {
     font-size: 2rem;
+  }
+  
+  .successful-listings li,
+  .failed-listings li {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+  }
+  
+  .listing-actions {
+    width: 100%;
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: center;
+    min-width: auto;
+  }
+  
+  .bulk-actions {
+    flex-direction: column;
+    gap: 12px;
+  }
+  
+  .bulk-action-button {
+    width: 100%;
+    justify-content: center;
+  }
+  
+  .view-listing-link,
+  .manage-draft-link {
+    padding: 8px 12px;
+    font-size: 0.75rem;
   }
 }

@@ -259,11 +259,18 @@ const EbayListingManager = ({ onClose }) => {
                 <span>🎉</span>
                 <div>
                   <strong>Success!</strong> {listingStatus.results.successful.length} listing{listingStatus.results.successful.length > 1 ? 's have' : ' has'} been created on eBay.
-                  {getMissingPoliciesCount() > 0 && (
+                  {getMissingPoliciesCount() > 0 ? (
                     <div style={{ marginTop: '8px', fontSize: '0.9rem' }}>
-                      These are currently drafts. Complete them in eBay Seller Hub to make them live.
+                      These are currently <strong>drafts</strong>. Complete them in eBay Seller Hub to make them live.
+                    </div>
+                  ) : (
+                    <div style={{ marginTop: '8px', fontSize: '0.9rem' }}>
+                      Your listings are now <strong>live</strong> on eBay and ready for buyers!
                     </div>
                   )}
+                  <div style={{ marginTop: '8px', fontSize: '0.85rem', color: '#065f46' }}>
+                    💡 Tip: You can view and manage all your listings using the buttons below.
+                  </div>
                 </div>
               </div>
 
@@ -280,12 +287,62 @@ const EbayListingManager = ({ onClose }) => {
                           </div>
                         )}
                       </div>
-                      <div className="listing-id">
-                        {getMissingPoliciesCount() > 0 ? 'Draft Created' : 'Live Listing'}
+                      <div className="listing-actions">
+                        <div className="listing-status">
+                          {getMissingPoliciesCount() > 0 ? 'Draft Created' : 'Live Listing'}
+                        </div>
+                        {item.listingId && (
+                          <a 
+                            href={`https://www.ebay.com/itm/${item.listingId}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="view-listing-link"
+                            title="View listing on eBay"
+                          >
+                            View on eBay
+                          </a>
+                        )}
+                        {item.offerId && getMissingPoliciesCount() > 0 && (
+                          <a 
+                            href="https://www.ebay.com/sh/lst/drafts"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="manage-draft-link"
+                            title="Complete this draft in Seller Hub"
+                          >
+                            Complete Draft
+                          </a>
+                        )}
                       </div>
                     </li>
                   ))}
                 </ul>
+              </div>
+
+              {/* Add bulk action buttons */}
+              <div className="bulk-actions">
+                {listingStatus.results.successful.some(item => item.listingId) && (
+                  <a 
+                    href="https://www.ebay.com/sh/lst/active"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="bulk-action-button view-all-listings"
+                  >
+                    <span>📋</span>
+                    View All My Listings
+                  </a>
+                )}
+                {getMissingPoliciesCount() > 0 && listingStatus.results.successful.length > 0 && (
+                  <a 
+                    href="https://www.ebay.com/sh/lst/drafts"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="bulk-action-button manage-drafts"
+                  >
+                    <span>✏️</span>
+                    Manage All Drafts
+                  </a>
+                )}
               </div>
             </>
           )}

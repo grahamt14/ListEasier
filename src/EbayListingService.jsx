@@ -35,23 +35,18 @@ class EbayListingService {
     return {
       sku: metadata.sku || `SKU-${Date.now()}`,
       title: listing.title || 'No Title',
-      description: listing.description || 'No Description',
+      description: listing.description || listing.title || 'No Description', // Fallback to title
       categoryId: categoryId,
       price: parseFloat(metadata.price) || 9.99,
       quantity: 1,
       imageUrls: imageUrls.filter(url => url && url.includes('http')),
       condition: 'NEW', // Default to NEW, can be made configurable
       policies: {
-        paymentPolicyId: selectedPolicies.paymentPolicyId,
-        fulfillmentPolicyId: selectedPolicies.fulfillmentPolicyId,
-        returnPolicyId: selectedPolicies.returnPolicyId
+        paymentPolicyId: selectedPolicies?.paymentPolicyId || null,
+        fulfillmentPolicyId: selectedPolicies?.fulfillmentPolicyId || null,
+        returnPolicyId: selectedPolicies?.returnPolicyId || null
       },
-      aspectsData: aspectsData,
-      location: {
-        // Add user's location data here
-        country: 'US', // Get from user settings
-        postalCode: '90210' // Get from user settings
-      }
+      aspectsData: aspectsData || {}
     };
   }
 

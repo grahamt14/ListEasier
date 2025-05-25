@@ -1,4 +1,4 @@
-// EbayListingManager.jsx - Improved UI and messaging
+// EbayListingManager.jsx - Complete with Enhanced UI
 import React, { useState } from 'react';
 import { useAppState } from './StateContext';
 import { useEbayAuth } from './EbayAuthContext';
@@ -384,7 +384,6 @@ const EbayListingManager = ({ onClose }) => {
 export const CreateListingButton = ({ groupIndex, disabled = false }) => {
   const [showManager, setShowManager] = useState(false);
   const { isAuthenticated } = useEbayAuth();
-  const listingService = new EbayListingService();
 
   if (!isAuthenticated) return null;
 

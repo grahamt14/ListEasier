@@ -1,4 +1,4 @@
-// FormSection.jsx (Updated with eBay Integration and HEIC Support)
+// FormSection.jsx - Enhanced with Caching and Performance Improvements
 import { useState, useRef, useEffect } from 'react';
 import { DynamoDBClient, QueryCommand } from '@aws-sdk/client-dynamodb';
 import { unmarshall } from '@aws-sdk/util-dynamodb';
@@ -8,6 +8,9 @@ import { fromCognitoIdentityPool } from "@aws-sdk/credential-provider-cognito-id
 import { useAppState } from './StateContext';
 import { useEbayAuth } from './EbayAuthContext';
 
+// Import caching service
+import { cacheService } from './CacheService';
+
 // Import the optimized image handlers and uploader
 import OptimizedImageUploader from './OptimizedImageUploader';
 import { processImagesInBatch, isHeicFile, convertHeicToJpeg } from './OptimizedImageHandler';
@@ -16,8 +19,6 @@ import EbayPolicySelector from './EbayPolicySelector';
 import EbayMarketplaceSelector from './EbayMarketplaceSelector';
 import './OptimizedUploaderStyles.css';
 import './EbayAuth.css';
-
-
 
 export const getSelectedCategoryOptionsJSON = (fieldSelections, price, sku, ebayPolicies = null) => {
   const output = {};
@@ -78,6 +79,9 @@ function FormSection({ onGenerateListing, onCategoryFieldsChange }) {
   const [autoRotateEnabled, setAutoRotateEnabled] = useState(false);
   const [showEbayAuth, setShowEbayAuth] = useState(false);
 
+  // Cache performance tracking
+  const [cacheStats, setCacheStats] = useState(null);
+
   // Pass categoryFields to parent when they change
   useEffect(() => {
     if (onCategoryFieldsChange) {
@@ -127,6 +131,12 @@ function FormSection({ onGenerateListing, onCategoryFieldsChange }) {
     
     // Also clear group metadata
     dispatch({ type: 'UPDATE_GROUP_METADATA', payload: [] });
+
+    // Clear relevant cache entries for this user session
+    cacheService.delete(`categories_all`);
+    if (category !== '--' && subCategory !== '--') {
+      cacheService.delete(cacheService.getCategoryKey(category, subCategory));
+    }
   };
 
   // Handle eBay authentication success
@@ -147,11 +157,24 @@ function FormSection({ onGenerateListing, onCategoryFieldsChange }) {
     // You could store this in app state if needed
   };
 
-  // Fetch categories on component mount
+  // Enhanced categories fetching with caching
   useEffect(() => {
     const fetchCategories = async () => {
       try {
         setCategoriesLoading(true);
+        
+        // Check cache first
+        const cacheKey = 'categories_all';
+        const cachedCategories = cacheService.get(cacheKey);
+        
+        if (cachedCategories) {
+          console.log('Using cached categories');
+          setCategories(cachedCategories);
+          setCategoriesLoading(false);
+          return;
+        }
+
+        console.log('Fetching categories from DynamoDB');
         const scanCommand = new ScanCommand({
           TableName: 'ListCategory',
         });
@@ -167,9 +190,18 @@ function FormSection({ onGenerateListing, onCategoryFieldsChange }) {
           categoryData[category].push(subcategory);
         });
         categoryData['--'] = ['--'];
+        
+        // Cache the results for 24 hours
+        cacheService.set(cacheKey, categoryData, null, 'categories');
+        
         setCategories(categoryData);
       } catch (err) {
         console.error('Error fetching categories:', err);
+        // Try to use any cached data on error
+        const fallbackData = cacheService.get('categories_all');
+        if (fallbackData) {
+          setCategories(fallbackData);
+        }
       } finally {
         setCategoriesLoading(false);
       }
@@ -178,7 +210,7 @@ function FormSection({ onGenerateListing, onCategoryFieldsChange }) {
     fetchCategories();
   }, []);
 
-  // Fetch category fields when subcategory changes
+  // Enhanced category fields fetching with caching
   useEffect(() => {
     if (!subCategory || subCategory === "--") {
       setCategoryFields([]);
@@ -186,18 +218,53 @@ function FormSection({ onGenerateListing, onCategoryFieldsChange }) {
       return;
     }
 
-    const fetchCategoryFields = async () => {
+    const fetchCategoryFieldsWithCache = async () => {
       try {
-        const command = new QueryCommand({
+        // Check cache first
+        const cachedFields = cacheService.getCategoryFields(category, subCategory);
+        
+        if (cachedFields) {
+          console.log('Using cached category fields for', category, subCategory);
+          setCategoryFields(cachedFields);
+          
+          const initialSelections = {};
+          cachedFields.forEach(item => {
+            initialSelections[item.FieldLabel] = "";
+          });
+          dispatch({ type: 'SET_FIELD_SELECTIONS', payload: initialSelections });
+          return;
+        }
+
+        console.log('Fetching category fields from DynamoDB for', category, subCategory);
+        
+        // Try DynamoDB response cache first
+        const dynamoQuery = {
           TableName: 'CategoryFields',
           KeyConditionExpression: 'SubCategoryType = :sub',
           ExpressionAttributeValues: {
             ':sub': { S: subCategory },
           },
-        });
-
-        const response = await client.send(command);
+        };
+        
+        let cachedDynamoResponse = cacheService.getDynamoDBResponse('CategoryFields', dynamoQuery);
+        let response;
+        
+        if (cachedDynamoResponse) {
+          console.log('Using cached DynamoDB response');
+          response = cachedDynamoResponse;
+        } else {
+          const command = new QueryCommand(dynamoQuery);
+          response = await client.send(command);
+          
+          // Cache the DynamoDB response
+          cacheService.setDynamoDBResponse('CategoryFields', dynamoQuery, response);
+        }
+        
         const items = response.Items?.map(item => unmarshall(item)) || [];
+        
+        // Cache the processed category fields
+        cacheService.setCategoryFields(category, subCategory, items);
+        
         setCategoryFields(items);
 
         const initialSelections = {};
@@ -212,8 +279,8 @@ function FormSection({ onGenerateListing, onCategoryFieldsChange }) {
       }
     };
 
-    fetchCategoryFields();
-  }, [subCategory, dispatch]);
+    fetchCategoryFieldsWithCache();
+  }, [category, subCategory, dispatch]);
 
   // Synchronize selected category with global state
   useEffect(() => {
@@ -231,6 +298,20 @@ function FormSection({ onGenerateListing, onCategoryFieldsChange }) {
       dispatch({ type: 'SET_RAW_FILES', payload: [] });
     }
   }, [filesBase64, rawFiles.length, dispatch]);
+
+  // Update cache stats periodically
+  useEffect(() => {
+    const updateCacheStats = () => {
+      if (process.env.NODE_ENV === 'development') {
+        setCacheStats(cacheService.getStats());
+      }
+    };
+
+    updateCacheStats();
+    const interval = setInterval(updateCacheStats, 30000); // Update every 30 seconds
+
+    return () => clearInterval(interval);
+  }, []);
 
   // Category change handler
   const handleCategoryChange = (e) => {
@@ -529,13 +610,24 @@ const handleGroupSelected = async () => {
   }
 };
 
-// Function to fetch eBay category ID 
+// Enhanced function to fetch eBay category ID with caching
 const fetchEbayCategoryID = async (category, subCategory) => {
   if (!category || category === "--" || !subCategory || subCategory === "--") {
     return null;
   }
   
   try {
+    // Check cache first
+    const cacheKey = `ebay_category_${category}_${subCategory}`;
+    const cachedCategoryID = cacheService.get(cacheKey);
+    
+    if (cachedCategoryID !== null) {
+      console.log('Using cached eBay category ID');
+      return cachedCategoryID;
+    }
+
+    console.log('Fetching eBay category ID from DynamoDB');
+    
     // Query the eBay category mapping from DynamoDB
     const command = new QueryCommand({
       TableName: 'ListCategory',
@@ -550,7 +642,12 @@ const fetchEbayCategoryID = async (category, subCategory) => {
     
     if (response.Items && response.Items.length > 0) {
       const item = unmarshall(response.Items[0]);
-      return item.EbayCategoryID || null;
+      const categoryID = item.EbayCategoryID || null;
+      
+      // Cache the result for 24 hours
+      cacheService.set(cacheKey, categoryID, null, 'ebayCategories');
+      
+      return categoryID;
     }
     
     // If no direct match, try to get a default category for the main category
@@ -567,11 +664,17 @@ const fetchEbayCategoryID = async (category, subCategory) => {
     
     if (fallbackResponse.Items && fallbackResponse.Items.length > 0) {
       const fallbackItem = unmarshall(fallbackResponse.Items[0]);
-      return fallbackItem.EbayCategoryID || null;
+      const fallbackCategoryID = fallbackItem.EbayCategoryID || null;
+      
+      // Cache the fallback result for a shorter time (1 hour)
+      cacheService.set(cacheKey, fallbackCategoryID, 60 * 60 * 1000, 'ebayCategories');
+      
+      return fallbackCategoryID;
     }
     
-    // Fallback to a generic category if all else fails
-    return ""; // This is a generic eBay category ID (you can change this to whatever is appropriate)
+    // Cache null result to avoid repeated failed lookups
+    cacheService.set(cacheKey, null, 60 * 60 * 1000, 'ebayCategories');
+    return null;
   } catch (error) {
     console.error('Error in fetchEbayCategoryID:', error);
     throw error; // Rethrow to be handled by the caller
@@ -1059,12 +1162,49 @@ const uploadToS3 = async (file) => {
     </div>
   );
 
+  // Cache stats display (development only)
+  const CacheStatsDisplay = () => {
+    if (process.env.NODE_ENV !== 'development' || !cacheStats) {
+      return null;
+    }
+
+    return (
+      <div className="cache-stats" style={{
+        position: 'fixed',
+        top: '10px',
+        right: '10px',
+        background: 'rgba(0,0,0,0.8)',
+        color: 'white',
+        padding: '10px',
+        borderRadius: '5px',
+        fontSize: '12px',
+        zIndex: 1000,
+        maxWidth: '300px'
+      }}>
+        <h4 style={{ margin: '0 0 5px 0' }}>Cache Stats</h4>
+        <div>Size: {cacheStats.size}/{cacheStats.maxSize}</div>
+        <div>Hit Ratio: {cacheStats.hitRatio}</div>
+        <div>Memory: {cacheStats.memoryUsage}</div>
+        <div>Requests: {cacheStats.totalRequests}</div>
+        <div style={{ marginTop: '5px', fontSize: '10px', opacity: 0.7 }}>
+          Hits: {cacheStats.hitCount} | Misses: {cacheStats.missCount}
+        </div>
+      </div>
+    );
+  };
+
   return (
     <section className="form-section">
+      {/* Cache Stats Display (Development Only) */}
+      <CacheStatsDisplay />
+      
       <div className="form-group">
         <label>Category</label>
         {categoriesLoading ? (
-          <div>Loading categories...</div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <Spinner />
+            <span>Loading categories from cache...</span>
+          </div>
         ) : (
           <select onChange={handleCategoryChange} value={selectedCategory}>
             {Object.keys(categories).map(cat => <option key={cat} value={cat}>{cat}</option>)}
@@ -1256,30 +1396,30 @@ const uploadToS3 = async (file) => {
         onMouseEnter={() => !isValidSelection && setShowTooltip(true)} 
         onMouseLeave={() => setShowTooltip(false)}
       >
-<button 
-  className="primary large" 
-  disabled={!isValidSelection || isLoading || uploadStatus.isUploading || processingStatus.isProcessing || (!isDirty && !hasNewGroupsToProcess())} 
-  onClick={handleGenerateListingWithUpload}
->
-  {isLoading || processingStatus.isProcessing ? (
-    <span className="loading-button">
-      <Spinner /> 
-      {processingStatus.isProcessing ? 
-        `Processing group ${processingStatus.currentGroup || 0} of ${processingStatus.processTotal || 0}...` : 
-        `Generating... (${completedChunks}/${totalChunks})`
-      }
-    </span>
-  ) : uploadStatus.isUploading ? (
-    <span className="loading-button">
-      <Spinner /> 
-      {uploadStatus.uploadStage} 
-      {uploadStatus.currentFileIndex ? 
-        `(${uploadStatus.currentFileIndex}/${uploadStatus.uploadTotal})` :
-        `(${uploadStatus.uploadCompleted}/${uploadStatus.uploadTotal})`
-      }
-    </span>
-  ) : hasNewGroupsToProcess() ? 'Generate Listing' : 'Generate Listing'}
-</button>
+        <button 
+          className="primary large" 
+          disabled={!isValidSelection || isLoading || uploadStatus.isUploading || processingStatus.isProcessing || (!isDirty && !hasNewGroupsToProcess())} 
+          onClick={handleGenerateListingWithUpload}
+        >
+          {isLoading || processingStatus.isProcessing ? (
+            <span className="loading-button">
+              <Spinner /> 
+              {processingStatus.isProcessing ? 
+                `Processing group ${processingStatus.currentGroup || 0} of ${processingStatus.processTotal || 0}...` : 
+                `Generating... (${completedChunks}/${totalChunks})`
+              }
+            </span>
+          ) : uploadStatus.isUploading ? (
+            <span className="loading-button">
+              <Spinner /> 
+              {uploadStatus.uploadStage} 
+              {uploadStatus.currentFileIndex ? 
+                `(${uploadStatus.currentFileIndex}/${uploadStatus.uploadTotal})` :
+                `(${uploadStatus.uploadCompleted}/${uploadStatus.uploadTotal})`
+              }
+            </span>
+          ) : hasNewGroupsToProcess() ? 'Generate Listing' : 'Generate Listing'}
+        </button>
         {showTooltip && <span className="tooltip">Please select a valid category and subcategory.</span>}
       </div>
 
@@ -1331,6 +1471,99 @@ const uploadToS3 = async (file) => {
               </div>
             );
           })}
+        </div>
+      )}
+
+      {/* Cache management buttons (development only) */}
+      {process.env.NODE_ENV === 'development' && (
+        <div className="form-group" style={{ marginTop: '20px', padding: '10px', background: '#f5f5f5', borderRadius: '5px' }}>
+          <label style={{ color: '#666', fontSize: '0.9rem' }}>Cache Management (Dev Only)</label>
+          <div style={{ display: 'flex', gap: '10px', marginTop: '5px' }}>
+            <button 
+              onClick={() => {
+                cacheService.clear();
+                setCacheStats(cacheService.getStats());
+                console.log('Cache cleared');
+              }}
+              style={{
+                padding: '5px 10px',
+                fontSize: '0.8rem',
+                background: '#ff4444',
+                color: 'white',
+                border: 'none',
+                borderRadius: '3px',
+                cursor: 'pointer'
+              }}
+            >
+              Clear Cache
+            </button>
+            <button 
+              onClick={() => {
+                cacheService.cleanup();
+                setCacheStats(cacheService.getStats());
+                console.log('Cache cleaned up');
+              }}
+              style={{
+                padding: '5px 10px',
+                fontSize: '0.8rem',
+                background: '#4CAF50',
+                color: 'white',
+                border: 'none',
+                borderRadius: '3px',
+                cursor: 'pointer'
+              }}
+            >
+              Cleanup Expired
+            </button>
+            <button 
+              onClick={() => {
+                const exportData = cacheService.exportCache();
+                console.log('Cache export:', exportData);
+                // In a real app, you might save this to localStorage or download as file
+                localStorage.setItem('listeasier_cache_backup', JSON.stringify(exportData));
+                alert(`Cache exported: ${exportData.entries.length} items`);
+              }}
+              style={{
+                padding: '5px 10px',
+                fontSize: '0.8rem',
+                background: '#2196F3',
+                color: 'white',
+                border: 'none',
+                borderRadius: '3px',
+                cursor: 'pointer'
+              }}
+            >
+              Export Cache
+            </button>
+            <button 
+              onClick={() => {
+                try {
+                  const backup = localStorage.getItem('listeasier_cache_backup');
+                  if (backup) {
+                    const exportData = JSON.parse(backup);
+                    const imported = cacheService.importCache(exportData);
+                    setCacheStats(cacheService.getStats());
+                    alert(`Cache imported: ${imported} items`);
+                  } else {
+                    alert('No cache backup found');
+                  }
+                } catch (error) {
+                  alert('Error importing cache: ' + error.message);
+                }
+              }}
+              style={{
+                padding: '5px 10px',
+                fontSize: '0.8rem',
+                background: '#FF9800',
+                color: 'white',
+                border: 'none',
+                borderRadius: '3px',
+                cursor: 'pointer'
+              }}
+            >
+              Import Cache
+            </button>
+          </div>
         </div>
       )}
     </section>

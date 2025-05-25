@@ -1,4 +1,4 @@
-// EbayListingService.jsx - Updated with better policy handling
+// EbayListingService.jsx - Enhanced service for creating eBay listings from CSV data
 import EbayOAuthService from './EbayOAuthService';
 
 class EbayListingService {
@@ -32,20 +32,6 @@ class EbayListingService {
       });
     }
 
-    // Create policies object - only include if they exist and are valid
-    const policies = {};
-    if (selectedPolicies) {
-      if (selectedPolicies.paymentPolicyId && selectedPolicies.paymentPolicyId !== '') {
-        policies.paymentPolicyId = selectedPolicies.paymentPolicyId;
-      }
-      if (selectedPolicies.fulfillmentPolicyId && selectedPolicies.fulfillmentPolicyId !== '') {
-        policies.fulfillmentPolicyId = selectedPolicies.fulfillmentPolicyId;
-      }
-      if (selectedPolicies.returnPolicyId && selectedPolicies.returnPolicyId !== '') {
-        policies.returnPolicyId = selectedPolicies.returnPolicyId;
-      }
-    }
-
     return {
       sku: metadata.sku || `SKU-${Date.now()}`,
       title: listing.title || 'No Title',
@@ -55,15 +41,16 @@ class EbayListingService {
       quantity: 1,
       imageUrls: imageUrls.filter(url => url && url.includes('http')),
       condition: 'NEW', // Default to NEW, can be made configurable
-      policies: policies,
+      policies: {
+        paymentPolicyId: selectedPolicies.paymentPolicyId,
+        fulfillmentPolicyId: selectedPolicies.fulfillmentPolicyId,
+        returnPolicyId: selectedPolicies.returnPolicyId
+      },
       aspectsData: aspectsData,
       location: {
-        // Add user's location data here - you can make this configurable
-        country: 'US', 
-        state: 'CA',
-        city: 'Beverly Hills',
-        postalCode: '90210',
-        addressLine1: '123 Main Street'
+        // Add user's location data here
+        country: 'US', // Get from user settings
+        postalCode: '90210' // Get from user settings
       }
     };
   }
@@ -79,16 +66,6 @@ class EbayListingService {
       const environment = this.ebayOAuthService.environment;
       const marketplaceId = this.ebayOAuthService.getMarketplace();
 
-      console.log('Creating listing with data:', {
-        sku: listingData.sku,
-        title: listingData.title?.substring(0, 50) + '...',
-        categoryId: listingData.categoryId,
-        price: listingData.price,
-        imageCount: listingData.imageUrls.length,
-        hasPolicies: Object.keys(listingData.policies).length > 0,
-        policies: listingData.policies
-      });
-
       const response = await fetch(this.createListingEndpoint, {
         method: 'POST',
         headers: {
@@ -103,73 +80,61 @@ class EbayListingService {
         })
       });
 
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error(`HTTP Error: ${response.status}`, errorText);
-        
-        // Parse specific error types
-        let errorMessage = `HTTP ${response.status}`;
-        try {
-          const errorData = JSON.parse(errorText);
-          if (errorData.error) {
-            errorMessage = errorData.error;
-          }
-        } catch (e) {
-          errorMessage = errorText;
-        }
-        
-        throw new Error(errorMessage);
-      }
-
       const result = await response.json();
       
-      if (!result.success) {
-        console.error('eBay API Error:', result);
-        
-        // Extract meaningful error message
+      if (!response.ok || !result.success) {
+        // Enhanced error handling for different response types
         let errorMessage = result.error || 'Failed to create listing';
-        if (result.details && result.details.data && result.details.data.errors) {
-          const ebayErrors = result.details.data.errors.map(err => err.message).join('; ');
-          errorMessage = `eBay Error: ${ebayErrors}`;
+        let errorDetails = result.details || {};
+        let isDraft = result.isDraft || false;
+        
+        // Handle specific error scenarios
+        if (result.step === 'publish_offer' && result.troubleshooting) {
+          errorMessage = `Publishing failed: ${errorMessage}`;
+          errorDetails.troubleshooting = result.troubleshooting;
+          errorDetails.suggestions = result.suggestions;
+          errorDetails.canRetry = result.canRetry;
         }
         
-        throw new Error(errorMessage);
+        // Handle business policy issues
+        if (result.businessPolicyStatus === 'not_available') {
+          errorMessage = `Business policies not enabled: ${errorMessage}`;
+          errorDetails.nextSteps = result.nextSteps;
+        }
+        
+        return {
+          success: false,
+          error: errorMessage,
+          details: errorDetails,
+          isDraft: isDraft,
+          sku: listingData.sku,
+          offerId: result.offerId || null,
+          step: result.step || 'unknown'
+        };
       }
 
-      console.log('✅ Listing created successfully:', {
-        listingId: result.listingId,
-        sku: result.sku
-      });
-
+      // Handle successful responses (including draft listings)
       return {
         success: true,
-        listingId: result.listingId,
-        sku: result.sku,
-        message: result.message
+        listingId: result.listingId || null,
+        offerId: result.offerId,
+        sku: result.sku || result.originalSku,
+        originalSku: result.originalSku,
+        message: result.message,
+        isDraft: result.isDraft || false,
+        environment: result.environment,
+        categoryUsed: result.categoryUsed,
+        businessPolicyStatus: result.businessPolicyStatus,
+        nextSteps: result.nextSteps || null,
+        troubleshooting: result.troubleshooting || null
       };
     } catch (error) {
       console.error('Error creating listing:', error);
-      
-      // Categorize errors for better user experience
-      let userFriendlyError = error.message;
-      
-      if (error.message.includes('Invalid category')) {
-        userFriendlyError = 'Category not valid for eBay marketplace';
-      } else if (error.message.includes('image')) {
-        userFriendlyError = 'Image upload failed - check image URLs';
-      } else if (error.message.includes('policy')) {
-        userFriendlyError = 'Business policy error - using default policies';
-      } else if (error.message.includes('token') || error.message.includes('unauthorized')) {
-        userFriendlyError = 'eBay authentication expired - please reconnect';
-      } else if (error.message.includes('rate limit')) {
-        userFriendlyError = 'eBay rate limit reached - please wait and try again';
-      }
-      
       return {
         success: false,
-        error: userFriendlyError,
+        error: error.message,
         sku: listingData.sku,
-        originalError: error.message
+        step: 'network_error'
       };
     }
   }
@@ -191,7 +156,13 @@ class EbayListingService {
     const results = {
       successful: [],
       failed: [],
-      total: 0
+      drafts: [], // NEW: Track draft listings separately
+      total: 0,
+      summary: {
+        published: 0,
+        drafts: 0,
+        failed: 0
+      }
     };
 
     // Filter valid listings
@@ -206,13 +177,9 @@ class EbayListingService {
 
     results.total = validListings.length;
 
-    console.log(`Starting creation of ${results.total} eBay listings`);
-
     // Process listings in batches
     for (let i = 0; i < validListings.length; i += this.batchSize) {
       const batch = validListings.slice(i, i + this.batchSize);
-      
-      console.log(`Processing batch ${Math.floor(i/this.batchSize) + 1}/${Math.ceil(validListings.length/this.batchSize)}`);
       
       // Process batch in parallel
       const batchPromises = batch.map(async ({ response, index }) => {
@@ -227,23 +194,37 @@ class EbayListingService {
           selectedPolicies
         );
 
-        console.log(`📦 Creating listing ${index + 1}/${results.total}: ${listingData.sku}`);
         return this.createSingleListing(listingData);
       });
 
       const batchResults = await Promise.all(batchPromises);
       
-      // Process results
+      // Process results with enhanced categorization
       batchResults.forEach((result, batchIndex) => {
         const listingIndex = i + batchIndex;
         progressCallback(listingIndex + 1, results.total);
         
         if (result.success) {
-          console.log(`✅ Successful listing ${listingIndex + 1}/${results.total}: ${result.sku}`);
-          results.successful.push(result);
+          if (result.isDraft) {
+            // Successfully created but as draft
+            results.drafts.push({
+              ...result,
+              message: result.message || 'Created as draft due to missing business policies'
+            });
+            results.summary.drafts++;
+          } else {
+            // Successfully published
+            results.successful.push(result);
+            results.summary.published++;
+          }
         } else {
-          console.log(`❌ Failed listing ${listingIndex + 1}/${results.total}: ${result.error}`);
-          results.failed.push(result);
+          // Failed to create
+          results.failed.push({
+            ...result,
+            originalIndex: listingIndex,
+            troubleshooting: this.generateTroubleshootingAdvice(result)
+          });
+          results.summary.failed++;
         }
       });
 
@@ -253,8 +234,50 @@ class EbayListingService {
       }
     }
 
-    console.log(`Listing creation complete: ${results.successful.length} successful, ${results.failed.length} failed`);
     return results;
+  }
+
+  /**
+   * Generate troubleshooting advice based on the error
+   * @param {Object} result - Failed listing result
+   * @returns {Array} - Array of troubleshooting suggestions
+   */
+  generateTroubleshootingAdvice(result) {
+    const advice = [];
+    
+    // Business policy related issues
+    if (result.details?.businessPolicyStatus === 'not_available') {
+      advice.push('Enable business policies in your eBay account settings');
+      advice.push('Go to My eBay > Account > Site Preferences > Selling preferences');
+      advice.push('Turn on "Use business policies for my listings"');
+    }
+    
+    // Publishing issues
+    if (result.step === 'publish_offer') {
+      advice.push('The offer was created but could not be published');
+      advice.push('Check eBay Seller Hub for the draft listing');
+      advice.push('You may be able to publish it manually from eBay');
+    }
+    
+    // Category issues
+    if (result.step === 'offer_creation' && result.details?.suggestions) {
+      advice.push(...result.details.suggestions);
+    }
+    
+    // Network/API issues
+    if (result.step === 'network_error') {
+      advice.push('Check your internet connection');
+      advice.push('eBay servers may be temporarily unavailable');
+      advice.push('Try again in a few minutes');
+    }
+    
+    // Token issues
+    if (result.error?.includes('token') || result.error?.includes('auth')) {
+      advice.push('Your eBay authentication may have expired');
+      advice.push('Try disconnecting and reconnecting your eBay account');
+    }
+    
+    return advice.length > 0 ? advice : ['Contact support for assistance with this error'];
   }
 
   /**
@@ -314,6 +337,59 @@ class EbayListingService {
       ready: issues.length === 0,
       issues
     };
+  }
+
+  /**
+   * Get detailed status about the current eBay connection
+   * @returns {Object} - Connection status details
+   */
+  async getConnectionStatus() {
+    const status = {
+      isAuthenticated: false,
+      isConfigured: false,
+      hasBusinessPolicies: false,
+      environment: this.ebayOAuthService.environment,
+      marketplace: this.ebayOAuthService.getMarketplace(),
+      issues: [],
+      recommendations: []
+    };
+
+    // Check configuration
+    status.isConfigured = this.ebayOAuthService.isConfigured();
+    if (!status.isConfigured) {
+      status.issues.push('eBay OAuth service not properly configured');
+      status.recommendations.push('Check your eBay developer credentials');
+      return status;
+    }
+
+    // Check authentication
+    status.isAuthenticated = this.ebayOAuthService.isAuthenticated();
+    if (!status.isAuthenticated) {
+      status.issues.push('Not authenticated with eBay');
+      status.recommendations.push('Connect your eBay account');
+      return status;
+    }
+
+    // Check business policies (if authenticated)
+    try {
+      const policies = await this.ebayOAuthService.getBusinessPolicies();
+      status.hasBusinessPolicies = policies.success && !policies.notEligible;
+      
+      if (!status.hasBusinessPolicies) {
+        if (policies.notEligible) {
+          status.issues.push('Business policies not enabled on eBay account');
+          status.recommendations.push('Enable business policies in eBay seller preferences');
+        } else {
+          status.issues.push('Unable to verify business policies');
+          status.recommendations.push('Check eBay account permissions');
+        }
+      }
+    } catch (error) {
+      status.issues.push('Error checking business policies');
+      status.recommendations.push('Verify eBay account connectivity');
+    }
+
+    return status;
   }
 }
 

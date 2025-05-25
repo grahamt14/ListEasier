@@ -1,4 +1,4 @@
-// EbayListingManager.jsx - Component for creating and managing eBay listings
+// EbayListingManager.jsx - Enhanced component for creating and managing eBay listings
 import React, { useState } from 'react';
 import { useAppState } from './StateContext';
 import { useEbayAuth } from './EbayAuthContext';
@@ -93,16 +93,38 @@ const EbayListingManager = ({ onClose }) => {
     try {
       const result = await listingService.createListingFromGroup(groupIndex, state);
       
+      // Format single result to match batch format
+      const formattedResults = {
+        successful: [],
+        failed: [],
+        drafts: [],
+        total: 1,
+        summary: {
+          published: 0,
+          drafts: 0,
+          failed: 0
+        }
+      };
+
+      if (result.success) {
+        if (result.isDraft) {
+          formattedResults.drafts.push(result);
+          formattedResults.summary.drafts = 1;
+        } else {
+          formattedResults.successful.push(result);
+          formattedResults.summary.published = 1;
+        }
+      } else {
+        formattedResults.failed.push(result);
+        formattedResults.summary.failed = 1;
+      }
+      
       setListingStatus({
         isListing: false,
         progress: 100,
         currentIndex: 1,
         total: 1,
-        results: {
-          successful: result.success ? [result] : [],
-          failed: result.success ? [] : [result],
-          total: 1
-        },
+        results: formattedResults,
         error: null
       });
     } catch (error) {
@@ -142,6 +164,13 @@ const EbayListingManager = ({ onClose }) => {
                   {selectedPolicies.fulfillmentPolicyId && <li>✓ Shipping policy selected</li>}
                   {selectedPolicies.returnPolicyId && <li>✓ Return policy selected</li>}
                 </ul>
+                {!selectedPolicies.paymentPolicyId && !selectedPolicies.fulfillmentPolicyId && !selectedPolicies.returnPolicyId && (
+                  <div className="policy-warning">
+                    <p style={{ color: '#f57c00', fontSize: '0.9rem', margin: '10px 0' }}>
+                      ⚠️ No business policies selected. Listings may be created as drafts if your eBay account doesn't have business policies enabled.
+                    </p>
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -180,22 +209,31 @@ const EbayListingManager = ({ onClose }) => {
           
           <div className="results-summary">
             <div className="result-stat success">
-              <span className="stat-number">{listingStatus.results.successful.length}</span>
-              <span className="stat-label">Successful</span>
+              <span className="stat-number">{listingStatus.results.summary.published}</span>
+              <span className="stat-label">Published</span>
             </div>
+            
+            {listingStatus.results.summary.drafts > 0 && (
+              <div className="result-stat draft">
+                <span className="stat-number">{listingStatus.results.summary.drafts}</span>
+                <span className="stat-label">Drafts</span>
+              </div>
+            )}
+            
             <div className="result-stat failed">
-              <span className="stat-number">{listingStatus.results.failed.length}</span>
+              <span className="stat-number">{listingStatus.results.summary.failed}</span>
               <span className="stat-label">Failed</span>
             </div>
           </div>
 
+          {/* Successfully Published Listings */}
           {listingStatus.results.successful.length > 0 && (
             <div className="successful-listings">
-              <h5>Successfully Created:</h5>
+              <h5>✅ Successfully Published ({listingStatus.results.successful.length}):</h5>
               <ul>
                 {listingStatus.results.successful.map((item, index) => (
                   <li key={index}>
-                    <span className="sku">{item.sku}</span>
+                    <span className="sku">{item.originalSku || item.sku}</span>
                     <span className="listing-id">Listing ID: {item.listingId}</span>
                   </li>
                 ))}
@@ -203,19 +241,113 @@ const EbayListingManager = ({ onClose }) => {
             </div>
           )}
 
+          {/* Draft Listings */}
+          {listingStatus.results.drafts && listingStatus.results.drafts.length > 0 && (
+            <div className="draft-listings">
+              <h5>📝 Created as Drafts ({listingStatus.results.drafts.length}):</h5>
+              <div className="draft-explanation">
+                <p style={{ color: '#f57c00', fontSize: '0.9rem', marginBottom: '10px' }}>
+                  These listings were created but need business policies to be published.
+                </p>
+              </div>
+              <ul>
+                {listingStatus.results.drafts.map((item, index) => (
+                  <li key={index}>
+                    <div className="draft-item">
+                      <span className="sku">{item.originalSku || item.sku}</span>
+                      <span className="offer-id">Offer ID: {item.offerId}</span>
+                      <div className="draft-next-steps">
+                        {item.nextSteps && (
+                          <div className="next-steps">
+                            <strong>Next Steps:</strong>
+                            <ul style={{ margin: '5px 0', paddingLeft: '20px' }}>
+                              {item.nextSteps.map((step, stepIndex) => (
+                                <li key={stepIndex} style={{ fontSize: '0.8rem' }}>{step}</li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+              
+              {/* Business Policy Help */}
+              <div className="business-policy-help">
+                <h6>How to enable business policies:</h6>
+                <ol style={{ fontSize: '0.85rem', margin: '10px 0', paddingLeft: '20px' }}>
+                  <li>Go to <strong>My eBay</strong> → <strong>Account</strong> → <strong>Site Preferences</strong></li>
+                  <li>Find <strong>Selling preferences</strong></li>
+                  <li>Turn on <strong>"Use business policies for my listings"</strong></li>
+                  <li>Create your payment, shipping, and return policies</li>
+                  <li>Come back and try listing again</li>
+                </ol>
+              </div>
+            </div>
+          )}
+
+          {/* Failed Listings */}
           {listingStatus.results.failed.length > 0 && (
             <div className="failed-listings">
-              <h5>Failed to Create:</h5>
+              <h5>❌ Failed to Create ({listingStatus.results.failed.length}):</h5>
               <ul>
                 {listingStatus.results.failed.map((item, index) => (
                   <li key={index}>
-                    <span className="sku">{item.sku}</span>
-                    <span className="error">{item.error}</span>
+                    <div className="failed-item">
+                      <span className="sku">{item.originalSku || item.sku}</span>
+                      <span className="error">{item.error}</span>
+                      
+                      {/* Show troubleshooting advice */}
+                      {item.troubleshooting && item.troubleshooting.length > 0 && (
+                        <div className="troubleshooting">
+                          <strong>Troubleshooting:</strong>
+                          <ul style={{ margin: '5px 0', paddingLeft: '20px' }}>
+                            {item.troubleshooting.map((advice, adviceIndex) => (
+                              <li key={adviceIndex} style={{ fontSize: '0.8rem' }}>{advice}</li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+                      
+                      {/* Show retry option if available */}
+                      {item.details?.canRetry && (
+                        <div className="retry-info">
+                          <p style={{ fontSize: '0.8rem', color: '#2196F3', margin: '5px 0' }}>
+                            💡 {item.details.retryInstructions}
+                          </p>
+                        </div>
+                      )}
+                    </div>
                   </li>
                 ))}
               </ul>
             </div>
           )}
+
+          {/* Overall Summary and Next Steps */}
+          <div className="results-summary-text">
+            <h6>Summary:</h6>
+            <p>
+              {listingStatus.results.summary.published > 0 && 
+                `${listingStatus.results.summary.published} listings published successfully. `
+              }
+              {listingStatus.results.summary.drafts > 0 && 
+                `${listingStatus.results.summary.drafts} listings created as drafts. `
+              }
+              {listingStatus.results.summary.failed > 0 && 
+                `${listingStatus.results.summary.failed} listings failed to create.`
+              }
+            </p>
+            
+            {listingStatus.results.summary.drafts > 0 && (
+              <div className="draft-summary-help">
+                <p style={{ color: '#f57c00', fontSize: '0.9rem', fontWeight: 'bold' }}>
+                  📝 Your draft listings are saved in eBay and can be published once you enable business policies.
+                </p>
+              </div>
+            )}
+          </div>
 
           <button className="close-results-button" onClick={onClose}>
             Close

@@ -2850,3 +2850,127 @@ body {
     border: 2px solid #ffffff;
   }
 }
+
+/* Logo-Only Sidebar Brand */
+.sidebar-brand {
+  padding: 1rem;
+  border-bottom: 2px solid #374151;
+  background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  overflow: hidden;
+  min-height: 80px;
+}
+
+/* Subtle background pattern */
+.sidebar-brand::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-image: radial-gradient(circle at 20% 80%, rgba(96, 165, 250, 0.1) 0%, transparent 50%),
+                    radial-gradient(circle at 80% 20%, rgba(59, 130, 246, 0.1) 0%, transparent 50%);
+  pointer-events: none;
+}
+
+.brand-logo-only {
+  width: calc(100% - 1rem);
+  height: calc(100% - 1rem);
+  max-width: 200px;
+  max-height: 60px;
+  object-fit: contain;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.95);
+  padding: 0.5rem;
+  box-shadow: 0 4px 16px rgba(96, 165, 250, 0.3);
+  transition: all 0.3s ease;
+  cursor: pointer;
+  position: relative;
+  z-index: 1;
+}
+
+.brand-logo-only:hover {
+  transform: translateY(-2px) scale(1.02);
+  box-shadow: 0 6px 24px rgba(96, 165, 250, 0.5);
+  background: rgba(255, 255, 255, 1);
+}
+
+/* Collapsed sidebar adjustments */
+.sidebar.collapsed .sidebar-brand {
+  padding: 0.75rem;
+  min-height: 60px;
+}
+
+.sidebar.collapsed .brand-logo-only {
+  width: calc(100% - 0.5rem);
+  height: calc(100% - 0.5rem);
+  max-width: 44px;
+  max-height: 44px;
+  padding: 0.25rem;
+  border-radius: 6px;
+}
+
+/* Focus state for accessibility */
+.brand-logo-only:focus-visible {
+  outline: 2px solid #60a5fa;
+  outline-offset: 2px;
+}
+
+/* Subtle animation */
+@keyframes logoGlow {
+  0%, 100% {
+    box-shadow: 0 4px 16px rgba(96, 165, 250, 0.3);
+  }
+  50% {
+    box-shadow: 0 6px 24px rgba(96, 165, 250, 0.5);
+  }
+}
+
+.brand-logo-only {
+  animation: logoGlow 4s ease-in-out infinite;
+}
+
+/* Mobile responsiveness */
+@media (max-width: 768px) {
+  .sidebar-brand {
+    padding: 0.75rem;
+    min-height: 70px;
+  }
+  
+  .brand-logo-only {
+    max-height: 50px;
+  }
+}
+
+@media (max-width: 600px) {
+  .sidebar-brand {
+    padding: 0.5rem;
+    min-height: 60px;
+  }
+  
+  .brand-logo-only {
+    max-height: 45px;
+    border-radius: 6px;
+  }
+  
+  .sidebar.collapsed .brand-logo-only {
+    max-width: 40px;
+    max-height: 40px;
+  }
+}
+
+/* High contrast mode support */
+@media (prefers-contrast: high) {
+  .sidebar-brand {
+    border-bottom: 3px solid #ffffff;
+  }
+  
+  .brand-logo-only {
+    border: 2px solid #ffffff;
+    background: #ffffff;
+  }
+}

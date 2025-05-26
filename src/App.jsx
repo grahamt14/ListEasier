@@ -522,25 +522,13 @@ function Sidebar() {
 
   return (
     <div className={`sidebar ${sidebarCollapsed ? 'collapsed' : ''}`}>
-      {/* Enhanced Sidebar Brand */}
+      {/* Logo-Only Sidebar Brand */}
       <div className="sidebar-brand">
-        <div className="brand-content">
-          <div className="brand-logo">
-            <div className="logo-container">
-              <img 
-                src="/ListEasier.jpg" 
-                alt="ListEasier Logo" 
-                className="brand-logo-image"
-              />
-            </div>
-            {!sidebarCollapsed && (
-              <div className="brand-text-container">
-                <span className="brand-text">ListEasier</span>
-                <span className="brand-tagline">Batch Listing Made Easy</span>
-              </div>
-            )}
-          </div>
-        </div>
+        <img 
+          src="/ListEasier.jpg" 
+          alt="ListEasier Logo" 
+          className="brand-logo-only"
+        />
       </div>
 
       {/* Navigation */}

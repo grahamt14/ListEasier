@@ -2082,16 +2082,22 @@ function BatchEditor() {
   const [showListingManager, setShowListingManager] = useState(false);
   const { state, dispatch: appDispatch } = useAppState();
   
+  // FIXED: Add debouncing and change detection to prevent excessive saves
   const updateTimeoutRef = useRef(null);
   const lastUpdateRef = useRef(null);
+  const lastSaveTimeRef = useRef(0);
+  const SAVE_THROTTLE_MS = 10000; // Only save at most once per 10 seconds
   
   useEffect(() => {
     if (currentBatch && currentBatch.appState) {
       console.log('🔄 BatchEditor: Loading batch state into app state:', currentBatch.id);
       console.log('🔍 BatchEditor: Batch appState keys:', Object.keys(currentBatch.appState));
-      console.log('🔍 BatchEditor: Image groups:', currentBatch.appState.imageGroups);
-      console.log('🔍 BatchEditor: S3 image groups:', currentBatch.appState.s3ImageGroups);
-      console.log('🔍 BatchEditor: Response data:', currentBatch.appState.responseData);
+      console.log('🔍 BatchEditor: Category values:', {
+        batchCategory: currentBatch.category,
+        batchSubCategory: currentBatch.subCategory,
+        appStateCategory: currentBatch.appState.category,
+        appStateSubCategory: currentBatch.appState.subCategory
+      });
       
       // Clear current app state first
       appDispatch({ type: 'CLEAR_ALL_FOR_NEW_BATCH' });
@@ -2099,6 +2105,17 @@ function BatchEditor() {
       // Then load the batch-specific state with CORRECT action types
       setTimeout(() => {
         const batchState = currentBatch.appState;
+        
+        // FIXED: Helper function to safely convert strings and handle object issues
+        const safeStringConvert = (value, defaultValue = '--') => {
+          if (value === null || value === undefined) return defaultValue;
+          if (typeof value === 'string') return value;
+          if (typeof value === 'object') {
+            console.warn('⚠️ BatchEditor: Converting object to string:', value);
+            return defaultValue;
+          }
+          return String(value);
+        };
         
         // Map appState properties to correct action types
         const actionMappings = {
@@ -2129,24 +2146,30 @@ function BatchEditor() {
           }
         });
         
-        // Handle category and subcategory separately
-        if (currentBatch.category && currentBatch.category !== '--') {
-          console.log('🔄 BatchEditor: Setting category to:', currentBatch.category);
-          appDispatch({ type: 'SET_CATEGORY', payload: currentBatch.category });
+        // FIXED: Handle category and subcategory with proper string conversion
+        const categoryValue = safeStringConvert(batchState.category || currentBatch.category);
+        const subCategoryValue = safeStringConvert(batchState.subCategory || currentBatch.subCategory);
+        
+        if (categoryValue && categoryValue !== '--') {
+          console.log('🔄 BatchEditor: Setting category to:', categoryValue, typeof categoryValue);
+          appDispatch({ type: 'SET_CATEGORY', payload: categoryValue });
         }
-        if (currentBatch.subCategory && currentBatch.subCategory !== '--') {
-          console.log('🔄 BatchEditor: Setting subcategory to:', currentBatch.subCategory);
-          appDispatch({ type: 'SET_SUBCATEGORY', payload: currentBatch.subCategory });
+        if (subCategoryValue && subCategoryValue !== '--') {
+          console.log('🔄 BatchEditor: Setting subcategory to:', subCategoryValue, typeof subCategoryValue);
+          appDispatch({ type: 'SET_SUBCATEGORY', payload: subCategoryValue });
         }
         
         // Set batch-level price and SKU if not already set in appState
-        if (currentBatch.salePrice && !batchState.price) {
-          console.log('🔄 BatchEditor: Setting price from batch to:', currentBatch.salePrice);
-          appDispatch({ type: 'SET_PRICE', payload: currentBatch.salePrice });
+        const priceValue = safeStringConvert(batchState.price || currentBatch.salePrice, '');
+        const skuValue = safeStringConvert(batchState.sku || currentBatch.sku, '');
+        
+        if (priceValue && !batchState.price) {
+          console.log('🔄 BatchEditor: Setting price from batch to:', priceValue);
+          appDispatch({ type: 'SET_PRICE', payload: priceValue });
         }
-        if (currentBatch.sku && !batchState.sku) {
-          console.log('🔄 BatchEditor: Setting SKU from batch to:', currentBatch.sku);
-          appDispatch({ type: 'SET_SKU', payload: currentBatch.sku });
+        if (skuValue && !batchState.sku) {
+          console.log('🔄 BatchEditor: Setting SKU from batch to:', skuValue);
+          appDispatch({ type: 'SET_SKU', payload: skuValue });
         }
         
         console.log('✅ BatchEditor: Finished loading batch state');
@@ -2154,6 +2177,7 @@ function BatchEditor() {
     }
   }, [currentBatch?.id, appDispatch]); // Only trigger when batch ID changes
 
+  // FIXED: Throttled batch update with change detection
   useEffect(() => {
     if (currentBatch) {
       const hasValidListings = state.responseData.some(item => item && !item.error);
@@ -2162,6 +2186,17 @@ function BatchEditor() {
       if (hasValidListings && currentBatch.status === 'draft') {
         newStatus = 'ready';
       }
+      
+      // FIXED: Helper function for safe string conversion
+      const safeStringConvert = (value, defaultValue = '') => {
+        if (value === null || value === undefined) return defaultValue;
+        if (typeof value === 'string') return value;
+        if (typeof value === 'object') {
+          console.warn('⚠️ BatchEditor: Converting object to string in update:', value);
+          return defaultValue;
+        }
+        return String(value);
+      };
       
       const updatedBatch = {
         ...currentBatch,
@@ -2174,30 +2209,68 @@ function BatchEditor() {
           groupMetadata: state.groupMetadata,
           fieldSelections: state.fieldSelections,
           processedGroupIndices: state.processedGroupIndices,
-          category: state.category,
-          subCategory: state.subCategory,
-          price: state.price,
-          sku: state.sku,
+          // FIXED: Ensure category fields are strings
+          category: safeStringConvert(state.category),
+          subCategory: safeStringConvert(state.subCategory),
+          price: safeStringConvert(state.price),
+          sku: safeStringConvert(state.sku),
           categoryID: state.categoryID
         },
         totalItems: state.responseData.filter(item => item && !item.error).length,
         status: newStatus,
-        // Update the batch's default price and SKU with current values
-        salePrice: state.price || currentBatch.salePrice,
-        sku: state.sku || currentBatch.sku
+        // FIXED: Update the batch's default price and SKU with current values using safe conversion
+        salePrice: safeStringConvert(state.price || currentBatch.salePrice),
+        sku: safeStringConvert(state.sku || currentBatch.sku)
       };
       
-      const currentDataString = JSON.stringify(updatedBatch);
-      if (lastUpdateRef.current !== currentDataString) {
+      // FIXED: Only update if there are significant changes and enough time has passed
+      const currentDataString = JSON.stringify({
+        appState: updatedBatch.appState,
+        totalItems: updatedBatch.totalItems,
+        status: updatedBatch.status,
+        salePrice: updatedBatch.salePrice,
+        sku: updatedBatch.sku
+      });
+      
+      const now = Date.now();
+      const timeSinceLastSave = now - lastSaveTimeRef.current;
+      
+      // Only proceed if data has changed AND enough time has passed
+      if (lastUpdateRef.current !== currentDataString && timeSinceLastSave >= SAVE_THROTTLE_MS) {
         lastUpdateRef.current = currentDataString;
         
         if (updateTimeoutRef.current) {
           clearTimeout(updateTimeoutRef.current);
         }
         
+        // FIXED: Longer delay and immediate save for significant changes
+        const hasSignificantChange = (
+          updatedBatch.totalItems !== currentBatch.totalItems ||
+          updatedBatch.status !== currentBatch.status ||
+          (state.responseData.length > 0 && state.responseData.some(item => item && !item.error))
+        );
+        
+        const delay = hasSignificantChange ? 1000 : 5000; // 1 second for significant changes, 5 seconds for minor
+        
         updateTimeoutRef.current = setTimeout(() => {
+          console.log('💾 BatchEditor: Saving batch update after throttle delay');
+          lastSaveTimeRef.current = Date.now();
           updateBatch(updatedBatch);
-        }, 300);
+        }, delay);
+      } else if (lastUpdateRef.current !== currentDataString) {
+        // Data changed but we're still in throttle period - set up delayed save
+        lastUpdateRef.current = currentDataString;
+        
+        if (updateTimeoutRef.current) {
+          clearTimeout(updateTimeoutRef.current);
+        }
+        
+        const remainingThrottleTime = SAVE_THROTTLE_MS - timeSinceLastSave;
+        updateTimeoutRef.current = setTimeout(() => {
+          console.log('💾 BatchEditor: Saving batch update after throttle period');
+          lastSaveTimeRef.current = Date.now();
+          updateBatch(updatedBatch);
+        }, Math.max(remainingThrottleTime, 1000));
       }
     }
     
@@ -2522,6 +2595,11 @@ function BatchEditor() {
   };
 
   const handleBackToOverview = () => {
+    // Clear any pending saves
+    if (updateTimeoutRef.current) {
+      clearTimeout(updateTimeoutRef.current);
+    }
+    
     // Clear app state when going back to overview
     console.log('🧹 BatchEditor: Clearing app state on back to overview');
     appDispatch({ type: 'CLEAR_ALL_FOR_NEW_BATCH' });
@@ -2598,60 +2676,6 @@ function BatchEditor() {
           </div>
         </div>
       )}
-    </div>
-  );
-}
-
-// Main App Layout Component
-function AppLayout() {
-  const { viewMode, currentBatch, dispatch, sidebarCollapsed } = useBatch();
-  const { dispatch: appDispatch } = useAppState();
-
-  useEffect(() => {
-    if (viewMode === 'edit' && !currentBatch) {
-      console.log('🔄 AppLayout: No current batch in edit mode, redirecting to overview');
-      // Clear app state when no batch is selected
-      appDispatch({ type: 'CLEAR_ALL_FOR_NEW_BATCH' });
-      dispatch({ type: 'SET_VIEW_MODE', payload: 'overview' });
-    }
-  }, [viewMode, currentBatch, dispatch, appDispatch]);
-
-  // Effect to clear state when switching between different view modes
-  useEffect(() => {
-    if (viewMode === 'overview') {
-      console.log('🧹 AppLayout: Clearing app state for overview mode');
-      appDispatch({ type: 'CLEAR_ALL_FOR_NEW_BATCH' });
-    } else if (viewMode === 'create') {
-      console.log('🧹 AppLayout: Clearing app state for create mode');
-      appDispatch({ type: 'CLEAR_ALL_FOR_NEW_BATCH' });
-    }
-  }, [viewMode, appDispatch]);
-
-  return (
-    <div className={`app-layout ${sidebarCollapsed ? 'sidebar-collapsed' : ''}`}>
-      <Sidebar />
-      <div className="main-content">
-        <MainHeader />
-        <div className="content-area">
-          {viewMode === 'overview' && <BatchOverview />}
-          {viewMode === 'create' && <BatchWizard />}
-          {viewMode === 'edit' && currentBatch && <BatchEditor />}
-          {viewMode === 'edit' && !currentBatch && (
-            <div style={{ 
-              display: 'flex', 
-              justifyContent: 'center', 
-              alignItems: 'center', 
-              height: '50vh',
-              flexDirection: 'column'
-            }}>
-              <div className="spinner">
-                <div className="spinner-circle"></div>
-              </div>
-              <p>Loading batch...</p>
-            </div>
-          )}
-        </div>
-      </div>
     </div>
   );
 }

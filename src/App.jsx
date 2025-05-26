@@ -183,20 +183,19 @@ function BatchProvider({ children }) {
     return compressed;
   };
   
-  const loadBatchesFromDynamoDBWithScan = async () => {
+ const loadBatchesFromDynamoDBWithScan = async () => {
   console.log('📥 BatchProvider: Starting to load batches from DynamoDB using Scan...');
   setIsLoading(true);
   try {
     const sessionId = getSessionId();
     console.log('🔍 BatchProvider: Using session ID for scan:', sessionId);
     
-    // Use ScanCommand with FilterExpression as fallback
+    // FIXED: Use a simpler scan without the NOT begins_with operator
     const scanParams = {
       TableName: 'ListEasierBatches',
-      FilterExpression: 'sessionId = :sessionId AND NOT begins_with(batchId, :templatePrefix)',
+      FilterExpression: 'sessionId = :sessionId',
       ExpressionAttributeValues: {
-        ':sessionId': sessionId,
-        ':templatePrefix': 'template_'
+        ':sessionId': sessionId
       },
       Limit: 100
     };
@@ -215,8 +214,15 @@ function BatchProvider({ children }) {
       responseKeys: Object.keys(response)
     });
     
-    const batches = response.Items || [];
-    console.log('📦 BatchProvider: Raw batches from DynamoDB:', batches);
+    const allItems = response.Items || [];
+    console.log('📦 BatchProvider: Raw items from DynamoDB:', allItems);
+    
+    // Filter out templates on the client side
+    const batches = allItems.filter(item => 
+      !item.batchId || !item.batchId.startsWith('template_')
+    );
+    
+    console.log('📦 BatchProvider: Filtered batches from DynamoDB:', batches);
     
     // Process batches same as before...
     const expandedBatches = batches.map((batch, index) => {
@@ -384,17 +390,17 @@ function BatchProvider({ children }) {
   try {
     const sessionId = getSessionId();
     
-    // Fixed: Use a simpler query and filter client-side
-    const queryParams = {
+    // FIXED: Use a simpler scan for templates too
+    const scanParams = {
       TableName: 'ListEasierBatches',
-      KeyConditionExpression: 'sessionId = :sessionId',
+      FilterExpression: 'sessionId = :sessionId',
       ExpressionAttributeValues: {
         ':sessionId': sessionId
       }
     };
 
-    console.log('🔍 BatchProvider: Template query parameters:', queryParams);
-    const command = new QueryCommand(queryParams);
+    console.log('🔍 BatchProvider: Template scan parameters:', scanParams);
+    const command = new ScanCommand(scanParams);
     const response = await docClient.send(command);
     
     // Filter templates on the client side

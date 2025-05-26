@@ -58,7 +58,7 @@ body {
   justify-content: center;
   position: relative;
   overflow: hidden;
-  min-height: 90px; /* Increased from 80px */
+  min-height: 80px; /* Reduced from 120px to 80px (40px reduction) */
 }
 
 .sidebar-brand::before {
@@ -85,8 +85,9 @@ body {
 
 .brand-logo-only {
   width: 100%; /* Fill entire width */
-  height: 100%; /* Fill entire height */
-  object-fit: contain;
+  height: 120px; /* Fixed height larger than container to maintain logo size */
+  object-fit: cover; /* Changed from contain to cover to crop excess */
+  object-position: center; /* Center the image for best cropping */
   border-radius: 12px; /* Rounded corners on the image itself */
   background: none; /* Remove white background */
   padding: 0; /* Remove padding */
@@ -111,12 +112,12 @@ body {
 /* Collapsed sidebar brand adjustments */
 .sidebar.collapsed .sidebar-brand {
   padding: 8px; /* Small padding when collapsed */
-  min-height: 80px; /* Smaller height when collapsed */
+  min-height: 64px; /* Reduced proportionally (was 80px, now 64px) */
 }
 
 .sidebar.collapsed .brand-logo-only {
   width: calc(100% - 16px); /* Account for padding when collapsed */
-  height: calc(100% - 16px);
+  height: 80px; /* Fixed height for collapsed state */
   border-radius: 8px; /* Smaller border radius when collapsed */
 }
 

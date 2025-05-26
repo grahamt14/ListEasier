@@ -90,6 +90,7 @@ function batchReducer(state, action) {
 function BatchProvider({ children }) {
   const [state, dispatch] = useReducer(batchReducer, initialBatchState);
   const [isLoading, setIsLoading] = useState(false);
+  const updateTimeouts = new Map();
   
   console.log('🔧 BatchProvider: Initializing...');
   
@@ -243,41 +244,60 @@ const loadBatchesFromDynamoDBWithScan = async () => {
     
     console.log('📦 BatchProvider: Filtered batches from DynamoDB:', batches);
     
-    // Process batches - FIXED: Don't expand compressed image groups incorrectly
+    // FIXED: Process batches with proper string conversion and validation
     const expandedBatches = batches.map((batch, index) => {
       console.log(`🔄 BatchProvider: Processing batch ${index + 1}:`, batch);
       
+      // Helper function to safely convert to string
+      const safeStringConvert = (value, defaultValue = '--') => {
+        if (value === null || value === undefined) return defaultValue;
+        if (typeof value === 'string') return value;
+        if (typeof value === 'object') {
+          console.warn('⚠️ BatchProvider: Converting object to string:', value);
+          return defaultValue; // Don't try to stringify objects, use default
+        }
+        return String(value);
+      };
+      
       const expanded = {
         ...batch,
-        category: String(batch.category || '--'),
-        subCategory: String(batch.subCategory || '--'),
-        name: String(batch.name || `Batch ${batch.id || Date.now()}`),
-        status: String(batch.status || 'draft'),
-        id: String(batch.id || batch.batchId || Date.now()),
+        // FIXED: Ensure all critical fields are properly converted to strings
+        category: safeStringConvert(batch.category),
+        subCategory: safeStringConvert(batch.subCategory),
+        name: safeStringConvert(batch.name, `Batch ${batch.id || Date.now()}`),
+        status: safeStringConvert(batch.status, 'draft'),
+        id: safeStringConvert(batch.id || batch.batchId || Date.now()),
+        salePrice: safeStringConvert(batch.salePrice, ''),
+        sku: safeStringConvert(batch.sku, ''),
         appState: {
           ...batch.appState,
-          category: String(batch.appState?.category || '--'),
-          subCategory: String(batch.appState?.subCategory || '--'),
-          // FIXED: Properly handle imageGroups - don't expand if it's already valid
-          imageGroups: batch.appState?.imageGroups || [[]],
-          s3ImageGroups: batch.appState?.s3ImageGroups || [[]],
-          responseData: batch.appState?.responseData || [],
-          groupMetadata: batch.appState?.groupMetadata || [],
-          fieldSelections: batch.appState?.fieldSelections || {},
-          processedGroupIndices: batch.appState?.processedGroupIndices || [],
-          price: String(batch.appState?.price || ''),
-          sku: String(batch.appState?.sku || ''),
+          // FIXED: Ensure appState fields are also properly converted
+          category: safeStringConvert(batch.appState?.category || batch.category),
+          subCategory: safeStringConvert(batch.appState?.subCategory || batch.subCategory),
+          price: safeStringConvert(batch.appState?.price || batch.salePrice, ''),
+          sku: safeStringConvert(batch.appState?.sku || batch.sku, ''),
           categoryID: batch.appState?.categoryID || '',
-          // Ensure other state is properly initialized
-          filesBase64: batch.appState?.filesBase64 || [],
+          
+          // Properly handle arrays and objects
+          imageGroups: Array.isArray(batch.appState?.imageGroups) ? batch.appState.imageGroups : [[]],
+          s3ImageGroups: Array.isArray(batch.appState?.s3ImageGroups) ? batch.appState.s3ImageGroups : [[]],
+          responseData: Array.isArray(batch.appState?.responseData) ? batch.appState.responseData : [],
+          groupMetadata: Array.isArray(batch.appState?.groupMetadata) ? batch.appState.groupMetadata : [],
+          fieldSelections: (batch.appState?.fieldSelections && typeof batch.appState.fieldSelections === 'object') 
+            ? batch.appState.fieldSelections : {},
+          processedGroupIndices: Array.isArray(batch.appState?.processedGroupIndices) ? batch.appState.processedGroupIndices : [],
+          
+          // Always reset these to safe defaults
+          filesBase64: Array.isArray(batch.appState?.filesBase64) ? batch.appState.filesBase64 : [],
           rawFiles: [], // Always empty on load
-          imageRotations: batch.appState?.imageRotations || {},
+          imageRotations: (batch.appState?.imageRotations && typeof batch.appState.imageRotations === 'object') 
+            ? batch.appState.imageRotations : {},
           selectedImages: [],
           isLoading: false,
           isDirty: false,
-          totalChunks: batch.appState?.totalChunks || 0,
-          completedChunks: batch.appState?.completedChunks || 0,
-          processingGroups: batch.appState?.processingGroups || [],
+          totalChunks: Number(batch.appState?.totalChunks) || 0,
+          completedChunks: Number(batch.appState?.completedChunks) || 0,
+          processingGroups: Array.isArray(batch.appState?.processingGroups) ? batch.appState.processingGroups : [],
           errorMessages: [],
           uploadStatus: {
             isUploading: false,
@@ -303,6 +323,8 @@ const loadBatchesFromDynamoDBWithScan = async () => {
         category: expanded.category,
         subCategory: expanded.subCategory,
         status: expanded.status,
+        categoryType: typeof expanded.category,
+        subCategoryType: typeof expanded.subCategory,
         imageGroupsCount: expanded.appState?.imageGroups?.length || 0,
         s3ImageGroupsCount: expanded.appState?.s3ImageGroups?.length || 0,
         responseDataCount: expanded.appState?.responseData?.length || 0
@@ -328,6 +350,156 @@ const loadBatchesFromDynamoDBWithScan = async () => {
     setIsLoading(false);
     console.log('🏁 BatchProvider: Finished loading batches');
   }
+};
+
+const createBatch = (batchData) => {
+  console.log('🆕 BatchProvider: Creating new batch with data:', batchData);
+  
+  // Helper function to safely convert to string
+  const safeStringConvert = (value, defaultValue = '') => {
+    if (value === null || value === undefined) return defaultValue;
+    if (typeof value === 'string') return value;
+    if (typeof value === 'object') {
+      console.warn('⚠️ BatchProvider: Converting object to string in createBatch:', value);
+      return defaultValue;
+    }
+    return String(value);
+  };
+  
+  const newBatch = {
+    id: String(Date.now()),
+    ...batchData,
+    // FIXED: Ensure all fields are properly converted to strings
+    category: safeStringConvert(batchData.category, '--'),
+    subCategory: safeStringConvert(batchData.subCategory, '--'),
+    name: safeStringConvert(batchData.name, `Batch ${Date.now()}`),
+    status: 'draft',
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+    items: [],
+    totalItems: 0,
+    csvDownloads: 0,
+    ebayListingsCreated: 0,
+    lastCsvDownload: null,
+    lastEbayListingCreated: null,
+    salePrice: safeStringConvert(batchData.salePrice, ''),
+    sku: safeStringConvert(batchData.sku, ''),
+    appState: {
+      filesBase64: [],
+      rawFiles: [],
+      imageGroups: [[]],
+      s3ImageGroups: [[]],
+      responseData: [],
+      groupMetadata: [],
+      fieldSelections: {},
+      processedGroupIndices: [],
+      // FIXED: Ensure appState fields are strings
+      category: safeStringConvert(batchData.category, '--'),
+      subCategory: safeStringConvert(batchData.subCategory, '--'),
+      price: safeStringConvert(batchData.salePrice, ''),
+      sku: safeStringConvert(batchData.sku, ''),
+      categoryID: null,
+      // Reset all status
+      isLoading: false,
+      isDirty: false,
+      totalChunks: 0,
+      completedChunks: 0,
+      processingGroups: [],
+      errorMessages: [],
+      uploadStatus: {
+        isUploading: false,
+        uploadProgress: 0,
+        uploadTotal: 0,
+        uploadCompleted: 0,
+        uploadStage: '',
+        currentFileIndex: 0
+      },
+      processingStatus: {
+        isProcessing: false,
+        processTotal: 0,
+        processCompleted: 0,
+        processStage: '',
+        currentGroup: 0
+      }
+    }
+  };
+  
+  console.log('✅ BatchProvider: Created new batch object:', {
+    id: newBatch.id,
+    name: newBatch.name,
+    category: newBatch.category,
+    subCategory: newBatch.subCategory,
+    status: newBatch.status,
+    categoryType: typeof newBatch.category,
+    subCategoryType: typeof newBatch.subCategory
+  });
+  
+  dispatch({ type: 'CREATE_BATCH', payload: newBatch });
+  console.log('📤 BatchProvider: Dispatched CREATE_BATCH action');
+  
+  // Save to DynamoDB (async, don't block UI)
+  saveBatchToDynamoDB(newBatch).catch(error => {
+    console.error('❌ BatchProvider: Failed to save new batch to DynamoDB:', error);
+  });
+  
+  return newBatch;
+};
+
+const updateBatch = (batchData) => {
+  console.log('🔄 BatchProvider: Updating batch:', batchData.id);
+  
+  // Helper function to safely convert to string
+  const safeStringConvert = (value, defaultValue = '') => {
+    if (value === null || value === undefined) return defaultValue;
+    if (typeof value === 'string') return value;
+    if (typeof value === 'object') {
+      console.warn('⚠️ BatchProvider: Converting object to string in updateBatch:', value);
+      return defaultValue;
+    }
+    return String(value);
+  };
+  
+  const updatedBatch = {
+    ...batchData,
+    // FIXED: Ensure critical fields are strings
+    category: safeStringConvert(batchData.category, '--'),
+    subCategory: safeStringConvert(batchData.subCategory, '--'),
+    name: safeStringConvert(batchData.name, `Batch ${batchData.id}`),
+    id: safeStringConvert(batchData.id),
+    salePrice: safeStringConvert(batchData.salePrice, ''),
+    sku: safeStringConvert(batchData.sku, ''),
+    updatedAt: new Date().toISOString(),
+    // FIXED: Ensure appState category fields are also strings
+    appState: {
+      ...batchData.appState,
+      category: safeStringConvert(batchData.appState?.category || batchData.category, '--'),
+      subCategory: safeStringConvert(batchData.appState?.subCategory || batchData.subCategory, '--'),
+      price: safeStringConvert(batchData.appState?.price || batchData.salePrice, ''),
+      sku: safeStringConvert(batchData.appState?.sku || batchData.sku, '')
+    }
+  };
+  
+  console.log('✅ BatchProvider: Updated batch object created with proper string conversion');
+  dispatch({ type: 'UPDATE_BATCH', payload: updatedBatch });
+  
+  // FIXED: Add throttling to prevent excessive writes - only save at most once per 5 seconds
+  const batchId = updatedBatch.id;
+  const now = Date.now();
+  
+  // Clear any existing timeout for this batch
+  if (updateTimeouts.has(batchId)) {
+    clearTimeout(updateTimeouts.get(batchId));
+  }
+  
+  // Set a new timeout to save after 5 seconds of no updates
+  const timeoutId = setTimeout(() => {
+    updateTimeouts.delete(batchId);
+    saveBatchToDynamoDB(updatedBatch).catch(error => {
+      console.error('❌ BatchProvider: Failed to update batch in DynamoDB:', error);
+    });
+  }, 5000); // 5 second delay
+  
+  updateTimeouts.set(batchId, timeoutId);
 };
 
 

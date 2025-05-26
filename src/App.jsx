@@ -25,7 +25,8 @@ const initialBatchState = {
   currentBatch: null,
   currentStep: 0,
   viewMode: 'overview', // 'overview', 'create', 'edit'
-  statusFilter: 'all' // 'all', 'open', 'closed'
+  statusFilter: 'all', // 'all', 'open', 'closed'
+  sidebarCollapsed: false // New state for sidebar
 };
 
 function batchReducer(state, action) {
@@ -63,6 +64,8 @@ function batchReducer(state, action) {
       return { ...state, currentStep: action.payload };
     case 'SET_STATUS_FILTER':
       return { ...state, statusFilter: action.payload };
+    case 'TOGGLE_SIDEBAR':
+      return { ...state, sidebarCollapsed: !state.sidebarCollapsed };
     case 'LOAD_TEMPLATES':
       return { ...state, templates: action.payload };
     case 'ADD_TEMPLATE':
@@ -122,12 +125,10 @@ function BatchProvider({ children }) {
       updatedAt: new Date().toISOString(),
       items: [],
       totalItems: 0,
-      // Track batch completion metrics
       csvDownloads: 0,
       ebayListingsCreated: 0,
       lastCsvDownload: null,
       lastEbayListingCreated: null,
-      // Initialize with empty app state structure
       appState: {
         filesBase64: [],
         rawFiles: [],
@@ -155,7 +156,6 @@ function BatchProvider({ children }) {
     dispatch({ type: 'DELETE_BATCH', payload: batchId });
   };
 
-  // New function to mark CSV as downloaded
   const markCsvDownloaded = (batchId) => {
     const batch = state.batches.find(b => b.id === batchId);
     if (batch) {
@@ -170,7 +170,6 @@ function BatchProvider({ children }) {
     }
   };
 
-  // New function to mark eBay listings as created
   const markEbayListingsCreated = (batchId, listingsCount = 1) => {
     const batch = state.batches.find(b => b.id === batchId);
     if (batch) {
@@ -185,17 +184,14 @@ function BatchProvider({ children }) {
     }
   };
 
-  // Helper function to determine batch status
   const determineBatchStatus = (batch, newActivity = {}) => {
     const hasValidListings = batch.appState?.responseData?.some(item => item && !item.error) || false;
     const totalValidListings = batch.appState?.responseData?.filter(item => item && !item.error).length || 0;
     
-    // If no valid listings generated yet, keep as draft
     if (!hasValidListings || totalValidListings === 0) {
       return 'draft';
     }
 
-    // Check if batch has been "used" (CSV downloaded or eBay listings created)
     const totalCsvDownloads = (batch.csvDownloads || 0) + (newActivity.csvDownloaded ? 1 : 0);
     const totalEbayListings = (batch.ebayListingsCreated || 0) + (newActivity.ebayListingsCreated || 0);
     
@@ -203,7 +199,6 @@ function BatchProvider({ children }) {
       return 'completed';
     }
 
-    // If has valid listings but no downloads/creations, it's ready for use
     return 'ready';
   };
 
@@ -499,7 +494,199 @@ function DeleteBatchModal({ isOpen, onClose, onConfirm, batchName }) {
   );
 }
 
-// Updated BatchOverview component with working filters and better status tracking
+// Sidebar Component with Preline Integration
+function Sidebar() {
+  const { batches, dispatch, statusFilter, sidebarCollapsed, viewMode } = useBatch();
+  
+  const getFilterCounts = () => {
+    const open = batches.filter(batch => 
+      batch.status === 'draft' || batch.status === 'ready' || batch.status === 'error'
+    ).length;
+    const closed = batches.filter(batch => batch.status === 'completed').length;
+    
+    return { all: batches.length, open, closed };
+  };
+
+  const filterCounts = getFilterCounts();
+
+  const handleFilterChange = (newFilter) => {
+    dispatch({ type: 'SET_STATUS_FILTER', payload: newFilter });
+    if (viewMode !== 'overview') {
+      dispatch({ type: 'SET_VIEW_MODE', payload: 'overview' });
+    }
+  };
+
+  const handleCreateBatch = () => {
+    dispatch({ type: 'SET_VIEW_MODE', payload: 'create' });
+  };
+
+  return (
+    <div className={`sidebar ${sidebarCollapsed ? 'collapsed' : ''}`}>
+      {/* Sidebar Brand */}
+      <div className="sidebar-brand">
+        <div className="brand-content">
+          <div className="brand-logo">
+            <svg className="brand-icon" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M13 3L4 14h6v7l9-11h-6V3z"/>
+            </svg>
+            {!sidebarCollapsed && <span className="brand-text">ListEasier</span>}
+          </div>
+        </div>
+      </div>
+
+      {/* Navigation */}
+      <nav className="sidebar-nav">
+        {/* Overview Section */}
+        <div className="nav-section">
+          <div className="nav-section-header">
+            {!sidebarCollapsed && <span>Overview</span>}
+          </div>
+          <ul className="nav-list">
+            <li className="nav-item">
+              <button 
+                className={`nav-link ${viewMode === 'overview' && statusFilter === 'all' ? 'active' : ''}`}
+                onClick={() => handleFilterChange('all')}
+                title="All Batches"
+              >
+                <svg className="nav-icon" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-5 14H7v-2h7v2zm3-4H7v-2h10v2zm0-4H7V7h10v2z"/>
+                </svg>
+                {!sidebarCollapsed && (
+                  <>
+                    <span>All Batches</span>
+                    <span className="nav-badge">{filterCounts.all}</span>
+                  </>
+                )}
+              </button>
+            </li>
+            <li className="nav-item">
+              <button 
+                className={`nav-link ${viewMode === 'overview' && statusFilter === 'open' ? 'active' : ''}`}
+                onClick={() => handleFilterChange('open')}
+                title="Open Batches"
+              >
+                <svg className="nav-icon" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
+                </svg>
+                {!sidebarCollapsed && (
+                  <>
+                    <span>Open</span>
+                    <span className="nav-badge">{filterCounts.open}</span>
+                  </>
+                )}
+              </button>
+            </li>
+            <li className="nav-item">
+              <button 
+                className={`nav-link ${viewMode === 'overview' && statusFilter === 'closed' ? 'active' : ''}`}
+                onClick={() => handleFilterChange('closed')}
+                title="Completed Batches"
+              >
+                <svg className="nav-icon" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M9 16.2L4.8 12l-1.4 1.4L9 19 21 7l-1.4-1.4L9 16.2z"/>
+                </svg>
+                {!sidebarCollapsed && (
+                  <>
+                    <span>Completed</span>
+                    <span className="nav-badge">{filterCounts.closed}</span>
+                  </>
+                )}
+              </button>
+            </li>
+          </ul>
+        </div>
+
+        {/* Actions Section */}
+        <div className="nav-section">
+          <div className="nav-section-header">
+            {!sidebarCollapsed && <span>Actions</span>}
+          </div>
+          <ul className="nav-list">
+            <li className="nav-item">
+              <button 
+                className={`nav-link ${viewMode === 'create' ? 'active' : ''}`}
+                onClick={handleCreateBatch}
+                title="Create New Batch"
+              >
+                <svg className="nav-icon" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/>
+                </svg>
+                {!sidebarCollapsed && <span>New Batch</span>}
+              </button>
+            </li>
+          </ul>
+        </div>
+
+        {/* Recent Batches */}
+        {!sidebarCollapsed && batches.length > 0 && (
+          <div className="nav-section">
+            <div className="nav-section-header">
+              <span>Recent Batches</span>
+            </div>
+            <ul className="nav-list">
+              {batches.slice(0, 5).map(batch => (
+                <li key={batch.id} className="nav-item">
+                  <button 
+                    className="nav-link batch-link"
+                    onClick={() => dispatch({ type: 'SET_CURRENT_BATCH', payload: batch })}
+                    title={batch.name}
+                  >
+                    <div className="batch-thumbnail">
+                      {batch.category && batch.category.charAt(0)}
+                    </div>
+                    <div className="batch-info">
+                      <span className="batch-name">{batch.name}</span>
+                      <span className={`batch-status status-${batch.status}`}>
+                        {batch.status}
+                      </span>
+                    </div>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+      </nav>
+    </div>
+  );
+}
+
+// Main Header Component
+function MainHeader() {
+  const { dispatch, sidebarCollapsed, viewMode, currentBatch } = useBatch();
+
+  const toggleSidebar = () => {
+    dispatch({ type: 'TOGGLE_SIDEBAR' });
+  };
+
+  const getPageTitle = () => {
+    if (viewMode === 'create') return 'Create New Batch';
+    if (viewMode === 'edit' && currentBatch) return currentBatch.name;
+    return 'Your Batches';
+  };
+
+  return (
+    <header className="main-header">
+      <div className="header-left">
+        <button 
+          className="sidebar-toggle"
+          onClick={toggleSidebar}
+          title={sidebarCollapsed ? 'Expand Sidebar' : 'Collapse Sidebar'}
+        >
+          <svg viewBox="0 0 24 24" fill="currentColor">
+            <path d="M3 18h18v-2H3v2zm0-5h18v-2H3v2zm0-7v2h18V6H3z"/>
+          </svg>
+        </button>
+        <h1 className="page-title">{getPageTitle()}</h1>
+      </div>
+      <div className="header-right">
+        {/* Add any header actions here */}
+      </div>
+    </header>
+  );
+}
+
+// Updated BatchOverview component
 function BatchOverview() {
   const { batches, dispatch, deleteBatch, statusFilter } = useBatch();
   const [deleteModal, setDeleteModal] = useState({ isOpen: false, batch: null });
@@ -534,10 +721,6 @@ function BatchOverview() {
     });
   };
 
-  const handleCreateBatch = () => {
-    dispatch({ type: 'SET_VIEW_MODE', payload: 'create' });
-  };
-
   const handleEditBatch = (batch) => {
     dispatch({ type: 'SET_CURRENT_BATCH', payload: batch });
   };
@@ -557,11 +740,6 @@ function BatchOverview() {
     setDeleteModal({ isOpen: false, batch: null });
   };
 
-  const handleFilterChange = (newFilter) => {
-    dispatch({ type: 'SET_STATUS_FILTER', payload: newFilter });
-  };
-
-  // Helper function to get batch statistics
   const getBatchStats = (batch) => {
     const appState = batch.appState || {};
     const totalListings = appState.responseData?.filter(item => item && !item.error).length || 0;
@@ -575,17 +753,14 @@ function BatchOverview() {
     };
   };
 
-  // Filter batches based on status
   const getFilteredBatches = () => {
     if (statusFilter === 'all') {
       return batches;
     } else if (statusFilter === 'open') {
-      // Open batches are draft and ready (not completed)
       return batches.filter(batch => 
         batch.status === 'draft' || batch.status === 'ready' || batch.status === 'error'
       );
     } else if (statusFilter === 'closed') {
-      // Closed batches are completed
       return batches.filter(batch => batch.status === 'completed');
     }
     return batches;
@@ -593,52 +768,9 @@ function BatchOverview() {
 
   const filteredBatches = getFilteredBatches();
 
-  // Get filter counts for display
-  const getFilterCounts = () => {
-    const open = batches.filter(batch => 
-      batch.status === 'draft' || batch.status === 'ready' || batch.status === 'error'
-    ).length;
-    const closed = batches.filter(batch => batch.status === 'completed').length;
-    
-    return { all: batches.length, open, closed };
-  };
-
-  const filterCounts = getFilterCounts();
-
   return (
-    <div className="batch-overview">
-      <div className="page-header">
-        <h1>Your Batches</h1>
-        <button onClick={handleCreateBatch} className="btn btn-primary">
-          + Add Batch
-        </button>
-      </div>
-
-      <div className="batch-filters">
-        <button 
-          className={`filter-btn ${statusFilter === 'all' ? 'active' : ''}`}
-          onClick={() => handleFilterChange('all')}
-        >
-          All ({filterCounts.all})
-        </button>
-        <button 
-          className={`filter-btn ${statusFilter === 'open' ? 'active' : ''}`}
-          onClick={() => handleFilterChange('open')}
-        >
-          Open ({filterCounts.open})
-        </button>
-        <button 
-          className={`filter-btn ${statusFilter === 'closed' ? 'active' : ''}`}
-          onClick={() => handleFilterChange('closed')}
-        >
-          Closed ({filterCounts.closed})
-        </button>
-      </div>
-
-      // Updated BatchOverview legend section with dark text for light background
-// Replace the existing legend section in the BatchOverview component
-
-      {/* Add legend for batch preview icons and status explanation - FIXED TEXT COLORS */}
+    <div className="batch-overview-content">
+      {/* Batch legend */}
       <div className="batch-legend" style={{
         background: '#f8f9fa',
         border: '1px solid #e9ecef',
@@ -711,7 +843,10 @@ function BatchOverview() {
                'No batches have been completed yet'}
             </p>
             {statusFilter === 'all' && (
-              <button onClick={handleCreateBatch} className="btn btn-primary">
+              <button 
+                onClick={() => dispatch({ type: 'SET_VIEW_MODE', payload: 'create' })}
+                className="btn btn-primary"
+              >
                 Create Batch
               </button>
             )}
@@ -945,18 +1080,6 @@ function BatchWizard() {
         const hasCategory = batchData.category && batchData.category !== '--';
         const hasSubCategory = batchData.subCategory && batchData.subCategory !== '--';
         
-        // Debug logging (remove in production)
-        console.log('Validation check:', {
-          hasName,
-          hasCategory,
-          hasSubCategory,
-          batchData: {
-            name: batchData.name,
-            category: batchData.category,
-            subCategory: batchData.subCategory
-          }
-        });
-        
         return hasName && hasCategory && hasSubCategory;
       case 1:
         return true; // Optional step
@@ -966,8 +1089,8 @@ function BatchWizard() {
   };
 
   return (
-    <div className="modal-overlay">
-      <div className="modal-content batch-wizard">
+    <div className="batch-wizard-content">
+      <div className="wizard-card">
         <div className="wizard-header">
           <h2>Create a new batch</h2>
           <button onClick={handleCancel} className="modal-close">×</button>
@@ -1314,34 +1437,25 @@ function BatchWizard() {
   );
 }
 
-// Updated BatchEditor function in App.jsx
-// Fix the eBay listing creation callback chain
-
-// Updated BatchEditor function in App.jsx
-// Fix the eBay listing creation callback chain
-
+// Updated BatchEditor function with proper layout
 function BatchEditor() {
   const { currentBatch, updateBatch, dispatch, markCsvDownloaded, markEbayListingsCreated } = useBatch();
   const [showListingManager, setShowListingManager] = useState(false);
   const { state, dispatch: appDispatch } = useAppState();
   
-  // Use refs to prevent excessive re-renders
   const updateTimeoutRef = useRef(null);
   const lastUpdateRef = useRef(null);
   
-  // Initialize app state from batch data when batch changes
   useEffect(() => {
     if (currentBatch && currentBatch.appState) {
       console.log('Loading batch state into app state:', currentBatch);
       
-      // Load batch state into app state
       Object.entries(currentBatch.appState).forEach(([key, value]) => {
         const actionType = `SET_${key.toUpperCase()}`;
         console.log(`Dispatching ${actionType} with:`, value);
         appDispatch({ type: actionType, payload: value });
       });
       
-      // Set category and form data - Fixed to properly set both category and subcategory
       if (currentBatch.category && currentBatch.category !== '--') {
         console.log('Setting category to:', currentBatch.category);
         appDispatch({ type: 'SET_CATEGORY', payload: currentBatch.category });
@@ -1357,15 +1471,13 @@ function BatchEditor() {
     }
   }, [currentBatch, appDispatch]);
 
-  // Save app state to batch with debouncing to prevent flickering
   useEffect(() => {
     if (currentBatch) {
       const hasValidListings = state.responseData.some(item => item && !item.error);
       
-      // Determine new status based on current state
       let newStatus = currentBatch.status;
       if (hasValidListings && currentBatch.status === 'draft') {
-        newStatus = 'ready'; // Batch has listings and is ready for use
+        newStatus = 'ready';
       }
       
       const updatedBatch = {
@@ -1389,24 +1501,20 @@ function BatchEditor() {
         status: newStatus
       };
       
-      // Only update if the data has actually changed
       const currentDataString = JSON.stringify(updatedBatch);
       if (lastUpdateRef.current !== currentDataString) {
         lastUpdateRef.current = currentDataString;
         
-        // Clear existing timeout
         if (updateTimeoutRef.current) {
           clearTimeout(updateTimeoutRef.current);
         }
         
-        // Debounce the update to prevent excessive saves
         updateTimeoutRef.current = setTimeout(() => {
           updateBatch(updatedBatch);
-        }, 300); // 300ms debounce
+        }, 300);
       }
     }
     
-    // Cleanup timeout on unmount
     return () => {
       if (updateTimeoutRef.current) {
         clearTimeout(updateTimeoutRef.current);
@@ -1415,7 +1523,6 @@ function BatchEditor() {
   }, [state, currentBatch, updateBatch]);
 
   const handleGenerateListing = async (aiResolveCategoryFields = false, categoryFields = []) => {
-    // ... existing generateListing code remains the same ...
     try {
       const { imageGroups, filesBase64, batchSize, processedGroupIndices, fieldSelections } = state;
    
@@ -1525,7 +1632,7 @@ function BatchEditor() {
         fieldSelections, 
         state.price, 
         state.sku, 
-        {} // No eBay policies in batch mode
+        {}
       );   
       
       if (aiResolveCategoryFields) {
@@ -1728,38 +1835,28 @@ function BatchEditor() {
   };
 
   const handleBackToOverview = () => {
-    // Clear the current batch and reset to overview mode
     dispatch({ type: 'SET_CURRENT_BATCH', payload: null });
     dispatch({ type: 'SET_VIEW_MODE', payload: 'overview' });
-    
-    // Optional: Clear any app state that might be causing issues
-    // You can uncomment this if you want to reset the working state when going back
-    // appDispatch({ type: 'SET_FILES_BASE64', payload: [] });
-    // appDispatch({ type: 'SET_IMAGE_GROUPS', payload: [[]] });
   };
 
   const handleCsvDownload = () => {
-    // Mark CSV as downloaded for this batch
     if (currentBatch) {
       markCsvDownloaded(currentBatch.id);
     }
   };
 
   const handleEbayListingsCreated = (listingsCount) => {
-    // Mark eBay listings as created for this batch
     console.log('handleEbayListingsCreated called with count:', listingsCount);
     if (currentBatch) {
       markEbayListingsCreated(currentBatch.id, listingsCount);
     }
   };
 
-  // **NEW: Handle showing the eBay listing manager**
   const handleShowEbayListingManager = () => {
     console.log('BatchEditor: Showing eBay listing manager');
     setShowListingManager(true);
   };
 
-  // **NEW: Handle when eBay listing manager closes**
   const handleCloseEbayListingManager = () => {
     console.log('BatchEditor: Closing eBay listing manager');
     setShowListingManager(false);
@@ -1770,8 +1867,8 @@ function BatchEditor() {
   }
 
   return (
-    <div className="batch-editor">
-      <header className="batch-editor-header">
+    <div className="batch-editor-content">
+      <div className="batch-editor-header">
         <div className="header-left">
           <button 
             onClick={handleBackToOverview}
@@ -1784,7 +1881,7 @@ function BatchEditor() {
             <span className="batch-status">{currentBatch.status}</span>
           </div>
         </div>
-      </header>
+      </div>
 
       <main className="main-card">
         <FormSection 
@@ -1800,7 +1897,6 @@ function BatchEditor() {
         />
       </main>
 
-      {/* **NEW: Properly handle the eBay listing manager modal** */}
       {showListingManager && (
         <div className="listing-modal-overlay">
           <div className="listing-modal">
@@ -1815,48 +1911,49 @@ function BatchEditor() {
   );
 }
 
-// Main App Component
-function AppContent() {
-  const { viewMode, currentBatch, dispatch } = useBatch();
+// Main App Layout Component
+function AppLayout() {
+  const { viewMode, currentBatch, dispatch, sidebarCollapsed } = useBatch();
 
-  // Safety check: if we're in edit mode but have no current batch, go to overview
-  React.useEffect(() => {
+  useEffect(() => {
     if (viewMode === 'edit' && !currentBatch) {
       console.log('No current batch in edit mode, redirecting to overview');
       dispatch({ type: 'SET_VIEW_MODE', payload: 'overview' });
     }
   }, [viewMode, currentBatch, dispatch]);
 
-  // Debug logging (remove in production)
-  React.useEffect(() => {
-    console.log('AppContent render:', { viewMode, currentBatch: currentBatch?.name || 'none' });
-  }, [viewMode, currentBatch]);
-
   return (
-    <div className="app-container">
-      {viewMode === 'overview' && <BatchOverview />}
-      {viewMode === 'create' && <BatchWizard />}
-      {viewMode === 'edit' && currentBatch && <BatchEditor />}
-      {viewMode === 'edit' && !currentBatch && (
-        <div style={{ 
-          display: 'flex', 
-          justifyContent: 'center', 
-          alignItems: 'center', 
-          height: '50vh',
-          flexDirection: 'column'
-        }}>
-          <div className="spinner">
-            <div className="spinner-circle"></div>
-          </div>
-          <p>Loading batch...</p>
+    <div className={`app-layout ${sidebarCollapsed ? 'sidebar-collapsed' : ''}`}>
+      <Sidebar />
+      <div className="main-content">
+        <MainHeader />
+        <div className="content-area">
+          {viewMode === 'overview' && <BatchOverview />}
+          {viewMode === 'create' && <BatchWizard />}
+          {viewMode === 'edit' && currentBatch && <BatchEditor />}
+          {viewMode === 'edit' && !currentBatch && (
+            <div style={{ 
+              display: 'flex', 
+              justifyContent: 'center', 
+              alignItems: 'center', 
+              height: '50vh',
+              flexDirection: 'column'
+            }}>
+              <div className="spinner">
+                <div className="spinner-circle"></div>
+              </div>
+              <p>Loading batch...</p>
+            </div>
+          )}
         </div>
-      )}
-
-      <footer className="footer">
-        <p>© 2025 ListEasier</p>
-      </footer>
+      </div>
     </div>
   );
+}
+
+// Main App Content
+function AppContent() {
+  return <AppLayout />;
 }
 
 // Updated EbayCallback component

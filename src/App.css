@@ -44,26 +44,31 @@ body {
   z-index: 1000;
   overflow-y: auto;
   box-shadow: 4px 0 20px rgba(0, 0, 0, 0.1);
-  padding: 12px; /* Add padding around the entire sidebar */
+  padding: 12px;
 }
 
 .sidebar.collapsed {
   width: 60px;
 }
 
-/* Sidebar Brand */
+/* Sidebar Brand - Embossed Effect */
 .sidebar-brand {
-  padding: 12px; /* Add padding inside the brand div */
+  padding: 16px;
   border-bottom: 2px solid #374151;
-  background: linear-gradient(180deg, #1f2937 0%, #111827 100%); /* Match sidebar background */
+  background: linear-gradient(145deg, #1f2937, #111827);
   display: flex;
   align-items: center;
   justify-content: center;
   position: relative;
   overflow: hidden;
   min-height: 80px;
-  border-radius: 12px; /* Add rounded corners */
-  margin-bottom: 12px; /* Add space below the brand */
+  border-radius: 12px;
+  margin-bottom: 12px;
+  /* Embossed effect with inset shadows */
+  box-shadow: 
+    inset 2px 2px 4px rgba(0, 0, 0, 0.4),
+    inset -2px -2px 4px rgba(55, 65, 81, 0.3),
+    0 1px 2px rgba(0, 0, 0, 0.2);
 }
 
 .sidebar-brand::before {
@@ -73,8 +78,9 @@ body {
   left: 0;
   right: 0;
   bottom: 0;
-  background-image: radial-gradient(circle at 20% 80%, rgba(96, 165, 250, 0.1) 0%, transparent 50%),
-                    radial-gradient(circle at 80% 20%, rgba(59, 130, 246, 0.1) 0%, transparent 50%);
+  background-image: 
+    radial-gradient(circle at 20% 80%, rgba(96, 165, 250, 0.05) 0%, transparent 50%),
+    radial-gradient(circle at 80% 20%, rgba(59, 130, 246, 0.05) 0%, transparent 50%);
   pointer-events: none;
 }
 
@@ -89,24 +95,26 @@ body {
 }
 
 .brand-logo-only {
-  width: 85%; /* Reduced from 100% to 85% to add space around it */
-  height: 85%; /* Reduced from 100% to 85% to add space around it */
+  width: 85%;
+  height: 85%;
   object-fit: contain;
   object-position: center;
-  border-radius: 8px; /* Slightly smaller border radius for the image */
+  border-radius: 8px;
   background: none;
   padding: 0;
-  box-shadow: 0 4px 16px rgba(96, 165, 250, 0.3); /* Back to blue shadow */
+  /* Subtle embossed shadow on the logo itself */
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.3));
   transition: all 0.3s ease;
   cursor: pointer;
   position: relative;
   z-index: 1;
-  animation: logoGlow 4s ease-in-out infinite;
 }
 
 .brand-logo-only:hover {
-  transform: scale(1.05);
-  box-shadow: 0 6px 24px rgba(96, 165, 250, 0.5);
+  transform: scale(1.02);
+  filter: 
+    drop-shadow(0 2px 4px rgba(0, 0, 0, 0.4))
+    drop-shadow(0 0 8px rgba(96, 165, 250, 0.3));
 }
 
 .brand-logo-only:focus-visible {
@@ -118,46 +126,17 @@ body {
 .sidebar.collapsed .sidebar-brand {
   padding: 8px;
   min-height: 64px;
-  margin-bottom: 8px; /* Smaller margin when collapsed */
+  margin-bottom: 8px;
+  /* Maintain embossed effect when collapsed */
+  box-shadow: 
+    inset 1px 1px 2px rgba(0, 0, 0, 0.4),
+    inset -1px -1px 2px rgba(55, 65, 81, 0.3),
+    0 1px 2px rgba(0, 0, 0, 0.2);
 }
 
 .sidebar.collapsed .brand-logo-only {
-  width: 80%; /* Slightly smaller when collapsed */
+  width: 80%;
   height: 80%;
-  border-radius: 6px;
-}
-
-@keyframes logoGlow {
-  0%, 100% {
-    box-shadow: 0 4px 16px rgba(96, 165, 250, 0.3);
-  }
-  50% {
-    box-shadow: 0 6px 24px rgba(96, 165, 250, 0.5);
-  }
-}
-
-/* Collapsed sidebar brand adjustments */
-.sidebar.collapsed .brand-text {
-  display: none;
-}
-
-.sidebar.collapsed .brand-icon[src] {
-  width: 28px;
-  height: 28px;
-  margin: 0 auto;
-}
-
-.sidebar.collapsed .sidebar-brand {
-  padding: 0.75rem;
-  min-height: 60px;
-}
-
-.sidebar.collapsed .brand-logo-only {
-  width: calc(100% - 0.5rem);
-  height: calc(100% - 0.5rem);
-  max-width: 44px;
-  max-height: 44px;
-  padding: 0.25rem;
   border-radius: 6px;
 }
 

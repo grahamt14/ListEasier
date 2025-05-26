@@ -1104,8 +1104,6 @@ function BatchWizard() {
     }
   };
 
-}
-
   return (
     <div className="batch-wizard-content">
       <div className="wizard-card">

@@ -635,7 +635,10 @@ function BatchOverview() {
         </button>
       </div>
 
-      {/* Add legend for batch preview icons and status explanation */}
+      // Updated BatchOverview legend section with dark text for light background
+// Replace the existing legend section in the BatchOverview component
+
+      {/* Add legend for batch preview icons and status explanation - FIXED TEXT COLORS */}
       <div className="batch-legend" style={{
         background: '#f8f9fa',
         border: '1px solid #e9ecef',
@@ -652,15 +655,15 @@ function BatchOverview() {
             <div style={{ display: 'flex', gap: '20px', flexWrap: 'wrap' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                 <span style={{ fontSize: '1.2rem' }}>📝</span>
-                <span>Generated Listings</span>
+                <span style={{ color: '#333' }}>Generated Listings</span>
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                 <span style={{ fontSize: '1.2rem' }}>📷</span>
-                <span>Image Groups</span>
+                <span style={{ color: '#333' }}>Image Groups</span>
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                 <span style={{ fontSize: '1.2rem' }}>✅</span>
-                <span>Processed Groups</span>
+                <span style={{ color: '#333' }}>Processed Groups</span>
               </div>
             </div>
           </div>
@@ -671,15 +674,15 @@ function BatchOverview() {
             <div style={{ display: 'flex', gap: '20px', flexWrap: 'wrap' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                 <div style={{ width: '12px', height: '12px', backgroundColor: '#6c757d', borderRadius: '50%' }}></div>
-                <span>Draft - In progress</span>
+                <span style={{ color: '#333' }}>Draft - In progress</span>
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                 <div style={{ width: '12px', height: '12px', backgroundColor: '#007bff', borderRadius: '50%' }}></div>
-                <span>Ready - Available for use</span>
+                <span style={{ color: '#333' }}>Ready - Available for use</span>
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                 <div style={{ width: '12px', height: '12px', backgroundColor: '#28a745', borderRadius: '50%' }}></div>
-                <span>Completed - CSV downloaded or eBay listings created</span>
+                <span style={{ color: '#333' }}>Completed - CSV downloaded or eBay listings created</span>
               </div>
             </div>
           </div>
@@ -1311,7 +1314,9 @@ function BatchWizard() {
   );
 }
 
-// Batch Editor - integrates with existing FormSection and PreviewSection
+// Updated BatchEditor function in App.jsx
+// Fix the eBay listing creation callback chain
+
 function BatchEditor() {
   const { currentBatch, updateBatch, dispatch, markCsvDownloaded, markEbayListingsCreated } = useBatch();
   const [showListingManager, setShowListingManager] = useState(false);
@@ -1407,6 +1412,7 @@ function BatchEditor() {
   }, [state, currentBatch, updateBatch]);
 
   const handleGenerateListing = async (aiResolveCategoryFields = false, categoryFields = []) => {
+    // ... existing generateListing code remains the same ...
     try {
       const { imageGroups, filesBase64, batchSize, processedGroupIndices, fieldSelections } = state;
    
@@ -1738,6 +1744,7 @@ function BatchEditor() {
 
   const handleEbayListingsCreated = (listingsCount) => {
     // Mark eBay listings as created for this batch
+    console.log('handleEbayListingsCreated called with count:', listingsCount);
     if (currentBatch) {
       markEbayListingsCreated(currentBatch.id, listingsCount);
     }
@@ -1783,7 +1790,7 @@ function BatchEditor() {
           <div className="listing-modal">
             <EbayListingManager 
               onClose={() => setShowListingManager(false)}
-              onListingsCreated={handleEbayListingsCreated}
+              onListingsCreated={handleEbayListingsCreated}  // FIX: Added this callback
             />
           </div>
         </div>

@@ -1,4 +1,4 @@
-// FormSection.jsx - Enhanced for Batch Mode
+// FormSection.jsx - Enhanced for Batch Mode with proper batch state handling
 import { useState, useRef, useEffect } from 'react';
 import { DynamoDBClient, QueryCommand, ScanCommand } from '@aws-sdk/client-dynamodb';
 import { unmarshall } from '@aws-sdk/util-dynamodb';
@@ -156,11 +156,6 @@ function FormSection({ onGenerateListing, onCategoryFieldsChange, batchMode = fa
       setCategoryFields([]);
       setAutoRotateEnabled(false);
       setAiResolveCategoryFields(false);
-      
-      // Reset to batch defaults
-      dispatch({ type: 'SET_CATEGORY', payload: currentBatch.category || '--' });
-      dispatch({ type: 'SET_SUBCATEGORY', payload: currentBatch.subCategory || '--' });
-      dispatch({ type: 'SET_PRICE', payload: currentBatch.salePrice || '' });
       
       // Clear images and groups but keep processed data
       dispatch({ type: 'SET_FILES_BASE64', payload: [] });
@@ -333,31 +328,32 @@ function FormSection({ onGenerateListing, onCategoryFieldsChange, batchMode = fa
     return () => clearInterval(interval);
   }, []);
 
-useEffect(() => {
-  if (batchMode && currentBatch && categories && Object.keys(categories).length > 0) {
-    // Set category and subcategory from batch
-    if (currentBatch.category && currentBatch.category !== '--' && categories[currentBatch.category]) {
-      // Only set if different from current to avoid loops
-      if (category !== currentBatch.category) {
-        setSelectedCategory(currentBatch.category);
-        setSubcategories(categories[currentBatch.category]);
-        dispatch({ type: 'SET_CATEGORY', payload: currentBatch.category });
+  // Initialize from batch when batch mode is active and categories are loaded
+  useEffect(() => {
+    if (batchMode && currentBatch && categories && Object.keys(categories).length > 0) {
+      // Set category and subcategory from batch
+      if (currentBatch.category && currentBatch.category !== '--' && categories[currentBatch.category]) {
+        // Only set if different from current to avoid loops
+        if (category !== currentBatch.category) {
+          setSelectedCategory(currentBatch.category);
+          setSubcategories(categories[currentBatch.category]);
+          dispatch({ type: 'SET_CATEGORY', payload: currentBatch.category });
+        }
+        
+        if (currentBatch.subCategory && 
+            currentBatch.subCategory !== '--' && 
+            categories[currentBatch.category].includes(currentBatch.subCategory) &&
+            subCategory !== currentBatch.subCategory) {
+          dispatch({ type: 'SET_SUBCATEGORY', payload: currentBatch.subCategory });
+        }
       }
       
-      if (currentBatch.subCategory && 
-          currentBatch.subCategory !== '--' && 
-          categories[currentBatch.category].includes(currentBatch.subCategory) &&
-          subCategory !== currentBatch.subCategory) {
-        dispatch({ type: 'SET_SUBCATEGORY', payload: currentBatch.subCategory });
+      // Set price from batch if not already set
+      if (currentBatch.salePrice && (!price || price === '')) {
+        dispatch({ type: 'SET_PRICE', payload: currentBatch.salePrice });
       }
     }
-    
-    // Set price from batch
-    if (currentBatch.salePrice && price !== currentBatch.salePrice) {
-      dispatch({ type: 'SET_PRICE', payload: currentBatch.salePrice });
-    }
-  }
-}, [batchMode, currentBatch, categories, category, subCategory, price, dispatch]);
+  }, [batchMode, currentBatch, categories, category, subCategory, price, dispatch]);
 
   const handleSubCategoryChange = (e) => {
     const sub = e.target.value;
@@ -439,16 +435,6 @@ useEffect(() => {
     dispatch({ type: 'SET_SUBCATEGORY', payload: '--' });
     validateSelection(cat, '--');
   };
-
-  // Synchronize selected category with global state
-  useEffect(() => {
-    if (category !== selectedCategory) {
-      setSelectedCategory(category);
-      if (categories[selectedCategory]) {
-        setSubcategories(categories[selectedCategory]);
-      }
-    }
-  }, [category, categories, selectedCategory]);
 
   const handleImageUploaderProcess = (processedImages, processedRawFiles) => {
     dispatch({ type: 'ADD_FILES_BASE64', payload: processedImages });
@@ -1120,34 +1106,34 @@ useEffect(() => {
         </div>
       )}
       
-<div className="form-group">
-  <label>Category</label>
-  {categoriesLoading ? (
-    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-      <Spinner />
-      <span>Loading categories from cache...</span>
-    </div>
-  ) : (
-    <select 
-      onChange={handleCategoryChange} 
-      value={selectedCategory}
-      // REMOVED: disabled={batchMode && currentBatch && currentBatch.category !== '--'}
-    >
-      {Object.keys(categories).map(cat => <option key={cat} value={cat}>{cat}</option>)}
-    </select>
-  )}
-</div>
+      <div className="form-group">
+        <label>Category</label>
+        {categoriesLoading ? (
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <Spinner />
+            <span>Loading categories from cache...</span>
+          </div>
+        ) : (
+          <select 
+            onChange={handleCategoryChange} 
+            value={selectedCategory}
+            disabled={batchMode && currentBatch && currentBatch.category !== '--'}
+          >
+            {Object.keys(categories).map(cat => <option key={cat} value={cat}>{cat}</option>)}
+          </select>
+        )}
+      </div>
 
-<div className="form-group">
-  <label>SubCategory</label>
-  <select 
-    onChange={handleSubCategoryChange} 
-    value={subCategory}
-    // REMOVED: disabled={batchMode && currentBatch && currentBatch.subCategory !== '--'}
-  >
-    {subcategories.map((sub, i) => <option key={i} value={sub}>{sub}</option>)}
-  </select>
-</div>
+      <div className="form-group">
+        <label>SubCategory</label>
+        <select 
+          onChange={handleSubCategoryChange} 
+          value={subCategory}
+          disabled={batchMode && currentBatch && currentBatch.subCategory !== '--'}
+        >
+          {subcategories.map((sub, i) => <option key={i} value={sub}>{sub}</option>)}
+        </select>
+      </div>
 
       <div className="form-group">
         <label>Price ($)</label>
@@ -1161,16 +1147,17 @@ useEffect(() => {
         />
       </div>
 
-<div className="form-group">
-  <label>SKU</label>
-  <input 
-    type="text" 
-    value={sku} 
-    onChange={handleSkuChange} 
-    placeholder="Enter SKU"  // Simple placeholder instead of dynamic one
-    className="form-control" 
-  />
-</div>
+      <div className="form-group">
+        <label>SKU</label>
+        <input 
+          type="text" 
+          value={sku} 
+          onChange={handleSkuChange} 
+          placeholder={batchMode && currentBatch && currentBatch.sku ? 
+            `Batch default: ${currentBatch.sku}` : "Enter SKU"} 
+          className="form-control" 
+        />
+      </div>
 
       <div className="form-group">
         <label>Category Fields</label>
@@ -1544,4 +1531,3 @@ useEffect(() => {
 }
 
 export default FormSection;
-    

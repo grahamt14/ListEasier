@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import './App.css';
 import FormSection, { getSelectedCategoryOptionsJSON } from './FormSection';
 import JSZip from 'jszip';
@@ -710,7 +710,23 @@ function BatchWizard() {
   const canProceed = () => {
     switch (currentStep) {
       case 0:
-        return batchData.name && batchData.category !== '--' && batchData.subCategory !== '--';
+        const hasName = batchData.name && batchData.name.trim().length > 0;
+        const hasCategory = batchData.category && batchData.category !== '--';
+        const hasSubCategory = batchData.subCategory && batchData.subCategory !== '--';
+        
+        // Debug logging (remove in production)
+        console.log('Validation check:', {
+          hasName,
+          hasCategory,
+          hasSubCategory,
+          batchData: {
+            name: batchData.name,
+            category: batchData.category,
+            subCategory: batchData.subCategory
+          }
+        });
+        
+        return hasName && hasCategory && hasSubCategory;
       case 1:
         return true; // Optional step
       default:
@@ -743,19 +759,27 @@ function BatchWizard() {
               <h3>General Settings</h3>
               
               <div className="form-group">
-                <label>Batch Name</label>
+                <label>Batch Name *</label>
                 <input
                   type="text"
                   value={batchData.name}
                   onChange={(e) => setBatchData({...batchData, name: e.target.value})}
-                  placeholder="Batch name"
+                  placeholder="Enter batch name"
                   className="form-control"
+                  style={{
+                    borderColor: batchData.name.trim() ? '#28a745' : '#ccc'
+                  }}
                 />
+                {!batchData.name.trim() && (
+                  <small style={{ color: '#dc3545', fontSize: '0.8rem' }}>
+                    Batch name is required
+                  </small>
+                )}
               </div>
 
               <div className="form-row">
                 <div className="form-group">
-                  <label>Category</label>
+                  <label>Category *</label>
                   {categoriesLoading ? (
                     <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                       <div className="spinner">
@@ -764,33 +788,60 @@ function BatchWizard() {
                       <span>Loading categories...</span>
                     </div>
                   ) : (
-                    <select
-                      value={batchData.category}
-                      onChange={(e) => setBatchData({
-                        ...batchData, 
-                        category: e.target.value,
-                        subCategory: '--'
-                      })}
-                      className="form-control"
-                    >
-                      {Object.keys(categories).map(cat => (
-                        <option key={cat} value={cat}>{cat}</option>
-                      ))}
-                    </select>
+                    <>
+                      <select
+                        value={batchData.category}
+                        onChange={(e) => {
+                          const newCategory = e.target.value;
+                          setBatchData({
+                            ...batchData, 
+                            category: newCategory,
+                            subCategory: '--' // Reset subcategory when category changes
+                          });
+                        }}
+                        className="form-control"
+                        style={{
+                          borderColor: batchData.category !== '--' ? '#28a745' : '#ccc'
+                        }}
+                      >
+                        {Object.keys(categories).map(cat => (
+                          <option key={cat} value={cat}>{cat}</option>
+                        ))}
+                      </select>
+                      {batchData.category === '--' && (
+                        <small style={{ color: '#dc3545', fontSize: '0.8rem' }}>
+                          Please select a category
+                        </small>
+                      )}
+                    </>
                   )}
                 </div>
                 <div className="form-group">
-                  <label>SubCategory</label>
+                  <label>SubCategory *</label>
                   <select
                     value={batchData.subCategory}
-                    onChange={(e) => setBatchData({...batchData, subCategory: e.target.value})}
+                    onChange={(e) => {
+                      const newSubCategory = e.target.value;
+                      setBatchData({
+                        ...batchData, 
+                        subCategory: newSubCategory
+                      });
+                    }}
                     className="form-control"
-                    disabled={categoriesLoading}
+                    disabled={categoriesLoading || batchData.category === '--'}
+                    style={{
+                      borderColor: batchData.subCategory !== '--' ? '#28a745' : '#ccc'
+                    }}
                   >
                     {subcategories.map(sub => (
                       <option key={sub} value={sub}>{sub}</option>
                     ))}
                   </select>
+                  {batchData.subCategory === '--' && batchData.category !== '--' && (
+                    <small style={{ color: '#dc3545', fontSize: '0.8rem' }}>
+                      Please select a subcategory
+                    </small>
+                  )}
                 </div>
               </div>
 
@@ -815,6 +866,60 @@ function BatchWizard() {
                 >
                   + Create New Template
                 </button>
+              </div>
+
+              {/* Validation Summary */}
+              <div style={{ 
+                marginTop: '1.5rem',
+                padding: '1rem',
+                backgroundColor: '#f8f9fa',
+                borderRadius: '6px',
+                border: '1px solid #e9ecef'
+              }}>
+                <h5 style={{ margin: '0 0 0.5rem 0', fontSize: '0.9rem', color: '#495057' }}>
+                  Required Fields:
+                </h5>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+                  <div style={{ 
+                    display: 'flex', 
+                    alignItems: 'center', 
+                    gap: '0.5rem',
+                    fontSize: '0.85rem'
+                  }}>
+                    <span style={{ 
+                      color: batchData.name.trim() ? '#28a745' : '#dc3545' 
+                    }}>
+                      {batchData.name.trim() ? '✓' : '○'}
+                    </span>
+                    <span>Batch Name</span>
+                  </div>
+                  <div style={{ 
+                    display: 'flex', 
+                    alignItems: 'center', 
+                    gap: '0.5rem',
+                    fontSize: '0.85rem'
+                  }}>
+                    <span style={{ 
+                      color: batchData.category !== '--' ? '#28a745' : '#dc3545' 
+                    }}>
+                      {batchData.category !== '--' ? '✓' : '○'}
+                    </span>
+                    <span>Category</span>
+                  </div>
+                  <div style={{ 
+                    display: 'flex', 
+                    alignItems: 'center', 
+                    gap: '0.5rem',
+                    fontSize: '0.85rem'
+                  }}>
+                    <span style={{ 
+                      color: batchData.subCategory !== '--' ? '#28a745' : '#dc3545' 
+                    }}>
+                      {batchData.subCategory !== '--' ? '✓' : '○'}
+                    </span>
+                    <span>SubCategory</span>
+                  </div>
+                </div>
               </div>
             </div>
           )}
@@ -981,6 +1086,10 @@ function BatchEditor() {
   const [showListingManager, setShowListingManager] = useState(false);
   const { state, dispatch: appDispatch } = useAppState();
   
+  // Use refs to prevent excessive re-renders
+  const updateTimeoutRef = useRef(null);
+  const lastUpdateRef = useRef(null);
+  
   // Initialize app state from batch data when batch changes
   useEffect(() => {
     if (currentBatch && currentBatch.appState) {
@@ -1002,7 +1111,7 @@ function BatchEditor() {
     }
   }, [currentBatch, appDispatch]);
 
-  // Save app state to batch whenever app state changes
+  // Save app state to batch with debouncing to prevent flickering
   useEffect(() => {
     if (currentBatch) {
       const updatedBatch = {
@@ -1024,8 +1133,30 @@ function BatchEditor() {
         },
         totalItems: state.responseData.filter(item => item && !item.error).length
       };
-      updateBatch(updatedBatch);
+      
+      // Only update if the data has actually changed
+      const currentDataString = JSON.stringify(updatedBatch);
+      if (lastUpdateRef.current !== currentDataString) {
+        lastUpdateRef.current = currentDataString;
+        
+        // Clear existing timeout
+        if (updateTimeoutRef.current) {
+          clearTimeout(updateTimeoutRef.current);
+        }
+        
+        // Debounce the update to prevent excessive saves
+        updateTimeoutRef.current = setTimeout(() => {
+          updateBatch(updatedBatch);
+        }, 300); // 300ms debounce
+      }
     }
+    
+    // Cleanup timeout on unmount
+    return () => {
+      if (updateTimeoutRef.current) {
+        clearTimeout(updateTimeoutRef.current);
+      }
+    };
   }, [state, currentBatch, updateBatch]);
 
   const handleGenerateListing = async (aiResolveCategoryFields = false, categoryFields = []) => {
@@ -1341,8 +1472,14 @@ function BatchEditor() {
   };
 
   const handleBackToOverview = () => {
-    dispatch({ type: 'SET_VIEW_MODE', payload: 'overview' });
+    // Clear the current batch and reset to overview mode
     dispatch({ type: 'SET_CURRENT_BATCH', payload: null });
+    dispatch({ type: 'SET_VIEW_MODE', payload: 'overview' });
+    
+    // Optional: Clear any app state that might be causing issues
+    // You can uncomment this if you want to reset the working state when going back
+    // appDispatch({ type: 'SET_FILES_BASE64', payload: [] });
+    // appDispatch({ type: 'SET_IMAGE_GROUPS', payload: [[]] });
   };
 
   if (!currentBatch) {
@@ -1393,13 +1530,40 @@ function BatchEditor() {
 
 // Main App Component
 function AppContent() {
-  const { viewMode } = useBatch();
+  const { viewMode, currentBatch, dispatch } = useBatch();
+
+  // Safety check: if we're in edit mode but have no current batch, go to overview
+  React.useEffect(() => {
+    if (viewMode === 'edit' && !currentBatch) {
+      console.log('No current batch in edit mode, redirecting to overview');
+      dispatch({ type: 'SET_VIEW_MODE', payload: 'overview' });
+    }
+  }, [viewMode, currentBatch, dispatch]);
+
+  // Debug logging (remove in production)
+  React.useEffect(() => {
+    console.log('AppContent render:', { viewMode, currentBatch: currentBatch?.name || 'none' });
+  }, [viewMode, currentBatch]);
 
   return (
     <div className="app-container">
       {viewMode === 'overview' && <BatchOverview />}
       {viewMode === 'create' && <BatchWizard />}
-      {viewMode === 'edit' && <BatchEditor />}
+      {viewMode === 'edit' && currentBatch && <BatchEditor />}
+      {viewMode === 'edit' && !currentBatch && (
+        <div style={{ 
+          display: 'flex', 
+          justifyContent: 'center', 
+          alignItems: 'center', 
+          height: '50vh',
+          flexDirection: 'column'
+        }}>
+          <div className="spinner">
+            <div className="spinner-circle"></div>
+          </div>
+          <p>Loading batch...</p>
+        </div>
+      )}
 
       <footer className="footer">
         <p>© 2025 ListEasier</p>

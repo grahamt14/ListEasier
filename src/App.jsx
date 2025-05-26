@@ -149,35 +149,55 @@ function BatchProvider({ children }) {
     return sessionId;
   };
 
-  // Compress batch data for storage (remove heavy base64 data)
   const compressBatchForStorage = (batch) => {
-    console.log('🗜️ BatchProvider: Compressing batch for storage:', batch.id);
-    const compressed = {
-      ...batch,
-      appState: {
-        ...batch.appState,
-        // Remove large arrays that can be regenerated
-        filesBase64: [],
-        rawFiles: [],
-        // Keep only essential state
-        imageGroups: batch.appState.imageGroups?.map(group => 
-          Array.isArray(group) ? { count: group.length } : group
-        ) || [[]],
-        s3ImageGroups: batch.appState.s3ImageGroups || [[]],
-        responseData: batch.appState.responseData || [],
-        groupMetadata: batch.appState.groupMetadata || [],
-        fieldSelections: batch.appState.fieldSelections || {},
-        processedGroupIndices: batch.appState.processedGroupIndices || [],
-        category: batch.appState.category,
-        subCategory: batch.appState.subCategory,
-        price: batch.appState.price,
-        sku: batch.appState.sku,
-        categoryID: batch.appState.categoryID
+  console.log('🗜️ BatchProvider: Compressing batch for storage:', batch.id);
+  const compressed = {
+    ...batch,
+    appState: {
+      ...batch.appState,
+      // DON'T remove the actual data - keep everything for proper restoration
+      filesBase64: batch.appState.filesBase64 || [],
+      rawFiles: [], // Remove heavy raw files but keep the rest
+      imageGroups: batch.appState.imageGroups || [[]],
+      s3ImageGroups: batch.appState.s3ImageGroups || [[]],
+      responseData: batch.appState.responseData || [],
+      groupMetadata: batch.appState.groupMetadata || [],
+      fieldSelections: batch.appState.fieldSelections || {},
+      processedGroupIndices: batch.appState.processedGroupIndices || [],
+      category: batch.appState.category,
+      subCategory: batch.appState.subCategory,
+      price: batch.appState.price,
+      sku: batch.appState.sku,
+      categoryID: batch.appState.categoryID,
+      // Preserve status information
+      isLoading: false,
+      isDirty: false,
+      totalChunks: batch.appState.totalChunks || 0,
+      completedChunks: batch.appState.completedChunks || 0,
+      processingGroups: batch.appState.processingGroups || [],
+      errorMessages: batch.appState.errorMessages || [],
+      imageRotations: batch.appState.imageRotations || {},
+      selectedImages: batch.appState.selectedImages || [],
+      uploadStatus: {
+        isUploading: false,
+        uploadProgress: 0,
+        uploadTotal: 0,
+        uploadCompleted: 0,
+        uploadStage: '',
+        currentFileIndex: 0
+      },
+      processingStatus: {
+        isProcessing: false,
+        processTotal: 0,
+        processCompleted: 0,
+        processStage: '',
+        currentGroup: 0
       }
-    };
-    console.log('✅ BatchProvider: Batch compressed successfully');
-    return compressed;
+    }
   };
+  console.log('✅ BatchProvider: Batch compressed successfully');
+  return compressed;
+};
   
 const loadBatchesFromDynamoDBWithScan = async () => {
   console.log('📥 BatchProvider: Starting to load batches from DynamoDB using Scan...');
@@ -186,12 +206,11 @@ const loadBatchesFromDynamoDBWithScan = async () => {
     const sessionId = getSessionId();
     console.log('🔍 BatchProvider: Using session ID for scan:', sessionId);
     
-    // FIXED: Use proper DynamoDB attribute value format
     const scanParams = {
       TableName: 'ListEasierBatches',
       FilterExpression: 'sessionId = :sessionId',
       ExpressionAttributeValues: {
-        ':sessionId': { S: sessionId } // Use proper DynamoDB format
+        ':sessionId': { S: sessionId }
       },
       Limit: 100
     };
@@ -202,7 +221,7 @@ const loadBatchesFromDynamoDBWithScan = async () => {
     console.log('🔍 BatchProvider: Created ScanCommand:', command);
     
     console.log('🚀 BatchProvider: Executing DynamoDB scan...');
-    const response = await dynamoClient.send(command); // FIXED: Use dynamoClient, not client
+    const response = await dynamoClient.send(command);
     console.log('✅ BatchProvider: DynamoDB scan successful');
     console.log('📊 BatchProvider: Scan response:', {
       itemCount: response.Items?.length || 0,
@@ -224,7 +243,7 @@ const loadBatchesFromDynamoDBWithScan = async () => {
     
     console.log('📦 BatchProvider: Filtered batches from DynamoDB:', batches);
     
-    // Process batches same as before...
+    // Process batches - FIXED: Don't expand compressed image groups incorrectly
     const expandedBatches = batches.map((batch, index) => {
       console.log(`🔄 BatchProvider: Processing batch ${index + 1}:`, batch);
       
@@ -239,13 +258,42 @@ const loadBatchesFromDynamoDBWithScan = async () => {
           ...batch.appState,
           category: String(batch.appState?.category || '--'),
           subCategory: String(batch.appState?.subCategory || '--'),
-          imageGroups: batch.appState?.imageGroups?.map(group => 
-            group && typeof group === 'object' && group.count !== undefined 
-              ? new Array(group.count).fill('') 
-              : (group || [])
-          ) || [[]],
+          // FIXED: Properly handle imageGroups - don't expand if it's already valid
+          imageGroups: batch.appState?.imageGroups || [[]],
+          s3ImageGroups: batch.appState?.s3ImageGroups || [[]],
+          responseData: batch.appState?.responseData || [],
+          groupMetadata: batch.appState?.groupMetadata || [],
+          fieldSelections: batch.appState?.fieldSelections || {},
+          processedGroupIndices: batch.appState?.processedGroupIndices || [],
           price: String(batch.appState?.price || ''),
-          sku: String(batch.appState?.sku || '')
+          sku: String(batch.appState?.sku || ''),
+          categoryID: batch.appState?.categoryID || '',
+          // Ensure other state is properly initialized
+          filesBase64: batch.appState?.filesBase64 || [],
+          rawFiles: [], // Always empty on load
+          imageRotations: batch.appState?.imageRotations || {},
+          selectedImages: [],
+          isLoading: false,
+          isDirty: false,
+          totalChunks: batch.appState?.totalChunks || 0,
+          completedChunks: batch.appState?.completedChunks || 0,
+          processingGroups: batch.appState?.processingGroups || [],
+          errorMessages: [],
+          uploadStatus: {
+            isUploading: false,
+            uploadProgress: 0,
+            uploadTotal: 0,
+            uploadCompleted: 0,
+            uploadStage: '',
+            currentFileIndex: 0
+          },
+          processingStatus: {
+            isProcessing: false,
+            processTotal: 0,
+            processCompleted: 0,
+            processStage: '',
+            currentGroup: 0
+          }
         }
       };
       
@@ -254,7 +302,10 @@ const loadBatchesFromDynamoDBWithScan = async () => {
         name: expanded.name,
         category: expanded.category,
         subCategory: expanded.subCategory,
-        status: expanded.status
+        status: expanded.status,
+        imageGroupsCount: expanded.appState?.imageGroups?.length || 0,
+        s3ImageGroupsCount: expanded.appState?.s3ImageGroups?.length || 0,
+        responseDataCount: expanded.appState?.responseData?.length || 0
       });
       
       return expanded;
@@ -278,6 +329,7 @@ const loadBatchesFromDynamoDBWithScan = async () => {
     console.log('🏁 BatchProvider: Finished loading batches');
   }
 };
+
 
   const loadBatchesFromDynamoDB = async () => {
   console.log('📥 BatchProvider: Starting to load batches from DynamoDB...');
@@ -2036,18 +2088,48 @@ function BatchEditor() {
   useEffect(() => {
     if (currentBatch && currentBatch.appState) {
       console.log('🔄 BatchEditor: Loading batch state into app state:', currentBatch.id);
+      console.log('🔍 BatchEditor: Batch appState keys:', Object.keys(currentBatch.appState));
+      console.log('🔍 BatchEditor: Image groups:', currentBatch.appState.imageGroups);
+      console.log('🔍 BatchEditor: S3 image groups:', currentBatch.appState.s3ImageGroups);
+      console.log('🔍 BatchEditor: Response data:', currentBatch.appState.responseData);
       
       // Clear current app state first
       appDispatch({ type: 'CLEAR_ALL_FOR_NEW_BATCH' });
       
-      // Then load the batch-specific state
+      // Then load the batch-specific state with CORRECT action types
       setTimeout(() => {
-        Object.entries(currentBatch.appState).forEach(([key, value]) => {
-          const actionType = `SET_${key.toUpperCase()}`;
-          console.log(`🔄 BatchEditor: Dispatching ${actionType} with:`, value);
-          appDispatch({ type: actionType, payload: value });
+        const batchState = currentBatch.appState;
+        
+        // Map appState properties to correct action types
+        const actionMappings = {
+          filesBase64: 'SET_FILES_BASE64',
+          rawFiles: 'SET_RAW_FILES', 
+          imageGroups: 'SET_IMAGE_GROUPS',
+          s3ImageGroups: 'SET_S3_IMAGE_GROUPS',
+          responseData: 'SET_RESPONSE_DATA',
+          groupMetadata: 'UPDATE_GROUP_METADATA',
+          fieldSelections: 'SET_FIELD_SELECTIONS',
+          processedGroupIndices: 'SET_PROCESSED_GROUP_INDICES',
+          imageRotations: 'SET_IMAGE_ROTATIONS',
+          selectedImages: 'SET_SELECTED_IMAGES',
+          processingGroups: 'SET_PROCESSING_GROUPS',
+          errorMessages: 'SET_ERROR_MESSAGES',
+          totalChunks: 'SET_TOTAL_CHUNKS',
+          completedChunks: 'SET_COMPLETED_CHUNKS',
+          categoryID: 'SET_CATEGORY_ID',
+          price: 'SET_PRICE',
+          sku: 'SET_SKU'
+        };
+        
+        // Dispatch each state property with the correct action type
+        Object.entries(actionMappings).forEach(([stateKey, actionType]) => {
+          if (batchState.hasOwnProperty(stateKey)) {
+            console.log(`🔄 BatchEditor: Dispatching ${actionType} with:`, batchState[stateKey]);
+            appDispatch({ type: actionType, payload: batchState[stateKey] });
+          }
         });
         
+        // Handle category and subcategory separately
         if (currentBatch.category && currentBatch.category !== '--') {
           console.log('🔄 BatchEditor: Setting category to:', currentBatch.category);
           appDispatch({ type: 'SET_CATEGORY', payload: currentBatch.category });
@@ -2056,14 +2138,18 @@ function BatchEditor() {
           console.log('🔄 BatchEditor: Setting subcategory to:', currentBatch.subCategory);
           appDispatch({ type: 'SET_SUBCATEGORY', payload: currentBatch.subCategory });
         }
-        if (currentBatch.salePrice) {
-          console.log('🔄 BatchEditor: Setting price to:', currentBatch.salePrice);
+        
+        // Set batch-level price and SKU if not already set in appState
+        if (currentBatch.salePrice && !batchState.price) {
+          console.log('🔄 BatchEditor: Setting price from batch to:', currentBatch.salePrice);
           appDispatch({ type: 'SET_PRICE', payload: currentBatch.salePrice });
         }
-        if (currentBatch.sku) {
-          console.log('🔄 BatchEditor: Setting SKU to:', currentBatch.sku);
+        if (currentBatch.sku && !batchState.sku) {
+          console.log('🔄 BatchEditor: Setting SKU from batch to:', currentBatch.sku);
           appDispatch({ type: 'SET_SKU', payload: currentBatch.sku });
         }
+        
+        console.log('✅ BatchEditor: Finished loading batch state');
       }, 100); // Small delay to ensure clear happens first
     }
   }, [currentBatch?.id, appDispatch]); // Only trigger when batch ID changes

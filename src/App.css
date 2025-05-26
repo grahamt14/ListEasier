@@ -9,7 +9,7 @@
 
 body {
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
-  background-color: #f8fafc;
+  background-color: #26aae5; /* Changed to blue background */
   color: #1f2937;
   line-height: 1.6;
 }
@@ -18,7 +18,7 @@ body {
 .app-layout {
   display: flex;
   min-height: 100vh;
-  background-color: #f8fafc;
+  background-color: #26aae5; /* Changed to blue background */
 }
 
 .app-layout.sidebar-collapsed .sidebar {
@@ -26,6 +26,12 @@ body {
 }
 
 .app-layout.sidebar-collapsed .main-content {
+  margin-left: 60px;
+}
+
+
+
+.sidebar.collapsed + .main-content {
   margin-left: 60px;
 }
 
@@ -42,23 +48,26 @@ body {
   z-index: 1000;
   overflow-y: auto;
   box-shadow: 4px 0 20px rgba(0, 0, 0, 0.1);
+  padding: 12px; /* Add padding around the entire sidebar */
 }
 
 .sidebar.collapsed {
   width: 60px;
 }
 
-/* Updated Sidebar Brand */
+/* Sidebar Brand */
 .sidebar-brand {
-  padding: 0; /* Remove all padding */
+  padding: 12px; /* Add padding inside the brand div */
   border-bottom: 2px solid #374151;
-  background: #26aae5; /* Changed to solid blue background for PNG logo */
+  background: #26aae5; /* Blue background for PNG logo */
   display: flex;
   align-items: center;
   justify-content: center;
   position: relative;
   overflow: hidden;
-  min-height: 80px; /* Keep the perfect height we established */
+  min-height: 80px;
+  border-radius: 12px; /* Add rounded corners */
+  margin-bottom: 12px; /* Add space below the brand */
 }
 
 .sidebar-brand::before {
@@ -84,14 +93,14 @@ body {
 }
 
 .brand-logo-only {
-  width: 100%; /* Fill entire width */
-  height: 100%; /* Fill entire height of the div */
-  object-fit: contain; /* Changed back to contain to show full logo without cropping */
-  object-position: center; /* Center the image */
-  border-radius: 12px; /* Rounded corners on the image itself */
-  background: none; /* Remove white background */
-  padding: 0; /* Remove padding */
-  box-shadow: 0 4px 16px rgba(38, 170, 229, 0.3); /* Updated shadow color to match background */
+  width: 85%; /* Reduced from 100% to 85% to add space around it */
+  height: 85%; /* Reduced from 100% to 85% to add space around it */
+  object-fit: contain;
+  object-position: center;
+  border-radius: 8px; /* Slightly smaller border radius for the image */
+  background: none;
+  padding: 0;
+  box-shadow: 0 4px 16px rgba(38, 170, 229, 0.3);
   transition: all 0.3s ease;
   cursor: pointer;
   position: relative;
@@ -101,7 +110,7 @@ body {
 
 .brand-logo-only:hover {
   transform: scale(1.05);
-  box-shadow: 0 6px 24px rgba(38, 170, 229, 0.5); /* Updated hover shadow color */
+  box-shadow: 0 6px 24px rgba(38, 170, 229, 0.5);
 }
 
 .brand-logo-only:focus-visible {
@@ -111,14 +120,15 @@ body {
 
 /* Collapsed sidebar brand adjustments */
 .sidebar.collapsed .sidebar-brand {
-  padding: 8px; /* Small padding when collapsed */
-  min-height: 64px; /* Reduced proportionally */
+  padding: 8px;
+  min-height: 64px;
+  margin-bottom: 8px; /* Smaller margin when collapsed */
 }
 
 .sidebar.collapsed .brand-logo-only {
-  width: calc(100% - 16px); /* Account for padding when collapsed */
-  height: calc(100% - 16px); /* Account for padding when collapsed */
-  border-radius: 8px; /* Smaller border radius when collapsed */
+  width: 80%; /* Slightly smaller when collapsed */
+  height: 80%;
+  border-radius: 6px;
 }
 
 @keyframes logoGlow {
@@ -330,7 +340,7 @@ body {
   flex: 1;
   margin-left: 260px;
   min-height: 100vh;
-  background-color: ##26aae5;
+  background-color: #26aae5; /* Changed to blue background */
   transition: margin-left 0.3s ease;
 }
 

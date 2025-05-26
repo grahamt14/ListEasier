@@ -3,13 +3,15 @@ import './App.css';
 import FormSection, { getSelectedCategoryOptionsJSON } from './FormSection';
 import JSZip from 'jszip';
 import { saveAs } from 'file-saver';
-import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
-import { DynamoDBDocumentClient, ScanCommand } from '@aws-sdk/lib-dynamodb';
+import { DynamoDBClient, QueryCommand, DeleteCommand } from '@aws-sdk/client-dynamodb';
+import { DynamoDBDocumentClient, PutCommand } from '@aws-sdk/lib-dynamodb';
 import { fromCognitoIdentityPool } from "@aws-sdk/credential-provider-cognito-identity";
 import { AppStateProvider, useAppState } from './StateContext';
 import { EbayAuthProvider, useEbayAuth } from './EbayAuthContext';
 import EbayListingManager from './EbayListingManager';
 import BatchPreviewSection from './BatchPreviewSection';
+
+
 
 // Import caching service
 import { cacheService } from './CacheService';
@@ -90,31 +92,204 @@ function batchReducer(state, action) {
   }
 }
 
+// Enhanced BatchProvider with DynamoDB storage
 function BatchProvider({ children }) {
   const [state, dispatch] = useReducer(batchReducer, initialBatchState);
+  const [isLoading, setIsLoading] = useState(false);
+  
+  // AWS Configuration
+  const REGION = "us-east-2";
+  const IDENTITY_POOL_ID = "us-east-2:f81d1240-32a8-4aff-87e8-940effdf5908";
 
-  // Load batches and templates from localStorage on mount
+  const dynamoClient = new DynamoDBClient({
+    region: REGION,
+    credentials: fromCognitoIdentityPool({
+      clientConfig: { region: REGION },
+      identityPoolId: IDENTITY_POOL_ID,
+    }),
+  });
+
+  const docClient = DynamoDBDocumentClient.from(dynamoClient);
+
+  // Load batches and templates from DynamoDB on mount
   useEffect(() => {
-    const savedBatches = localStorage.getItem('listeasier_batches');
-    const savedTemplates = localStorage.getItem('listeasier_templates');
-    
-    if (savedBatches) {
-      dispatch({ type: 'LOAD_BATCHES', payload: JSON.parse(savedBatches) });
-    }
-    
-    if (savedTemplates) {
-      dispatch({ type: 'LOAD_TEMPLATES', payload: JSON.parse(savedTemplates) });
-    }
+    loadBatchesFromDynamoDB();
+    loadTemplatesFromDynamoDB();
   }, []);
 
-  // Save to localStorage whenever batches or templates change
-  useEffect(() => {
-    localStorage.setItem('listeasier_batches', JSON.stringify(state.batches));
-  }, [state.batches]);
+  // Get or create session ID
+  const getSessionId = () => {
+    let sessionId = sessionStorage.getItem('listeasier_session_id');
+    if (!sessionId) {
+      sessionId = `session_${Date.now()}_${Math.random().toString(36).substring(2)}`;
+      sessionStorage.setItem('listeasier_session_id', sessionId);
+    }
+    return sessionId;
+  };
 
-  useEffect(() => {
-    localStorage.setItem('listeasier_templates', JSON.stringify(state.templates));
-  }, [state.templates]);
+  // Compress batch data for storage (remove heavy base64 data)
+  const compressBatchForStorage = (batch) => {
+    return {
+      ...batch,
+      appState: {
+        ...batch.appState,
+        // Remove large arrays that can be regenerated
+        filesBase64: [],
+        rawFiles: [],
+        // Keep only essential state
+        imageGroups: batch.appState.imageGroups?.map(group => 
+          Array.isArray(group) ? { count: group.length } : group
+        ) || [[]],
+        s3ImageGroups: batch.appState.s3ImageGroups || [[]],
+        responseData: batch.appState.responseData || [],
+        groupMetadata: batch.appState.groupMetadata || [],
+        fieldSelections: batch.appState.fieldSelections || {},
+        processedGroupIndices: batch.appState.processedGroupIndices || [],
+        category: batch.appState.category,
+        subCategory: batch.appState.subCategory,
+        price: batch.appState.price,
+        sku: batch.appState.sku,
+        categoryID: batch.appState.categoryID
+      }
+    };
+  };
+
+  const loadBatchesFromDynamoDB = async () => {
+    setIsLoading(true);
+    try {
+      const sessionId = getSessionId();
+      
+      const command = new QueryCommand({
+        TableName: 'ListEasierBatches',
+        KeyConditionExpression: 'sessionId = :sessionId',
+        ExpressionAttributeValues: {
+          ':sessionId': sessionId
+        },
+        ScanIndexForward: false, // Most recent first
+        Limit: 100 // Reasonable limit
+      });
+
+      const response = await docClient.send(command);
+      const batches = response.Items || [];
+      
+      // Expand compressed image groups
+      const expandedBatches = batches.map(batch => ({
+        ...batch,
+        appState: {
+          ...batch.appState,
+          imageGroups: batch.appState.imageGroups?.map(group => 
+            group && typeof group === 'object' && group.count !== undefined 
+              ? new Array(group.count).fill('') 
+              : (group || [])
+          ) || [[]]
+        }
+      }));
+      
+      dispatch({ type: 'LOAD_BATCHES', payload: expandedBatches });
+      console.log(`Loaded ${batches.length} batches from DynamoDB`);
+      
+    } catch (error) {
+      console.error('Error loading batches from DynamoDB:', error);
+      dispatch({ type: 'LOAD_BATCHES', payload: [] });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const saveBatchToDynamoDB = async (batch) => {
+    try {
+      const sessionId = getSessionId();
+      const compressedBatch = compressBatchForStorage(batch);
+      
+      const item = {
+        sessionId,
+        batchId: batch.id,
+        ...compressedBatch,
+        updatedAt: new Date().toISOString(),
+        ttl: Math.floor(Date.now() / 1000) + (90 * 24 * 60 * 60) // 90 days
+      };
+
+      const command = new PutCommand({
+        TableName: 'ListEasierBatches',
+        Item: item
+      });
+
+      await docClient.send(command);
+      return true;
+    } catch (error) {
+      console.error('Error saving batch to DynamoDB:', error);
+      return false;
+    }
+  };
+
+  const deleteBatchFromDynamoDB = async (batchId) => {
+    try {
+      const sessionId = getSessionId();
+      
+      const command = new DeleteCommand({
+        TableName: 'ListEasierBatches',
+        Key: {
+          sessionId,
+          batchId
+        }
+      });
+
+      await docClient.send(command);
+      return true;
+    } catch (error) {
+      console.error('Error deleting batch from DynamoDB:', error);
+      return false;
+    }
+  };
+
+  const loadTemplatesFromDynamoDB = async () => {
+    try {
+      const sessionId = getSessionId();
+      
+      const command = new QueryCommand({
+        TableName: 'ListEasierBatches',
+        KeyConditionExpression: 'sessionId = :sessionId AND begins_with(batchId, :prefix)',
+        ExpressionAttributeValues: {
+          ':sessionId': sessionId,
+          ':prefix': 'template_'
+        }
+      });
+
+      const response = await docClient.send(command);
+      const templates = response.Items || [];
+      
+      dispatch({ type: 'LOAD_TEMPLATES', payload: templates });
+      
+    } catch (error) {
+      console.error('Error loading templates from DynamoDB:', error);
+      dispatch({ type: 'LOAD_TEMPLATES', payload: [] });
+    }
+  };
+
+  const saveTemplateToDynamoDB = async (template) => {
+    try {
+      const sessionId = getSessionId();
+      
+      const item = {
+        sessionId,
+        batchId: `template_${template.id}`,
+        ...template,
+        updatedAt: new Date().toISOString(),
+        ttl: Math.floor(Date.now() / 1000) + (365 * 24 * 60 * 60) // 1 year
+      };
+
+      const command = new PutCommand({
+        TableName: 'ListEasierBatches',
+        Item: item
+      });
+
+      await docClient.send(command);
+      return true;
+    } catch (error) {
+      console.error('Error saving template to DynamoDB:', error);
+      return false;
+    }
+  };
 
   const createBatch = (batchData) => {
     const newBatch = {
@@ -140,7 +315,14 @@ function BatchProvider({ children }) {
         processedGroupIndices: []
       }
     };
+    
     dispatch({ type: 'CREATE_BATCH', payload: newBatch });
+    
+    // Save to DynamoDB (async, don't block UI)
+    saveBatchToDynamoDB(newBatch).catch(error => {
+      console.error('Failed to save new batch to DynamoDB:', error);
+    });
+    
     return newBatch;
   };
 
@@ -149,11 +331,22 @@ function BatchProvider({ children }) {
       ...batchData,
       updatedAt: new Date().toISOString()
     };
+    
     dispatch({ type: 'UPDATE_BATCH', payload: updatedBatch });
+    
+    // Save to DynamoDB (async, don't block UI)
+    saveBatchToDynamoDB(updatedBatch).catch(error => {
+      console.error('Failed to update batch in DynamoDB:', error);
+    });
   };
 
   const deleteBatch = (batchId) => {
     dispatch({ type: 'DELETE_BATCH', payload: batchId });
+    
+    // Delete from DynamoDB (async)
+    deleteBatchFromDynamoDB(batchId).catch(error => {
+      console.error('Failed to delete batch from DynamoDB:', error);
+    });
   };
 
   const markCsvDownloaded = (batchId) => {
@@ -208,16 +401,29 @@ function BatchProvider({ children }) {
       ...templateData,
       createdAt: new Date().toISOString()
     };
+    
     dispatch({ type: 'ADD_TEMPLATE', payload: newTemplate });
+    
+    // Save to DynamoDB (async)
+    saveTemplateToDynamoDB(newTemplate).catch(error => {
+      console.error('Failed to save template to DynamoDB:', error);
+    });
+    
     return newTemplate;
   };
 
   const updateTemplate = (templateData) => {
     dispatch({ type: 'UPDATE_TEMPLATE', payload: templateData });
+    saveTemplateToDynamoDB(templateData).catch(error => {
+      console.error('Failed to update template in DynamoDB:', error);
+    });
   };
 
   const deleteTemplate = (templateId) => {
     dispatch({ type: 'DELETE_TEMPLATE', payload: templateId });
+    deleteBatchFromDynamoDB(`template_${templateId}`).catch(error => {
+      console.error('Failed to delete template from DynamoDB:', error);
+    });
   };
 
   const contextValue = {
@@ -230,7 +436,8 @@ function BatchProvider({ children }) {
     markEbayListingsCreated,
     createTemplate,
     updateTemplate,
-    deleteTemplate
+    deleteTemplate,
+    isLoading
   };
 
   return (

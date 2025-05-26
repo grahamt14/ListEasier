@@ -946,7 +946,6 @@ function BatchOverview() {
   );
 }
 
-// Updated BatchWizard component with proper imports and fixes
 function BatchWizard() {
   const { createBatch, templates, dispatch } = useBatch();
   const [currentStep, setCurrentStep] = useState(0);
@@ -1045,6 +1044,26 @@ function BatchWizard() {
 
   const subcategories = categories[batchData.category] || ['--'];
 
+  // Auto-select first subcategory when category changes
+  useEffect(() => {
+    if (batchData.category !== '--' && categories[batchData.category]) {
+      const availableSubcategories = categories[batchData.category];
+      if (availableSubcategories.length > 0 && availableSubcategories[0] !== '--') {
+        // Auto-select the first valid subcategory
+        setBatchData(prev => ({
+          ...prev,
+          subCategory: availableSubcategories[0]
+        }));
+      } else if (availableSubcategories.length > 1) {
+        // If first is '--', select the second one
+        setBatchData(prev => ({
+          ...prev,
+          subCategory: availableSubcategories[1]
+        }));
+      }
+    }
+  }, [batchData.category, categories]);
+
   const filteredTemplates = templates.filter(template => 
     (!template.category || template.category === batchData.category) &&
     (!template.subCategory || template.subCategory === batchData.subCategory)
@@ -1084,6 +1103,8 @@ function BatchWizard() {
         return false;
     }
   };
+
+}
 
   return (
     <div className="batch-wizard-content">

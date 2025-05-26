@@ -147,38 +147,52 @@ function FormSection({ onGenerateListing, onCategoryFieldsChange, batchMode = fa
     forcePathStyle: false,
   });
 
-  // Clear all form data - modified for batch mode
-  const handleClearAllLocal = () => {
-    if (batchMode && currentBatch) {
-      // In batch mode, just clear the current working state
-      setSelectedCategory(currentBatch.category || "--");
-      setSubcategories(categories[currentBatch.category] || ["--"]);
-      setCategoryFields([]);
-      setAutoRotateEnabled(false);
-      setAiResolveCategoryFields(false);
-      
-      // Clear images and groups but keep processed data
-      dispatch({ type: 'SET_FILES_BASE64', payload: [] });
-      dispatch({ type: 'SET_RAW_FILES', payload: [] });
-      dispatch({ type: 'SET_IMAGE_ROTATIONS', payload: {} });
-    } else {
-      // Original behavior for non-batch mode
-      setSelectedCategory("--");
-      setSubcategories(categories["--"] || ["--"]);
-      setCategoryFields([]);
-      setAutoRotateEnabled(false);
-      setAiResolveCategoryFields(false);
-      
-      dispatch({ type: 'CLEAR_ALL' });
-      dispatch({ type: 'CLEAR_PROCESSED_GROUPS' });
-      dispatch({ type: 'UPDATE_GROUP_METADATA', payload: [] });
+ const handleClearAllLocal = () => {
+  if (batchMode && currentBatch) {
+    // In batch mode, clear current working state but keep batch info
+    console.log('🧹 FormSection: Clearing working state in batch mode');
+    
+    // Keep category and subcategory from batch
+    setSelectedCategory(currentBatch.category || "--");
+    setSubcategories(categories[currentBatch.category] || ["--"]);
+    setCategoryFields([]);
+    setAutoRotateEnabled(false);
+    setAiResolveCategoryFields(false);
+    
+    // Clear images and groups but keep processed data structure
+    dispatch({ type: 'SET_FILES_BASE64', payload: [] });
+    dispatch({ type: 'SET_RAW_FILES', payload: [] });
+    dispatch({ type: 'SET_IMAGE_ROTATIONS', payload: {} });
+    dispatch({ type: 'SET_SELECTED_IMAGES', payload: [] });
+    
+    // Reset image groups to initial state but keep existing processed groups
+    const newImageGroups = [...state.imageGroups];
+    // Keep processed groups, but add fresh empty group at end
+    if (newImageGroups[newImageGroups.length - 1]?.length > 0) {
+      newImageGroups.push([]);
     }
+    dispatch({ type: 'SET_IMAGE_GROUPS', payload: newImageGroups });
+    
+  } else {
+    // Original behavior for non-batch mode - clear everything
+    console.log('🧹 FormSection: Clearing all state in normal mode');
+    setSelectedCategory("--");
+    setSubcategories(categories["--"] || ["--"]);
+    setCategoryFields([]);
+    setAutoRotateEnabled(false);
+    setAiResolveCategoryFields(false);
+    
+    dispatch({ type: 'CLEAR_ALL' });
+    dispatch({ type: 'CLEAR_PROCESSED_GROUPS' });
+    dispatch({ type: 'UPDATE_GROUP_METADATA', payload: [] });
+  }
 
-    cacheService.delete(`categories_all`);
-    if (category !== '--' && subCategory !== '--') {
-      cacheService.delete(cacheService.getCategoryKey(category, subCategory));
-    }
-  };
+  // Clear cache for categories
+  cacheService.delete(`categories_all`);
+  if (category !== '--' && subCategory !== '--') {
+    cacheService.delete(cacheService.getCategoryKey(category, subCategory));
+  }
+};
 
   const handleEbayAuthSuccess = () => {
     console.log('eBay authentication successful');

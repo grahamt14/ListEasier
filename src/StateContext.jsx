@@ -63,6 +63,56 @@ const initialState = {
 function appReducer(state, action) {
   switch (action.type) {
 	  // In the appReducer function in StateContext.jsx
+	  
+	    case 'CLEAR_ALL_FOR_NEW_BATCH':
+      return {
+        ...initialState,
+        // Keep only essential non-image state
+        category: '--',
+        subCategory: '--',
+        price: '',
+        sku: '',
+        categoryID: '',
+        fieldSelections: {},
+        // Reset all image-related state
+        filesBase64: [],
+        rawFiles: [],
+        imageGroups: [[]],
+        s3ImageGroups: [[]],
+        imageRotations: {},
+        selectedImages: [],
+        responseData: [],
+        processedGroupIndices: [],
+        groupMetadata: [],
+        // Reset status
+        isLoading: false,
+        isDirty: false,
+        totalChunks: 0,
+        completedChunks: 0,
+        processingGroups: [],
+        errorMessages: [],
+        uploadStatus: {
+          isUploading: false,
+          uploadProgress: 0,
+          uploadTotal: 0,
+          uploadCompleted: 0,
+          uploadStage: '',
+          currentFileIndex: 0
+        },
+        processingStatus: {
+          isProcessing: false,
+          processTotal: 0,
+          processCompleted: 0,
+          processStage: '',
+          currentGroup: 0
+        }
+      };
+
+    case 'LOAD_BATCH_STATE':
+      return {
+        ...state,
+        ...action.payload
+      };
 case 'SET_PROCESSING_STATUS':
   return {
     ...state,

@@ -420,61 +420,84 @@ const loadTemplatesFromDynamoDB = async () => {
   }
 };
 
-  const createBatch = (batchData) => {
-    console.log('🆕 BatchProvider: Creating new batch with data:', batchData);
-    
-    const newBatch = {
-      id: String(Date.now()),
-      ...batchData,
-      // Ensure category and subCategory are strings
+ const createBatch = (batchData) => {
+  console.log('🆕 BatchProvider: Creating new batch with data:', batchData);
+  
+  const newBatch = {
+    id: String(Date.now()),
+    ...batchData,
+    // Ensure category and subCategory are strings
+    category: String(batchData.category || '--'),
+    subCategory: String(batchData.subCategory || '--'),
+    name: String(batchData.name || `Batch ${Date.now()}`),
+    status: 'draft',
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+    items: [],
+    totalItems: 0,
+    csvDownloads: 0,
+    ebayListingsCreated: 0,
+    lastCsvDownload: null,
+    lastEbayListingCreated: null,
+    salePrice: String(batchData.salePrice || ''),
+    sku: String(batchData.sku || ''),
+    appState: {
+      filesBase64: [],
+      rawFiles: [],
+      imageGroups: [[]],
+      s3ImageGroups: [[]],
+      responseData: [],
+      groupMetadata: [],
+      fieldSelections: {},
+      processedGroupIndices: [],
       category: String(batchData.category || '--'),
       subCategory: String(batchData.subCategory || '--'),
-      name: String(batchData.name || `Batch ${Date.now()}`),
-      status: 'draft',
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-      items: [],
-      totalItems: 0,
-      csvDownloads: 0,
-      ebayListingsCreated: 0,
-      lastCsvDownload: null,
-      lastEbayListingCreated: null,
-      salePrice: String(batchData.salePrice || ''),
+      price: String(batchData.salePrice || ''),
       sku: String(batchData.sku || ''),
-      appState: {
-        filesBase64: [],
-        rawFiles: [],
-        imageGroups: [[]],
-        s3ImageGroups: [[]],
-        responseData: [],
-        groupMetadata: [],
-        fieldSelections: {},
-        processedGroupIndices: [],
-        category: String(batchData.category || '--'),
-        subCategory: String(batchData.subCategory || '--'),
-        price: String(batchData.salePrice || ''),
-        sku: String(batchData.sku || '')
+      categoryID: null,
+      // Reset all status
+      isLoading: false,
+      isDirty: false,
+      totalChunks: 0,
+      completedChunks: 0,
+      processingGroups: [],
+      errorMessages: [],
+      uploadStatus: {
+        isUploading: false,
+        uploadProgress: 0,
+        uploadTotal: 0,
+        uploadCompleted: 0,
+        uploadStage: '',
+        currentFileIndex: 0
+      },
+      processingStatus: {
+        isProcessing: false,
+        processTotal: 0,
+        processCompleted: 0,
+        processStage: '',
+        currentGroup: 0
       }
-    };
-    
-    console.log('✅ BatchProvider: Created new batch object:', {
-      id: newBatch.id,
-      name: newBatch.name,
-      category: newBatch.category,
-      subCategory: newBatch.subCategory,
-      status: newBatch.status
-    });
-    
-    dispatch({ type: 'CREATE_BATCH', payload: newBatch });
-    console.log('📤 BatchProvider: Dispatched CREATE_BATCH action');
-    
-    // Save to DynamoDB (async, don't block UI)
-    saveBatchToDynamoDB(newBatch).catch(error => {
-      console.error('❌ BatchProvider: Failed to save new batch to DynamoDB:', error);
-    });
-    
-    return newBatch;
+    }
   };
+  
+  console.log('✅ BatchProvider: Created new batch object:', {
+    id: newBatch.id,
+    name: newBatch.name,
+    category: newBatch.category,
+    subCategory: newBatch.subCategory,
+    status: newBatch.status
+  });
+  
+  dispatch({ type: 'CREATE_BATCH', payload: newBatch });
+  console.log('📤 BatchProvider: Dispatched CREATE_BATCH action');
+  
+  // Save to DynamoDB (async, don't block UI)
+  saveBatchToDynamoDB(newBatch).catch(error => {
+    console.error('❌ BatchProvider: Failed to save new batch to DynamoDB:', error);
+  });
+  
+  return newBatch;
+};
 
   const saveBatchToDynamoDB = async (batch) => {
     console.log('💾 BatchProvider: Saving batch to DynamoDB:', batch.id);
@@ -1222,14 +1245,16 @@ function BatchOverview() {
     }
   };
 
-  const handleEditBatch = (batch) => {
-    console.log('✏️ BatchOverview: Editing batch:', batch);
-    if (!batch || !batch.id) {
-      console.error('❌ BatchOverview: Invalid batch for editing:', batch);
-      return;
-    }
-    dispatch({ type: 'SET_CURRENT_BATCH', payload: batch });
-  };
+const handleEditBatch = (batch) => {
+  console.log('✏️ BatchOverview: Editing batch:', batch);
+  if (!batch || !batch.id) {
+    console.error('❌ BatchOverview: Invalid batch for editing:', batch);
+    return;
+  }
+  
+  // The state clearing will happen in BatchEditor's useEffect
+  dispatch({ type: 'SET_CURRENT_BATCH', payload: batch });
+};
 
   const handleDeleteBatch = (batch) => {
     console.log('🗑️ BatchOverview: Delete requested for batch:', batch);
@@ -1514,6 +1539,7 @@ function BatchOverview() {
 
 function BatchWizard() {
   const { createBatch, templates, dispatch } = useBatch();
+  const { dispatch: appDispatch } = useAppState(); // Add this line
   const [currentStep, setCurrentStep] = useState(0);
   const [batchData, setBatchData] = useState({
     name: '',
@@ -1640,6 +1666,10 @@ useEffect(() => {
     if (currentStep < 1) {
       setCurrentStep(currentStep + 1);
     } else {
+      // Clear app state before creating new batch
+      console.log('🧹 BatchWizard: Clearing app state for new batch');
+      appDispatch({ type: 'CLEAR_ALL_FOR_NEW_BATCH' });
+      
       // Save batch and switch to edit mode - ensure all fields are strings
       const sanitizedBatchData = {
         ...batchData,
@@ -1662,7 +1692,10 @@ useEffect(() => {
     }
   };
 
-  const handleCancel = () => {
+    const handleCancel = () => {
+    // Clear app state when canceling
+    console.log('🧹 BatchWizard: Clearing app state on cancel');
+    appDispatch({ type: 'CLEAR_ALL_FOR_NEW_BATCH' });
     dispatch({ type: 'SET_VIEW_MODE', payload: 'overview' });
   };
 
@@ -2002,33 +2035,38 @@ function BatchEditor() {
   
   useEffect(() => {
     if (currentBatch && currentBatch.appState) {
-      console.log('Loading batch state into app state:', currentBatch);
+      console.log('🔄 BatchEditor: Loading batch state into app state:', currentBatch.id);
       
-      Object.entries(currentBatch.appState).forEach(([key, value]) => {
-        const actionType = `SET_${key.toUpperCase()}`;
-        console.log(`Dispatching ${actionType} with:`, value);
-        appDispatch({ type: actionType, payload: value });
-      });
+      // Clear current app state first
+      appDispatch({ type: 'CLEAR_ALL_FOR_NEW_BATCH' });
       
-      if (currentBatch.category && currentBatch.category !== '--') {
-        console.log('Setting category to:', currentBatch.category);
-        appDispatch({ type: 'SET_CATEGORY', payload: currentBatch.category });
-      }
-      if (currentBatch.subCategory && currentBatch.subCategory !== '--') {
-        console.log('Setting subcategory to:', currentBatch.subCategory);
-        appDispatch({ type: 'SET_SUBCATEGORY', payload: currentBatch.subCategory });
-      }
-      if (currentBatch.salePrice) {
-        console.log('Setting price to:', currentBatch.salePrice);
-        appDispatch({ type: 'SET_PRICE', payload: currentBatch.salePrice });
-      }
-      // Set SKU from batch if available
-      if (currentBatch.sku) {
-        console.log('Setting SKU to:', currentBatch.sku);
-        appDispatch({ type: 'SET_SKU', payload: currentBatch.sku });
-      }
+      // Then load the batch-specific state
+      setTimeout(() => {
+        Object.entries(currentBatch.appState).forEach(([key, value]) => {
+          const actionType = `SET_${key.toUpperCase()}`;
+          console.log(`🔄 BatchEditor: Dispatching ${actionType} with:`, value);
+          appDispatch({ type: actionType, payload: value });
+        });
+        
+        if (currentBatch.category && currentBatch.category !== '--') {
+          console.log('🔄 BatchEditor: Setting category to:', currentBatch.category);
+          appDispatch({ type: 'SET_CATEGORY', payload: currentBatch.category });
+        }
+        if (currentBatch.subCategory && currentBatch.subCategory !== '--') {
+          console.log('🔄 BatchEditor: Setting subcategory to:', currentBatch.subCategory);
+          appDispatch({ type: 'SET_SUBCATEGORY', payload: currentBatch.subCategory });
+        }
+        if (currentBatch.salePrice) {
+          console.log('🔄 BatchEditor: Setting price to:', currentBatch.salePrice);
+          appDispatch({ type: 'SET_PRICE', payload: currentBatch.salePrice });
+        }
+        if (currentBatch.sku) {
+          console.log('🔄 BatchEditor: Setting SKU to:', currentBatch.sku);
+          appDispatch({ type: 'SET_SKU', payload: currentBatch.sku });
+        }
+      }, 100); // Small delay to ensure clear happens first
     }
-  }, [currentBatch, appDispatch]);
+  }, [currentBatch?.id, appDispatch]); // Only trigger when batch ID changes
 
   useEffect(() => {
     if (currentBatch) {
@@ -2398,6 +2436,10 @@ function BatchEditor() {
   };
 
   const handleBackToOverview = () => {
+    // Clear app state when going back to overview
+    console.log('🧹 BatchEditor: Clearing app state on back to overview');
+    appDispatch({ type: 'CLEAR_ALL_FOR_NEW_BATCH' });
+    
     dispatch({ type: 'SET_CURRENT_BATCH', payload: null });
     dispatch({ type: 'SET_VIEW_MODE', payload: 'overview' });
   };
@@ -2477,13 +2519,27 @@ function BatchEditor() {
 // Main App Layout Component
 function AppLayout() {
   const { viewMode, currentBatch, dispatch, sidebarCollapsed } = useBatch();
+  const { dispatch: appDispatch } = useAppState();
 
   useEffect(() => {
     if (viewMode === 'edit' && !currentBatch) {
-      console.log('No current batch in edit mode, redirecting to overview');
+      console.log('🔄 AppLayout: No current batch in edit mode, redirecting to overview');
+      // Clear app state when no batch is selected
+      appDispatch({ type: 'CLEAR_ALL_FOR_NEW_BATCH' });
       dispatch({ type: 'SET_VIEW_MODE', payload: 'overview' });
     }
-  }, [viewMode, currentBatch, dispatch]);
+  }, [viewMode, currentBatch, dispatch, appDispatch]);
+
+  // Effect to clear state when switching between different view modes
+  useEffect(() => {
+    if (viewMode === 'overview') {
+      console.log('🧹 AppLayout: Clearing app state for overview mode');
+      appDispatch({ type: 'CLEAR_ALL_FOR_NEW_BATCH' });
+    } else if (viewMode === 'create') {
+      console.log('🧹 AppLayout: Clearing app state for create mode');
+      appDispatch({ type: 'CLEAR_ALL_FOR_NEW_BATCH' });
+    }
+  }, [viewMode, appDispatch]);
 
   return (
     <div className={`app-layout ${sidebarCollapsed ? 'sidebar-collapsed' : ''}`}>

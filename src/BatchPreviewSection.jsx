@@ -3,10 +3,13 @@ import JSZip from 'jszip';
 import { saveAs } from 'file-saver';
 import { useAppState } from './StateContext';
 import { useEbayAuth } from './EbayAuthContext';
+import EbayAuth from './EbayAuth';
+import EbayPolicySelector from './EbayPolicySelector';
 
 function BatchPreviewSection({ onShowListingManager, currentBatch }) {
   const { state, dispatch } = useAppState();
   const [showListingManager, setShowListingManager] = useState(false);
+  const [showEbaySection, setShowEbaySection] = useState(false);
   const { 
     isAuthenticated: ebayAuthenticated, 
     selectedPolicies, 
@@ -70,6 +73,18 @@ function BatchPreviewSection({ onShowListingManager, currentBatch }) {
 
   const handleImageLeave = () => {
     setPreviewImage(null);
+  };
+
+  const handleEbayAuthSuccess = () => {
+    console.log('eBay authentication successful');
+  };
+
+  const handleEbayAuthError = (error) => {
+    console.error('eBay authentication error:', error);
+  };
+
+  const handlePolicyChange = (policyType, policy) => {
+    console.log(`Selected ${policyType}:`, policy);
   };
 
   const updateListingFieldSelection = (listingIndex, fieldLabel, newValue) => {
@@ -728,19 +743,145 @@ Action(SiteID=US|Country=US|Currency=USD|Version=1193|CC=UTF-8),Custom label (SK
         </div>
       </div>
       
-      {/* eBay Connection Status Display */}
+      {/* Enhanced eBay Connection Status for Batch Mode */}
       {!ebayAuthenticated && hasValidListings && (
         <div style={{
-          background: '#fff3cd',
+          background: 'linear-gradient(135deg, #fff3cd 0%, #ffeaa7 100%)',
           border: '1px solid #ffc107',
-          borderRadius: '8px',
-          padding: '12px 16px',
+          borderRadius: '12px',
+          padding: '20px 24px',
           margin: '16px 0',
           color: '#856404'
         }}>
-          <strong>💡 eBay Integration Available:</strong> Connect your eBay account to create listings directly on eBay.
-          {!currentBatch && (
-            <span> Go to the form section to connect your eBay account.</span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '12px' }}>
+            <span style={{ fontSize: '1.5em' }}>🔗</span>
+            <strong style={{ fontSize: '1.1rem' }}>eBay Integration Available</strong>
+          </div>
+          <p style={{ margin: '0 0 16px 0', fontSize: '1rem', lineHeight: '1.5' }}>
+            Connect your eBay account to create listings directly on eBay. You can still generate and download CSV files without connecting.
+          </p>
+          
+          {/* Add the connection interface directly here for batch mode */}
+          <div style={{ display: 'flex', gap: '12px', alignItems: 'center', flexWrap: 'wrap' }}>
+            <button 
+              onClick={() => setShowEbaySection(!showEbaySection)}
+              style={{
+                background: 'linear-gradient(135deg, #0654ba, #4a90e2)',
+                color: 'white',
+                border: 'none',
+                padding: '12px 24px',
+                borderRadius: '8px',
+                fontSize: '1rem',
+                fontWeight: '600',
+                cursor: 'pointer',
+                transition: 'all 0.3s ease',
+                boxShadow: '0 2px 8px rgba(6, 84, 186, 0.2)'
+              }}
+              onMouseOver={(e) => {
+                e.target.style.background = 'linear-gradient(135deg, #0545a0, #3a7bc8)';
+                e.target.style.transform = 'translateY(-2px)';
+                e.target.style.boxShadow = '0 4px 12px rgba(6, 84, 186, 0.3)';
+              }}
+              onMouseOut={(e) => {
+                e.target.style.background = 'linear-gradient(135deg, #0654ba, #4a90e2)';
+                e.target.style.transform = 'translateY(0)';
+                e.target.style.boxShadow = '0 2px 8px rgba(6, 84, 186, 0.2)';
+              }}
+            >
+              {showEbaySection ? '▲ Hide eBay Setup' : '🔗 Connect eBay Account'}
+            </button>
+            
+            <span style={{ fontSize: '0.9rem', color: '#856404', fontStyle: 'italic' }}>
+              Takes just 2 minutes to set up
+            </span>
+          </div>
+          
+          {/* Expandable eBay Connection Section */}
+          {showEbaySection && (
+            <div style={{
+              marginTop: '20px',
+              padding: '20px',
+              background: 'white',
+              borderRadius: '8px',
+              border: '1px solid #e9ecef',
+              boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
+            }}>
+              <EbayAuth 
+                onAuthSuccess={handleEbayAuthSuccess}
+                onAuthError={handleEbayAuthError}
+              />
+              {ebayAuthenticated && (
+                <div style={{ marginTop: '20px' }}>
+                  <EbayPolicySelector onPolicyChange={handlePolicyChange} />
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+      
+      {/* Authenticated eBay Status */}
+      {ebayAuthenticated && hasValidListings && (
+        <div style={{
+          background: 'linear-gradient(135deg, #d4edda 0%, #c3e6cb 100%)',
+          border: '1px solid #28a745',
+          borderRadius: '12px',
+          padding: '16px 20px',
+          margin: '16px 0',
+          color: '#155724'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '8px' }}>
+            <span style={{ fontSize: '1.2em' }}>✅</span>
+            <strong style={{ fontSize: '1rem' }}>eBay Account Connected</strong>
+          </div>
+          <div style={{ fontSize: '0.9rem', lineHeight: '1.4' }}>
+            Ready to create listings directly on eBay{ebayService?.environment === 'sandbox' ? ' (sandbox mode)' : ''}.
+            {selectedPolicies.paymentPolicyId && selectedPolicies.fulfillmentPolicyId && selectedPolicies.returnPolicyId ? (
+              <div style={{ marginTop: '6px', color: '#155724' }}>
+                ✓ All business policies configured
+              </div>
+            ) : (
+              <div style={{ marginTop: '6px', color: '#856404' }}>
+                ⚠️ Some business policies missing - listings will be created as drafts
+              </div>
+            )}
+          </div>
+          
+          <button 
+            onClick={() => setShowEbaySection(!showEbaySection)}
+            style={{
+              background: 'transparent',
+              border: '1px solid #28a745',
+              color: '#28a745',
+              padding: '6px 12px',
+              borderRadius: '6px',
+              fontSize: '0.85rem',
+              cursor: 'pointer',
+              marginTop: '10px',
+              transition: 'all 0.2s ease'
+            }}
+            onMouseOver={(e) => {
+              e.target.style.background = '#28a745';
+              e.target.style.color = 'white';
+            }}
+            onMouseOut={(e) => {
+              e.target.style.background = 'transparent';
+              e.target.style.color = '#28a745';
+            }}
+          >
+            {showEbaySection ? 'Hide Settings' : 'Configure Policies'}
+          </button>
+          
+          {showEbaySection && (
+            <div style={{
+              marginTop: '15px',
+              padding: '15px',
+              background: 'white',
+              borderRadius: '6px',
+              border: '1px solid #c3e6cb'
+            }}>
+              <EbayPolicySelector onPolicyChange={handlePolicyChange} />
+            </div>
           )}
         </div>
       )}

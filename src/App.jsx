@@ -151,470 +151,483 @@ function BatchProvider({ children }) {
   };
 
   const compressBatchForStorage = (batch) => {
-  console.log('🗜️ BatchProvider: Compressing batch for storage:', batch.id);
-  const compressed = {
-    ...batch,
-    appState: {
-      ...batch.appState,
-      // DON'T remove the actual data - keep everything for proper restoration
-      filesBase64: batch.appState.filesBase64 || [],
-      rawFiles: [], // Remove heavy raw files but keep the rest
-      imageGroups: batch.appState.imageGroups || [[]],
-      s3ImageGroups: batch.appState.s3ImageGroups || [[]],
-      responseData: batch.appState.responseData || [],
-      groupMetadata: batch.appState.groupMetadata || [],
-      fieldSelections: batch.appState.fieldSelections || {},
-      processedGroupIndices: batch.appState.processedGroupIndices || [],
-      category: batch.appState.category,
-      subCategory: batch.appState.subCategory,
-      price: batch.appState.price,
-      sku: batch.appState.sku,
-      categoryID: batch.appState.categoryID,
-      // Preserve status information
-      isLoading: false,
-      isDirty: false,
-      totalChunks: batch.appState.totalChunks || 0,
-      completedChunks: batch.appState.completedChunks || 0,
-      processingGroups: batch.appState.processingGroups || [],
-      errorMessages: batch.appState.errorMessages || [],
-      imageRotations: batch.appState.imageRotations || {},
-      selectedImages: batch.appState.selectedImages || [],
-      uploadStatus: {
-        isUploading: false,
-        uploadProgress: 0,
-        uploadTotal: 0,
-        uploadCompleted: 0,
-        uploadStage: '',
-        currentFileIndex: 0
-      },
-      processingStatus: {
-        isProcessing: false,
-        processTotal: 0,
-        processCompleted: 0,
-        processStage: '',
-        currentGroup: 0
+    console.log('🗜️ BatchProvider: Compressing batch for storage:', batch.id);
+    const compressed = {
+      ...batch,
+      appState: {
+        ...batch.appState,
+        // DON'T remove the actual data - keep everything for proper restoration
+        filesBase64: batch.appState.filesBase64 || [],
+        rawFiles: [], // Remove heavy raw files but keep the rest
+        imageGroups: batch.appState.imageGroups || [[]],
+        s3ImageGroups: batch.appState.s3ImageGroups || [[]],
+        responseData: batch.appState.responseData || [],
+        groupMetadata: batch.appState.groupMetadata || [],
+        fieldSelections: batch.appState.fieldSelections || {},
+        processedGroupIndices: batch.appState.processedGroupIndices || [],
+        category: batch.appState.category,
+        subCategory: batch.appState.subCategory,
+        price: batch.appState.price,
+        sku: batch.appState.sku,
+        categoryID: batch.appState.categoryID,
+        // Preserve status information
+        isLoading: false,
+        isDirty: false,
+        totalChunks: batch.appState.totalChunks || 0,
+        completedChunks: batch.appState.completedChunks || 0,
+        processingGroups: batch.appState.processingGroups || [],
+        errorMessages: batch.appState.errorMessages || [],
+        imageRotations: batch.appState.imageRotations || {},
+        selectedImages: batch.appState.selectedImages || [],
+        uploadStatus: {
+          isUploading: false,
+          uploadProgress: 0,
+          uploadTotal: 0,
+          uploadCompleted: 0,
+          uploadStage: '',
+          currentFileIndex: 0
+        },
+        processingStatus: {
+          isProcessing: false,
+          processTotal: 0,
+          processCompleted: 0,
+          processStage: '',
+          currentGroup: 0
+        }
       }
-    }
-  };
-  console.log('✅ BatchProvider: Batch compressed successfully');
-  return compressed;
-};
-  
-const loadBatchesFromDynamoDBWithScan = async () => {
-  console.log('📥 BatchProvider: Starting to load batches from DynamoDB using Scan...');
-  setIsLoading(true);
-  try {
-    const sessionId = getSessionId();
-    console.log('🔍 BatchProvider: Using session ID for scan:', sessionId);
-    
-    const scanParams = {
-      TableName: 'ListEasierBatches',
-      FilterExpression: 'sessionId = :sessionId',
-      ExpressionAttributeValues: {
-        ':sessionId': { S: sessionId }
-      },
-      Limit: 100
     };
+    console.log('✅ BatchProvider: Batch compressed successfully');
+    return compressed;
+  };
+  
+  const loadBatchesFromDynamoDBWithScan = async () => {
+    console.log('📥 BatchProvider: Starting to load batches from DynamoDB using Scan...');
+    setIsLoading(true);
+    try {
+      const sessionId = getSessionId();
+      console.log('🔍 BatchProvider: Using session ID for scan:', sessionId);
+      
+      const scanParams = {
+        TableName: 'ListEasierBatches',
+        FilterExpression: 'sessionId = :sessionId',
+        ExpressionAttributeValues: {
+          ':sessionId': { S: sessionId }
+        },
+        Limit: 100
+      };
 
-    console.log('🔍 BatchProvider: Scan parameters:', JSON.stringify(scanParams, null, 2));
-    
-    const command = new ScanCommand(scanParams);
-    console.log('🔍 BatchProvider: Created ScanCommand:', command);
-    
-    console.log('🚀 BatchProvider: Executing DynamoDB scan...');
-    const response = await dynamoClient.send(command);
-    console.log('✅ BatchProvider: DynamoDB scan successful');
-    console.log('📊 BatchProvider: Scan response:', {
-      itemCount: response.Items?.length || 0,
-      hasItems: !!response.Items,
-      responseKeys: Object.keys(response)
-    });
-    
-    const allItems = response.Items || [];
-    console.log('📦 BatchProvider: Raw items from DynamoDB:', allItems);
-    
-    // Convert DynamoDB items to plain objects using unmarshall
-    const unmarshallItems = allItems.map(item => unmarshall(item));
-    console.log('📦 BatchProvider: Unmarshalled items:', unmarshallItems);
-    
-    // Filter out templates on the client side
-    const batches = unmarshallItems.filter(item => 
-      !item.batchId || !item.batchId.startsWith('template_')
-    );
-    
-    console.log('📦 BatchProvider: Filtered batches from DynamoDB:', batches);
-    
-    // FIXED: Process batches with proper string conversion and validation
-    const expandedBatches = batches.map((batch, index) => {
-      console.log(`🔄 BatchProvider: Processing batch ${index + 1}:`, batch);
+      console.log('🔍 BatchProvider: Scan parameters:', JSON.stringify(scanParams, null, 2));
       
-      // Helper function to safely convert to string
-      const safeStringConvert = (value, defaultValue = '--') => {
-        if (value === null || value === undefined) return defaultValue;
-        if (typeof value === 'string') return value;
-        if (typeof value === 'object') {
-          console.warn('⚠️ BatchProvider: Converting object to string:', value);
-          return defaultValue; // Don't try to stringify objects, use default
-        }
-        return String(value);
-      };
+      const command = new ScanCommand(scanParams);
+      console.log('🔍 BatchProvider: Created ScanCommand:', command);
       
-      const expanded = {
-        ...batch,
-        // FIXED: Ensure all critical fields are properly converted to strings
-        category: safeStringConvert(batch.category),
-        subCategory: safeStringConvert(batch.subCategory),
-        name: safeStringConvert(batch.name, `Batch ${batch.id || Date.now()}`),
-        status: safeStringConvert(batch.status, 'draft'),
-        id: safeStringConvert(batch.id || batch.batchId || Date.now()),
-        salePrice: safeStringConvert(batch.salePrice, ''),
-        sku: safeStringConvert(batch.sku, ''),
-        appState: {
-          ...batch.appState,
-          // FIXED: Ensure appState fields are also properly converted
-          category: safeStringConvert(batch.appState?.category || batch.category),
-          subCategory: safeStringConvert(batch.appState?.subCategory || batch.subCategory),
-          price: safeStringConvert(batch.appState?.price || batch.salePrice, ''),
-          sku: safeStringConvert(batch.appState?.sku || batch.sku, ''),
-          categoryID: batch.appState?.categoryID || '',
-          
-          // Properly handle arrays and objects
-          imageGroups: Array.isArray(batch.appState?.imageGroups) ? batch.appState.imageGroups : [[]],
-          s3ImageGroups: Array.isArray(batch.appState?.s3ImageGroups) ? batch.appState.s3ImageGroups : [[]],
-          responseData: Array.isArray(batch.appState?.responseData) ? batch.appState.responseData : [],
-          groupMetadata: Array.isArray(batch.appState?.groupMetadata) ? batch.appState.groupMetadata : [],
-          fieldSelections: (batch.appState?.fieldSelections && typeof batch.appState.fieldSelections === 'object') 
-            ? batch.appState.fieldSelections : {},
-          processedGroupIndices: Array.isArray(batch.appState?.processedGroupIndices) ? batch.appState.processedGroupIndices : [],
-          
-          // Always reset these to safe defaults
-          filesBase64: Array.isArray(batch.appState?.filesBase64) ? batch.appState.filesBase64 : [],
-          rawFiles: [], // Always empty on load
-          imageRotations: (batch.appState?.imageRotations && typeof batch.appState.imageRotations === 'object') 
-            ? batch.appState.imageRotations : {},
-          selectedImages: [],
-          isLoading: false,
-          isDirty: false,
-          totalChunks: Number(batch.appState?.totalChunks) || 0,
-          completedChunks: Number(batch.appState?.completedChunks) || 0,
-          processingGroups: Array.isArray(batch.appState?.processingGroups) ? batch.appState.processingGroups : [],
-          errorMessages: [],
-          uploadStatus: {
-            isUploading: false,
-            uploadProgress: 0,
-            uploadTotal: 0,
-            uploadCompleted: 0,
-            uploadStage: '',
-            currentFileIndex: 0
-          },
-          processingStatus: {
-            isProcessing: false,
-            processTotal: 0,
-            processCompleted: 0,
-            processStage: '',
-            currentGroup: 0
-          }
-        }
-      };
-      
-      console.log(`✅ BatchProvider: Processed batch ${index + 1}:`, {
-        id: expanded.id,
-        name: expanded.name,
-        category: expanded.category,
-        subCategory: expanded.subCategory,
-        status: expanded.status,
-        categoryType: typeof expanded.category,
-        subCategoryType: typeof expanded.subCategory,
-        imageGroupsCount: expanded.appState?.imageGroups?.length || 0,
-        s3ImageGroupsCount: expanded.appState?.s3ImageGroups?.length || 0,
-        responseDataCount: expanded.appState?.responseData?.length || 0
+      console.log('🚀 BatchProvider: Executing DynamoDB scan...');
+      const response = await dynamoClient.send(command);
+      console.log('✅ BatchProvider: DynamoDB scan successful');
+      console.log('📊 BatchProvider: Scan response:', {
+        itemCount: response.Items?.length || 0,
+        hasItems: !!response.Items,
+        responseKeys: Object.keys(response)
       });
       
-      return expanded;
-    });
-    
-    console.log('🎉 BatchProvider: All batches processed successfully:', expandedBatches.length);
-    dispatch({ type: 'LOAD_BATCHES', payload: expandedBatches });
-    console.log(`✅ BatchProvider: Loaded ${batches.length} batches from DynamoDB`);
-    
-  } catch (error) {
-    console.error('❌ BatchProvider: Error loading batches from DynamoDB:', error);
-    console.error('❌ BatchProvider: Error stack:', error.stack);
-    console.error('❌ BatchProvider: Error details:', {
-      name: error.name,
-      message: error.message,
-      code: error.code
-    });
-    dispatch({ type: 'LOAD_BATCHES', payload: [] });
-  } finally {
-    setIsLoading(false);
-    console.log('🏁 BatchProvider: Finished loading batches');
-  }
-};
-  
-  const updatedBatch = {
-    ...batchData,
-    // FIXED: Ensure critical fields are strings
-    category: safeStringConvert(batchData.category, '--'),
-    subCategory: safeStringConvert(batchData.subCategory, '--'),
-    name: safeStringConvert(batchData.name, `Batch ${batchData.id}`),
-    id: safeStringConvert(batchData.id),
-    salePrice: safeStringConvert(batchData.salePrice, ''),
-    sku: safeStringConvert(batchData.sku, ''),
-    updatedAt: new Date().toISOString(),
-    // FIXED: Ensure appState category fields are also strings
-    appState: {
-      ...batchData.appState,
-      category: safeStringConvert(batchData.appState?.category || batchData.category, '--'),
-      subCategory: safeStringConvert(batchData.appState?.subCategory || batchData.subCategory, '--'),
-      price: safeStringConvert(batchData.appState?.price || batchData.salePrice, ''),
-      sku: safeStringConvert(batchData.appState?.sku || batchData.sku, '')
+      const allItems = response.Items || [];
+      console.log('📦 BatchProvider: Raw items from DynamoDB:', allItems);
+      
+      // Convert DynamoDB items to plain objects using unmarshall
+      const unmarshallItems = allItems.map(item => unmarshall(item));
+      console.log('📦 BatchProvider: Unmarshalled items:', unmarshallItems);
+      
+      // Filter out templates on the client side
+      const batches = unmarshallItems.filter(item => 
+        !item.batchId || !item.batchId.startsWith('template_')
+      );
+      
+      console.log('📦 BatchProvider: Filtered batches from DynamoDB:', batches);
+      
+      // FIXED: Process batches with proper string conversion and validation
+      const expandedBatches = batches.map((batch, index) => {
+        console.log(`🔄 BatchProvider: Processing batch ${index + 1}:`, batch);
+        
+        // Helper function to safely convert to string
+        const safeStringConvert = (value, defaultValue = '--') => {
+          if (value === null || value === undefined) return defaultValue;
+          if (typeof value === 'string') return value;
+          if (typeof value === 'object') {
+            console.warn('⚠️ BatchProvider: Converting object to string:', value);
+            return defaultValue; // Don't try to stringify objects, use default
+          }
+          return String(value);
+        };
+        
+        const expanded = {
+          ...batch,
+          // FIXED: Ensure all critical fields are properly converted to strings
+          category: safeStringConvert(batch.category),
+          subCategory: safeStringConvert(batch.subCategory),
+          name: safeStringConvert(batch.name, `Batch ${batch.id || Date.now()}`),
+          status: safeStringConvert(batch.status, 'draft'),
+          id: safeStringConvert(batch.id || batch.batchId || Date.now()),
+          salePrice: safeStringConvert(batch.salePrice, ''),
+          sku: safeStringConvert(batch.sku, ''),
+          appState: {
+            ...batch.appState,
+            // FIXED: Ensure appState fields are also properly converted
+            category: safeStringConvert(batch.appState?.category || batch.category),
+            subCategory: safeStringConvert(batch.appState?.subCategory || batch.subCategory),
+            price: safeStringConvert(batch.appState?.price || batch.salePrice, ''),
+            sku: safeStringConvert(batch.appState?.sku || batch.sku, ''),
+            categoryID: batch.appState?.categoryID || '',
+            
+            // Properly handle arrays and objects
+            imageGroups: Array.isArray(batch.appState?.imageGroups) ? batch.appState.imageGroups : [[]],
+            s3ImageGroups: Array.isArray(batch.appState?.s3ImageGroups) ? batch.appState.s3ImageGroups : [[]],
+            responseData: Array.isArray(batch.appState?.responseData) ? batch.appState.responseData : [],
+            groupMetadata: Array.isArray(batch.appState?.groupMetadata) ? batch.appState.groupMetadata : [],
+            fieldSelections: (batch.appState?.fieldSelections && typeof batch.appState.fieldSelections === 'object') 
+              ? batch.appState.fieldSelections : {},
+            processedGroupIndices: Array.isArray(batch.appState?.processedGroupIndices) ? batch.appState.processedGroupIndices : [],
+            
+            // Always reset these to safe defaults
+            filesBase64: Array.isArray(batch.appState?.filesBase64) ? batch.appState.filesBase64 : [],
+            rawFiles: [], // Always empty on load
+            imageRotations: (batch.appState?.imageRotations && typeof batch.appState.imageRotations === 'object') 
+              ? batch.appState.imageRotations : {},
+            selectedImages: [],
+            isLoading: false,
+            isDirty: false,
+            totalChunks: Number(batch.appState?.totalChunks) || 0,
+            completedChunks: Number(batch.appState?.completedChunks) || 0,
+            processingGroups: Array.isArray(batch.appState?.processingGroups) ? batch.appState.processingGroups : [],
+            errorMessages: [],
+            uploadStatus: {
+              isUploading: false,
+              uploadProgress: 0,
+              uploadTotal: 0,
+              uploadCompleted: 0,
+              uploadStage: '',
+              currentFileIndex: 0
+            },
+            processingStatus: {
+              isProcessing: false,
+              processTotal: 0,
+              processCompleted: 0,
+              processStage: '',
+              currentGroup: 0
+            }
+          }
+        };
+        
+        console.log(`✅ BatchProvider: Processed batch ${index + 1}:`, {
+          id: expanded.id,
+          name: expanded.name,
+          category: expanded.category,
+          subCategory: expanded.subCategory,
+          status: expanded.status,
+          categoryType: typeof expanded.category,
+          subCategoryType: typeof expanded.subCategory,
+          imageGroupsCount: expanded.appState?.imageGroups?.length || 0,
+          s3ImageGroupsCount: expanded.appState?.s3ImageGroups?.length || 0,
+          responseDataCount: expanded.appState?.responseData?.length || 0
+        });
+        
+        return expanded;
+      });
+      
+      console.log('🎉 BatchProvider: All batches processed successfully:', expandedBatches.length);
+      dispatch({ type: 'LOAD_BATCHES', payload: expandedBatches });
+      console.log(`✅ BatchProvider: Loaded ${batches.length} batches from DynamoDB`);
+      
+    } catch (error) {
+      console.error('❌ BatchProvider: Error loading batches from DynamoDB:', error);
+      console.error('❌ BatchProvider: Error stack:', error.stack);
+      console.error('❌ BatchProvider: Error details:', {
+        name: error.name,
+        message: error.message,
+        code: error.code
+      });
+      dispatch({ type: 'LOAD_BATCHES', payload: [] });
+    } finally {
+      setIsLoading(false);
+      console.log('🏁 BatchProvider: Finished loading batches');
     }
   };
   
-  console.log('✅ BatchProvider: Updated batch object created with proper string conversion');
-  dispatch({ type: 'UPDATE_BATCH', payload: updatedBatch });
-  
-  // FIXED: Add throttling to prevent excessive writes - only save at most once per 5 seconds
-  const batchId = updatedBatch.id;
-  const now = Date.now();
-  
-  // Clear any existing timeout for this batch
-  if (updateTimeouts.has(batchId)) {
-    clearTimeout(updateTimeouts.get(batchId));
-  }
-  
-  // Set a new timeout to save after 5 seconds of no updates
-  const timeoutId = setTimeout(() => {
-    updateTimeouts.delete(batchId);
-    saveBatchToDynamoDB(updatedBatch).catch(error => {
-      console.error('❌ BatchProvider: Failed to update batch in DynamoDB:', error);
-    });
-  }, 5000); // 5 second delay
-  
-  updateTimeouts.set(batchId, timeoutId);
-};
-
+  const updateBatch = (batchData) => {
+    console.log('🔄 BatchProvider: Updating batch:', batchData.id);
+    
+    // Helper function to safely convert to string
+    const safeStringConvert = (value, defaultValue = '--') => {
+      if (value === null || value === undefined) return defaultValue;
+      if (typeof value === 'string') return value;
+      if (typeof value === 'object') {
+        console.warn('⚠️ BatchProvider: Converting object to string:', value);
+        return defaultValue; // Don't try to stringify objects, use default
+      }
+      return String(value);
+    };
+    
+    const updatedBatch = {
+      ...batchData,
+      // FIXED: Ensure critical fields are strings
+      category: safeStringConvert(batchData.category, '--'),
+      subCategory: safeStringConvert(batchData.subCategory, '--'),
+      name: safeStringConvert(batchData.name, `Batch ${batchData.id}`),
+      id: safeStringConvert(batchData.id),
+      salePrice: safeStringConvert(batchData.salePrice, ''),
+      sku: safeStringConvert(batchData.sku, ''),
+      updatedAt: new Date().toISOString(),
+      // FIXED: Ensure appState category fields are also strings
+      appState: {
+        ...batchData.appState,
+        category: safeStringConvert(batchData.appState?.category || batchData.category, '--'),
+        subCategory: safeStringConvert(batchData.appState?.subCategory || batchData.subCategory, '--'),
+        price: safeStringConvert(batchData.appState?.price || batchData.salePrice, ''),
+        sku: safeStringConvert(batchData.appState?.sku || batchData.sku, '')
+      }
+    };
+    
+    console.log('✅ BatchProvider: Updated batch object created with proper string conversion');
+    dispatch({ type: 'UPDATE_BATCH', payload: updatedBatch });
+    
+    // FIXED: Add throttling to prevent excessive writes - only save at most once per 5 seconds
+    const batchId = updatedBatch.id;
+    const now = Date.now();
+    
+    // Clear any existing timeout for this batch
+    if (updateTimeouts.has(batchId)) {
+      clearTimeout(updateTimeouts.get(batchId));
+    }
+    
+    // Set a new timeout to save after 5 seconds of no updates
+    const timeoutId = setTimeout(() => {
+      updateTimeouts.delete(batchId);
+      saveBatchToDynamoDB(updatedBatch).catch(error => {
+        console.error('❌ BatchProvider: Failed to update batch in DynamoDB:', error);
+      });
+    }, 5000); // 5 second delay
+    
+    updateTimeouts.set(batchId, timeoutId);
+  };
 
   const loadBatchesFromDynamoDB = async () => {
-  console.log('📥 BatchProvider: Starting to load batches from DynamoDB...');
-  setIsLoading(true);
-  try {
-    const sessionId = getSessionId();
-    console.log('🔍 BatchProvider: Using session ID for query:', sessionId);
-    
-    // Fixed: Use a simpler query approach to avoid the NOT begins_with issue
-    const queryParams = {
-      TableName: 'ListEasierBatches',
-      KeyConditionExpression: 'sessionId = :sessionId',
-      ExpressionAttributeValues: {
-        ':sessionId': sessionId
-      },
-      ScanIndexForward: false, // Most recent first
-      Limit: 100
-    };
-
-    console.log('🔍 BatchProvider: Query parameters:', JSON.stringify(queryParams, null, 2));
-    console.log('🔍 BatchProvider: Document client type:', typeof docClient);
-    console.log('🔍 BatchProvider: Document client send method:', typeof docClient.send);
-    
-    if (!docClient.send) {
-      console.error('❌ BatchProvider: Document client does not have send method!');
-      console.log('🔍 BatchProvider: Available methods:', Object.getOwnPropertyNames(docClient));
-      throw new Error('Document client not properly initialized');
-    }
-
-    const command = new QueryCommand(queryParams);
-    console.log('🔍 BatchProvider: Created QueryCommand:', command);
-    
-    console.log('🚀 BatchProvider: Executing DynamoDB query...');
-    const response = await docClient.send(command);
-    console.log('✅ BatchProvider: DynamoDB query successful');
-    console.log('📊 BatchProvider: Query response:', {
-      itemCount: response.Items?.length || 0,
-      hasItems: !!response.Items,
-      responseKeys: Object.keys(response)
-    });
-    
-    const allItems = response.Items || [];
-    console.log('📦 BatchProvider: Raw items from DynamoDB:', allItems);
-    
-    // Filter out templates on the client side
-    const batches = allItems.filter(item => 
-      !item.batchId || !item.batchId.startsWith('template_')
-    );
-    
-    console.log('📦 BatchProvider: Filtered batches from DynamoDB:', batches);
-    
-    // Expand compressed image groups and ensure proper string types
-    const expandedBatches = batches.map((batch, index) => {
-      console.log(`🔄 BatchProvider: Processing batch ${index + 1}:`, batch);
+    console.log('📥 BatchProvider: Starting to load batches from DynamoDB...');
+    setIsLoading(true);
+    try {
+      const sessionId = getSessionId();
+      console.log('🔍 BatchProvider: Using session ID for query:', sessionId);
       
-      const expanded = {
-        ...batch,
-        // Ensure category and subCategory are always strings
-        category: String(batch.category || '--'),
-        subCategory: String(batch.subCategory || '--'),
-        name: String(batch.name || `Batch ${batch.id || Date.now()}`),
-        status: String(batch.status || 'draft'),
-        id: String(batch.id || batch.batchId || Date.now()),
-        appState: {
-          ...batch.appState,
-          category: String(batch.appState?.category || '--'),
-          subCategory: String(batch.appState?.subCategory || '--'),
-          imageGroups: batch.appState?.imageGroups?.map(group => 
-            group && typeof group === 'object' && group.count !== undefined 
-              ? new Array(group.count).fill('') 
-              : (group || [])
-          ) || [[]],
-          price: String(batch.appState?.price || ''),
-          sku: String(batch.appState?.sku || '')
-        }
+      // Fixed: Use a simpler query approach to avoid the NOT begins_with issue
+      const queryParams = {
+        TableName: 'ListEasierBatches',
+        KeyConditionExpression: 'sessionId = :sessionId',
+        ExpressionAttributeValues: {
+          ':sessionId': sessionId
+        },
+        ScanIndexForward: false, // Most recent first
+        Limit: 100
       };
+
+      console.log('🔍 BatchProvider: Query parameters:', JSON.stringify(queryParams, null, 2));
+      console.log('🔍 BatchProvider: Document client type:', typeof docClient);
+      console.log('🔍 BatchProvider: Document client send method:', typeof docClient.send);
       
-      console.log(`✅ BatchProvider: Processed batch ${index + 1}:`, {
-        id: expanded.id,
-        name: expanded.name,
-        category: expanded.category,
-        subCategory: expanded.subCategory,
-        status: expanded.status
+      if (!docClient.send) {
+        console.error('❌ BatchProvider: Document client does not have send method!');
+        console.log('🔍 BatchProvider: Available methods:', Object.getOwnPropertyNames(docClient));
+        throw new Error('Document client not properly initialized');
+      }
+
+      const command = new QueryCommand(queryParams);
+      console.log('🔍 BatchProvider: Created QueryCommand:', command);
+      
+      console.log('🚀 BatchProvider: Executing DynamoDB query...');
+      const response = await docClient.send(command);
+      console.log('✅ BatchProvider: DynamoDB query successful');
+      console.log('📊 BatchProvider: Query response:', {
+        itemCount: response.Items?.length || 0,
+        hasItems: !!response.Items,
+        responseKeys: Object.keys(response)
       });
       
-      return expanded;
-    });
-    
-    console.log('🎉 BatchProvider: All batches processed successfully:', expandedBatches.length);
-    dispatch({ type: 'LOAD_BATCHES', payload: expandedBatches });
-    console.log(`✅ BatchProvider: Loaded ${batches.length} batches from DynamoDB`);
-    
-  } catch (error) {
-    console.error('❌ BatchProvider: Error loading batches from DynamoDB:', error);
-    console.error('❌ BatchProvider: Error stack:', error.stack);
-    console.error('❌ BatchProvider: Error details:', {
-      name: error.name,
-      message: error.message,
-      code: error.code
-    });
-    dispatch({ type: 'LOAD_BATCHES', payload: [] });
-  } finally {
-    setIsLoading(false);
-    console.log('🏁 BatchProvider: Finished loading batches');
-  }
-};
-
-const loadTemplatesFromDynamoDB = async () => {
-  console.log('📥 BatchProvider: Starting to load templates from DynamoDB...');
-  try {
-    const sessionId = getSessionId();
-    
-    // FIXED: Use proper DynamoDB attribute value format
-    const scanParams = {
-      TableName: 'ListEasierBatches',
-      FilterExpression: 'sessionId = :sessionId',
-      ExpressionAttributeValues: {
-        ':sessionId': { S: sessionId } // Use proper DynamoDB format
-      }
-    };
-
-    console.log('🔍 BatchProvider: Template scan parameters:', scanParams);
-    const command = new ScanCommand(scanParams);
-    const response = await dynamoClient.send(command); // FIXED: Use dynamoClient, not client
-    
-    // Convert DynamoDB items to plain objects using unmarshall
-    const allItems = (response.Items || []).map(item => unmarshall(item));
-    
-    // Filter templates on the client side
-    const templates = allItems.filter(item => 
-      item.batchId && item.batchId.startsWith('template_')
-    );
-    
-    console.log('✅ BatchProvider: Loaded templates:', templates.length);
-    dispatch({ type: 'LOAD_TEMPLATES', payload: templates });
-    
-  } catch (error) {
-    console.error('❌ BatchProvider: Error loading templates from DynamoDB:', error);
-    dispatch({ type: 'LOAD_TEMPLATES', payload: [] });
-  }
-};
-
- const createBatch = (batchData) => {
-  console.log('🆕 BatchProvider: Creating new batch with data:', batchData);
-  
-  const newBatch = {
-    id: String(Date.now()),
-    ...batchData,
-    // Ensure category and subCategory are strings
-    category: String(batchData.category || '--'),
-    subCategory: String(batchData.subCategory || '--'),
-    name: String(batchData.name || `Batch ${Date.now()}`),
-    status: 'draft',
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-    items: [],
-    totalItems: 0,
-    csvDownloads: 0,
-    ebayListingsCreated: 0,
-    lastCsvDownload: null,
-    lastEbayListingCreated: null,
-    salePrice: String(batchData.salePrice || ''),
-    sku: String(batchData.sku || ''),
-    appState: {
-      filesBase64: [],
-      rawFiles: [],
-      imageGroups: [[]],
-      s3ImageGroups: [[]],
-      responseData: [],
-      groupMetadata: [],
-      fieldSelections: {},
-      processedGroupIndices: [],
-      category: String(batchData.category || '--'),
-      subCategory: String(batchData.subCategory || '--'),
-      price: String(batchData.salePrice || ''),
-      sku: String(batchData.sku || ''),
-      categoryID: null,
-      // Reset all status
-      isLoading: false,
-      isDirty: false,
-      totalChunks: 0,
-      completedChunks: 0,
-      processingGroups: [],
-      errorMessages: [],
-      uploadStatus: {
-        isUploading: false,
-        uploadProgress: 0,
-        uploadTotal: 0,
-        uploadCompleted: 0,
-        uploadStage: '',
-        currentFileIndex: 0
-      },
-      processingStatus: {
-        isProcessing: false,
-        processTotal: 0,
-        processCompleted: 0,
-        processStage: '',
-        currentGroup: 0
-      }
+      const allItems = response.Items || [];
+      console.log('📦 BatchProvider: Raw items from DynamoDB:', allItems);
+      
+      // Filter out templates on the client side
+      const batches = allItems.filter(item => 
+        !item.batchId || !item.batchId.startsWith('template_')
+      );
+      
+      console.log('📦 BatchProvider: Filtered batches from DynamoDB:', batches);
+      
+      // Expand compressed image groups and ensure proper string types
+      const expandedBatches = batches.map((batch, index) => {
+        console.log(`🔄 BatchProvider: Processing batch ${index + 1}:`, batch);
+        
+        const expanded = {
+          ...batch,
+          // Ensure category and subCategory are always strings
+          category: String(batch.category || '--'),
+          subCategory: String(batch.subCategory || '--'),
+          name: String(batch.name || `Batch ${batch.id || Date.now()}`),
+          status: String(batch.status || 'draft'),
+          id: String(batch.id || batch.batchId || Date.now()),
+          appState: {
+            ...batch.appState,
+            category: String(batch.appState?.category || '--'),
+            subCategory: String(batch.appState?.subCategory || '--'),
+            imageGroups: batch.appState?.imageGroups?.map(group => 
+              group && typeof group === 'object' && group.count !== undefined 
+                ? new Array(group.count).fill('') 
+                : (group || [])
+            ) || [[]],
+            price: String(batch.appState?.price || ''),
+            sku: String(batch.appState?.sku || '')
+          }
+        };
+        
+        console.log(`✅ BatchProvider: Processed batch ${index + 1}:`, {
+          id: expanded.id,
+          name: expanded.name,
+          category: expanded.category,
+          subCategory: expanded.subCategory,
+          status: expanded.status
+        });
+        
+        return expanded;
+      });
+      
+      console.log('🎉 BatchProvider: All batches processed successfully:', expandedBatches.length);
+      dispatch({ type: 'LOAD_BATCHES', payload: expandedBatches });
+      console.log(`✅ BatchProvider: Loaded ${batches.length} batches from DynamoDB`);
+      
+    } catch (error) {
+      console.error('❌ BatchProvider: Error loading batches from DynamoDB:', error);
+      console.error('❌ BatchProvider: Error stack:', error.stack);
+      console.error('❌ BatchProvider: Error details:', {
+        name: error.name,
+        message: error.message,
+        code: error.code
+      });
+      dispatch({ type: 'LOAD_BATCHES', payload: [] });
+    } finally {
+      setIsLoading(false);
+      console.log('🏁 BatchProvider: Finished loading batches');
     }
   };
-  
-  console.log('✅ BatchProvider: Created new batch object:', {
-    id: newBatch.id,
-    name: newBatch.name,
-    category: newBatch.category,
-    subCategory: newBatch.subCategory,
-    status: newBatch.status
-  });
-  
-  dispatch({ type: 'CREATE_BATCH', payload: newBatch });
-  console.log('📤 BatchProvider: Dispatched CREATE_BATCH action');
-  
-  // Save to DynamoDB (async, don't block UI)
-  saveBatchToDynamoDB(newBatch).catch(error => {
-    console.error('❌ BatchProvider: Failed to save new batch to DynamoDB:', error);
-  });
-  
-  return newBatch;
-};
+
+  const loadTemplatesFromDynamoDB = async () => {
+    console.log('📥 BatchProvider: Starting to load templates from DynamoDB...');
+    try {
+      const sessionId = getSessionId();
+      
+      // FIXED: Use proper DynamoDB attribute value format
+      const scanParams = {
+        TableName: 'ListEasierBatches',
+        FilterExpression: 'sessionId = :sessionId',
+        ExpressionAttributeValues: {
+          ':sessionId': { S: sessionId } // Use proper DynamoDB format
+        }
+      };
+
+      console.log('🔍 BatchProvider: Template scan parameters:', scanParams);
+      const command = new ScanCommand(scanParams);
+      const response = await dynamoClient.send(command); // FIXED: Use dynamoClient, not client
+      
+      // Convert DynamoDB items to plain objects using unmarshall
+      const allItems = (response.Items || []).map(item => unmarshall(item));
+      
+      // Filter templates on the client side
+      const templates = allItems.filter(item => 
+        item.batchId && item.batchId.startsWith('template_')
+      );
+      
+      console.log('✅ BatchProvider: Loaded templates:', templates.length);
+      dispatch({ type: 'LOAD_TEMPLATES', payload: templates });
+      
+    } catch (error) {
+      console.error('❌ BatchProvider: Error loading templates from DynamoDB:', error);
+      dispatch({ type: 'LOAD_TEMPLATES', payload: [] });
+    }
+  };
+
+  const createBatch = (batchData) => {
+    console.log('🆕 BatchProvider: Creating new batch with data:', batchData);
+    
+    const newBatch = {
+      id: String(Date.now()),
+      ...batchData,
+      // Ensure category and subCategory are strings
+      category: String(batchData.category || '--'),
+      subCategory: String(batchData.subCategory || '--'),
+      name: String(batchData.name || `Batch ${Date.now()}`),
+      status: 'draft',
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      items: [],
+      totalItems: 0,
+      csvDownloads: 0,
+      ebayListingsCreated: 0,
+      lastCsvDownload: null,
+      lastEbayListingCreated: null,
+      salePrice: String(batchData.salePrice || ''),
+      sku: String(batchData.sku || ''),
+      appState: {
+        filesBase64: [],
+        rawFiles: [],
+        imageGroups: [[]],
+        s3ImageGroups: [[]],
+        responseData: [],
+        groupMetadata: [],
+        fieldSelections: {},
+        processedGroupIndices: [],
+        category: String(batchData.category || '--'),
+        subCategory: String(batchData.subCategory || '--'),
+        price: String(batchData.salePrice || ''),
+        sku: String(batchData.sku || ''),
+        categoryID: null,
+        // Reset all status
+        isLoading: false,
+        isDirty: false,
+        totalChunks: 0,
+        completedChunks: 0,
+        processingGroups: [],
+        errorMessages: [],
+        uploadStatus: {
+          isUploading: false,
+          uploadProgress: 0,
+          uploadTotal: 0,
+          uploadCompleted: 0,
+          uploadStage: '',
+          currentFileIndex: 0
+        },
+        processingStatus: {
+          isProcessing: false,
+          processTotal: 0,
+          processCompleted: 0,
+          processStage: '',
+          currentGroup: 0
+        }
+      }
+    };
+    
+    console.log('✅ BatchProvider: Created new batch object:', {
+      id: newBatch.id,
+      name: newBatch.name,
+      category: newBatch.category,
+      subCategory: newBatch.subCategory,
+      status: newBatch.status
+    });
+    
+    dispatch({ type: 'CREATE_BATCH', payload: newBatch });
+    console.log('📤 BatchProvider: Dispatched CREATE_BATCH action');
+    
+    // Save to DynamoDB (async, don't block UI)
+    saveBatchToDynamoDB(newBatch).catch(error => {
+      console.error('❌ BatchProvider: Failed to save new batch to DynamoDB:', error);
+    });
+    
+    return newBatch;
+  };
 
   const saveBatchToDynamoDB = async (batch) => {
     console.log('💾 BatchProvider: Saving batch to DynamoDB:', batch.id);
@@ -649,28 +662,6 @@ const loadTemplatesFromDynamoDB = async () => {
       console.error('❌ BatchProvider: Error saving batch to DynamoDB:', error);
       return false;
     }
-  };
-
-  // Rest of the methods with similar logging...
-  const updateBatch = (batchData) => {
-    console.log('🔄 BatchProvider: Updating batch:', batchData.id);
-    const updatedBatch = {
-      ...batchData,
-      // Ensure critical fields are strings
-      category: String(batchData.category || '--'),
-      subCategory: String(batchData.subCategory || '--'),
-      name: String(batchData.name || `Batch ${batchData.id}`),
-      id: String(batchData.id),
-      updatedAt: new Date().toISOString()
-    };
-    
-    console.log('✅ BatchProvider: Updated batch object created');
-    dispatch({ type: 'UPDATE_BATCH', payload: updatedBatch });
-    
-    // Save to DynamoDB (async, don't block UI)
-    saveBatchToDynamoDB(updatedBatch).catch(error => {
-      console.error('❌ BatchProvider: Failed to update batch in DynamoDB:', error);
-    });
   };
 
   const deleteBatch = (batchId) => {
@@ -846,6 +837,7 @@ const loadTemplatesFromDynamoDB = async () => {
       {children}
     </BatchContext.Provider>
   );
+}
 
 function useBatch() {
   const context = useContext(BatchContext);
@@ -1361,16 +1353,16 @@ function BatchOverview() {
     }
   };
 
-const handleEditBatch = (batch) => {
-  console.log('✏️ BatchOverview: Editing batch:', batch);
-  if (!batch || !batch.id) {
-    console.error('❌ BatchOverview: Invalid batch for editing:', batch);
-    return;
-  }
-  
-  // The state clearing will happen in BatchEditor's useEffect
-  dispatch({ type: 'SET_CURRENT_BATCH', payload: batch });
-};
+  const handleEditBatch = (batch) => {
+    console.log('✏️ BatchOverview: Editing batch:', batch);
+    if (!batch || !batch.id) {
+      console.error('❌ BatchOverview: Invalid batch for editing:', batch);
+      return;
+    }
+    
+    // The state clearing will happen in BatchEditor's useEffect
+    dispatch({ type: 'SET_CURRENT_BATCH', payload: batch });
+  };
 
   const handleDeleteBatch = (batch) => {
     console.log('🗑️ BatchOverview: Delete requested for batch:', batch);
@@ -1691,65 +1683,64 @@ function BatchWizard() {
   }, []);
 
   // Fetch categories from DynamoDB (same logic as FormSection)
- // Fetch categories from DynamoDB (same logic as FormSection)
-useEffect(() => {
-  const fetchCategories = async () => {
-    try {
-      setCategoriesLoading(true);
-      
-      const cacheKey = 'categories_all';
-      const cachedCategories = cacheService.get(cacheKey);
-      
-      if (cachedCategories) {
-        setCategories(cachedCategories);
-        setCategoriesLoading(false);
-        return;
-      }
-
-      const scanCommand = new ScanCommand({
-        TableName: 'ListCategory',
-      });
-
-      const response = await dynamoClient.send(scanCommand); // Use dynamoClient, not docClient
-      const categoryData = {};
-      
-      // FIXED: Properly unmarshall DynamoDB items
-      const items = response.Items?.map(item => unmarshall(item)) || [];
-      
-      items.forEach(item => {
-        const category = item.Category;
-        const subcategory = item.SubCategory;
-        if (!categoryData[category]) {
-          categoryData[category] = [];
+  useEffect(() => {
+    const fetchCategories = async () => {
+      try {
+        setCategoriesLoading(true);
+        
+        const cacheKey = 'categories_all';
+        const cachedCategories = cacheService.get(cacheKey);
+        
+        if (cachedCategories) {
+          setCategories(cachedCategories);
+          setCategoriesLoading(false);
+          return;
         }
-        categoryData[category].push(subcategory);
-      });
-      categoryData['--'] = ['--'];
-      
-      cacheService.set(cacheKey, categoryData, null, 'categories');
-      
-      setCategories(categoryData);
-    } catch (err) {
-      console.error('Error fetching categories:', err);
-      const fallbackData = cacheService.get('categories_all');
-      if (fallbackData) {
-        setCategories(fallbackData);
-      } else {
-        // Fallback categories if DynamoDB fails
-        setCategories({
-          '--': ['--'],
-          'Electronics': ['Cell Phones', 'Computers', 'Gaming'],
-          'Collectibles': ['Sports Cards', 'Coins', 'Comics'],
-          'Clothing': ['Men', 'Women', 'Children']
-        });
-      }
-    } finally {
-      setCategoriesLoading(false);
-    }
-  };
 
-  fetchCategories();
-}, [dynamoClient]); // Add dynamoClient as dependency
+        const scanCommand = new ScanCommand({
+          TableName: 'ListCategory',
+        });
+
+        const response = await dynamoClient.send(scanCommand); // Use dynamoClient, not docClient
+        const categoryData = {};
+        
+        // FIXED: Properly unmarshall DynamoDB items
+        const items = response.Items?.map(item => unmarshall(item)) || [];
+        
+        items.forEach(item => {
+          const category = item.Category;
+          const subcategory = item.SubCategory;
+          if (!categoryData[category]) {
+            categoryData[category] = [];
+          }
+          categoryData[category].push(subcategory);
+        });
+        categoryData['--'] = ['--'];
+        
+        cacheService.set(cacheKey, categoryData, null, 'categories');
+        
+        setCategories(categoryData);
+      } catch (err) {
+        console.error('Error fetching categories:', err);
+        const fallbackData = cacheService.get('categories_all');
+        if (fallbackData) {
+          setCategories(fallbackData);
+        } else {
+          // Fallback categories if DynamoDB fails
+          setCategories({
+            '--': ['--'],
+            'Electronics': ['Cell Phones', 'Computers', 'Gaming'],
+            'Collectibles': ['Sports Cards', 'Coins', 'Comics'],
+            'Clothing': ['Men', 'Women', 'Children']
+          });
+        }
+      } finally {
+        setCategoriesLoading(false);
+      }
+    };
+
+    fetchCategories();
+  }, [dynamoClient]); // Add dynamoClient as dependency
 
   const subcategories = categories[batchData.category] || ['--'];
 
@@ -1808,7 +1799,7 @@ useEffect(() => {
     }
   };
 
-    const handleCancel = () => {
+  const handleCancel = () => {
     // Clear app state when canceling
     console.log('🧹 BatchWizard: Clearing app state on cancel');
     appDispatch({ type: 'CLEAR_ALL_FOR_NEW_BATCH' });
@@ -2740,6 +2731,35 @@ function BatchEditor() {
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+// App Layout Component
+function AppLayout() {
+  const { viewMode, currentBatch } = useBatch();
+
+  const renderMainContent = () => {
+    switch (viewMode) {
+      case 'create':
+        return <BatchWizard />;
+      case 'edit':
+        return currentBatch ? <BatchEditor /> : <BatchOverview />;
+      case 'overview':
+      default:
+        return <BatchOverview />;
+    }
+  };
+
+  return (
+    <div className="app-layout">
+      <Sidebar />
+      <div className="main-content">
+        <MainHeader />
+        <div className="content-area">
+          {renderMainContent()}
+        </div>
+      </div>
     </div>
   );
 }

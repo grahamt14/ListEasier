@@ -155,176 +155,179 @@ function BatchProvider({ children }) {
   };
 
   const loadBatchesFromDynamoDB = async () => {
-    setIsLoading(true);
-    try {
-      const sessionId = getSessionId();
-      
-      const command = new QueryCommand({
-        TableName: 'ListEasierBatches',
-        KeyConditionExpression: 'sessionId = :sessionId',
-        ExpressionAttributeValues: {
-          ':sessionId': sessionId
-        },
-        ScanIndexForward: false, // Most recent first
-        Limit: 100 // Reasonable limit
-      });
-
-      const response = await docClient.send(command);
-      const batches = response.Items || [];
-      
-      // Expand compressed image groups
-      const expandedBatches = batches.map(batch => ({
-        ...batch,
-        appState: {
-          ...batch.appState,
-          imageGroups: batch.appState.imageGroups?.map(group => 
-            group && typeof group === 'object' && group.count !== undefined 
-              ? new Array(group.count).fill('') 
-              : (group || [])
-          ) || [[]]
-        }
-      }));
-      
-      dispatch({ type: 'LOAD_BATCHES', payload: expandedBatches });
-      console.log(`Loaded ${batches.length} batches from DynamoDB`);
-      
-    } catch (error) {
-      console.error('Error loading batches from DynamoDB:', error);
-      dispatch({ type: 'LOAD_BATCHES', payload: [] });
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const saveBatchToDynamoDB = async (batch) => {
-    try {
-      const sessionId = getSessionId();
-      const compressedBatch = compressBatchForStorage(batch);
-      
-      const item = {
-        sessionId,
-        batchId: batch.id,
-        ...compressedBatch,
-        updatedAt: new Date().toISOString(),
-        ttl: Math.floor(Date.now() / 1000) + (90 * 24 * 60 * 60) // 90 days
-      };
-
-      const command = new PutCommand({
-        TableName: 'ListEasierBatches',
-        Item: item
-      });
-
-      await docClient.send(command);
-      return true;
-    } catch (error) {
-      console.error('Error saving batch to DynamoDB:', error);
-      return false;
-    }
-  };
-
-  const deleteBatchFromDynamoDB = async (batchId) => {
-    try {
-      const sessionId = getSessionId();
-      
-      const command = new DeleteCommand({
-        TableName: 'ListEasierBatches',
-        Key: {
-          sessionId,
-          batchId
-        }
-      });
-
-      await docClient.send(command);
-      return true;
-    } catch (error) {
-      console.error('Error deleting batch from DynamoDB:', error);
-      return false;
-    }
-  };
-
-  const loadTemplatesFromDynamoDB = async () => {
-    try {
-      const sessionId = getSessionId();
-      
-      const command = new QueryCommand({
-        TableName: 'ListEasierBatches',
-        KeyConditionExpression: 'sessionId = :sessionId AND begins_with(batchId, :prefix)',
-        ExpressionAttributeValues: {
-          ':sessionId': sessionId,
-          ':prefix': 'template_'
-        }
-      });
-
-      const response = await docClient.send(command);
-      const templates = response.Items || [];
-      
-      dispatch({ type: 'LOAD_TEMPLATES', payload: templates });
-      
-    } catch (error) {
-      console.error('Error loading templates from DynamoDB:', error);
-      dispatch({ type: 'LOAD_TEMPLATES', payload: [] });
-    }
-  };
-
-  const saveTemplateToDynamoDB = async (template) => {
-    try {
-      const sessionId = getSessionId();
-      
-      const item = {
-        sessionId,
-        batchId: `template_${template.id}`,
-        ...template,
-        updatedAt: new Date().toISOString(),
-        ttl: Math.floor(Date.now() / 1000) + (365 * 24 * 60 * 60) // 1 year
-      };
-
-      const command = new PutCommand({
-        TableName: 'ListEasierBatches',
-        Item: item
-      });
-
-      await docClient.send(command);
-      return true;
-    } catch (error) {
-      console.error('Error saving template to DynamoDB:', error);
-      return false;
-    }
-  };
-
-  const createBatch = (batchData) => {
-    const newBatch = {
-      id: Date.now().toString(),
-      ...batchData,
-      status: 'draft',
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-      items: [],
-      totalItems: 0,
-      csvDownloads: 0,
-      ebayListingsCreated: 0,
-      lastCsvDownload: null,
-      lastEbayListingCreated: null,
-      appState: {
-        filesBase64: [],
-        rawFiles: [],
-        imageGroups: [[]],
-        s3ImageGroups: [[]],
-        responseData: [],
-        groupMetadata: [],
-        fieldSelections: {},
-        processedGroupIndices: []
-      }
-    };
+  setIsLoading(true);
+  try {
+    const sessionId = getSessionId();
     
-    dispatch({ type: 'CREATE_BATCH', payload: newBatch });
-    
-    // Save to DynamoDB (async, don't block UI)
-    saveBatchToDynamoDB(newBatch).catch(error => {
-      console.error('Failed to save new batch to DynamoDB:', error);
+    // Use docClient.query instead of QueryCommand
+    const response = await docClient.query({
+      TableName: 'ListEasierBatches',
+      KeyConditionExpression: 'sessionId = :sessionId AND NOT begins_with(batchId, :templatePrefix)',
+      ExpressionAttributeValues: {
+        ':sessionId': sessionId,
+        ':templatePrefix': 'template_'
+      },
+      ScanIndexForward: false, // Most recent first
+      Limit: 100
     });
+
+    const batches = response.Items || [];
     
-    return newBatch;
+    // Expand compressed image groups
+    const expandedBatches = batches.map(batch => ({
+      ...batch,
+      appState: {
+        ...batch.appState,
+        imageGroups: batch.appState?.imageGroups?.map(group => 
+          group && typeof group === 'object' && group.count !== undefined 
+            ? new Array(group.count).fill('') 
+            : (group || [])
+        ) || [[]]
+      }
+    }));
+    
+    dispatch({ type: 'LOAD_BATCHES', payload: expandedBatches });
+    console.log(`Loaded ${batches.length} batches from DynamoDB`);
+    
+  } catch (error) {
+    console.error('Error loading batches from DynamoDB:', error);
+    dispatch({ type: 'LOAD_BATCHES', payload: [] });
+  } finally {
+    setIsLoading(false);
+  }
+};
+
+const loadTemplatesFromDynamoDB = async () => {
+  try {
+    const sessionId = getSessionId();
+    
+    // Use docClient.query instead of QueryCommand
+    const response = await docClient.query({
+      TableName: 'ListEasierBatches',
+      KeyConditionExpression: 'sessionId = :sessionId AND begins_with(batchId, :prefix)',
+      ExpressionAttributeValues: {
+        ':sessionId': sessionId,
+        ':prefix': 'template_'
+      }
+    });
+
+    const templates = response.Items || [];
+    dispatch({ type: 'LOAD_TEMPLATES', payload: templates });
+    
+  } catch (error) {
+    console.error('Error loading templates from DynamoDB:', error);
+    dispatch({ type: 'LOAD_TEMPLATES', payload: [] });
+  }
+};
+
+const saveBatchToDynamoDB = async (batch) => {
+  try {
+    const sessionId = getSessionId();
+    const compressedBatch = compressBatchForStorage(batch);
+    
+    const item = {
+      sessionId,
+      batchId: batch.id,
+      ...compressedBatch,
+      updatedAt: new Date().toISOString(),
+      ttl: Math.floor(Date.now() / 1000) + (90 * 24 * 60 * 60) // 90 days
+    };
+
+    // Use docClient.put instead of PutCommand
+    await docClient.put({
+      TableName: 'ListEasierBatches',
+      Item: item
+    });
+
+    return true;
+  } catch (error) {
+    console.error('Error saving batch to DynamoDB:', error);
+    return false;
+  }
+};
+
+const deleteBatchFromDynamoDB = async (batchId) => {
+  try {
+    const sessionId = getSessionId();
+    
+    // Use docClient.delete instead of DeleteCommand
+    await docClient.delete({
+      TableName: 'ListEasierBatches',
+      Key: {
+        sessionId,
+        batchId
+      }
+    });
+
+    return true;
+  } catch (error) {
+    console.error('Error deleting batch from DynamoDB:', error);
+    return false;
+  }
+};
+
+const saveTemplateToDynamoDB = async (template) => {
+  try {
+    const sessionId = getSessionId();
+    
+    const item = {
+      sessionId,
+      batchId: `template_${template.id}`,
+      ...template,
+      updatedAt: new Date().toISOString(),
+      ttl: Math.floor(Date.now() / 1000) + (365 * 24 * 60 * 60) // 1 year
+    };
+
+    // Use docClient.put instead of PutCommand
+    await docClient.put({
+      TableName: 'ListEasierBatches',
+      Item: item
+    });
+
+    return true;
+  } catch (error) {
+    console.error('Error saving template to DynamoDB:', error);
+    return false;
+  }
+};
+
+const createBatch = (batchData) => {
+  const newBatch = {
+    id: Date.now().toString(),
+    ...batchData,
+    // Ensure category and subCategory are strings
+    category: typeof batchData.category === 'string' ? batchData.category : '--',
+    subCategory: typeof batchData.subCategory === 'string' ? batchData.subCategory : '--',
+    status: 'draft',
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+    items: [],
+    totalItems: 0,
+    csvDownloads: 0,
+    ebayListingsCreated: 0,
+    lastCsvDownload: null,
+    lastEbayListingCreated: null,
+    appState: {
+      filesBase64: [],
+      rawFiles: [],
+      imageGroups: [[]],
+      s3ImageGroups: [[]],
+      responseData: [],
+      groupMetadata: [],
+      fieldSelections: {},
+      processedGroupIndices: []
+    }
   };
+  
+  dispatch({ type: 'CREATE_BATCH', payload: newBatch });
+  
+  // Save to DynamoDB (async, don't block UI)
+  saveBatchToDynamoDB(newBatch).catch(error => {
+    console.error('Failed to save new batch to DynamoDB:', error);
+  });
+  
+  return newBatch;
+};
 
   const updateBatch = (batchData) => {
     const updatedBatch = {
@@ -1070,9 +1073,10 @@ function BatchOverview() {
                       <div style={{ fontWeight: '500', marginBottom: '4px' }}>
                         {batch.name}
                       </div>
-                      <div style={{ fontSize: '0.85rem', color: '#666' }}>
-                        {batch.category} / {batch.subCategory}
-                      </div>
+                     // In the table row where you display category info
+<div style={{ fontSize: '0.85rem', color: '#666' }}>
+  {typeof batch.category === 'string' ? batch.category : 'No Category'} / {typeof batch.subCategory === 'string' ? batch.subCategory : 'No SubCategory'}
+</div>
                       {batch.status === 'completed' && (
                         <div style={{ fontSize: '0.75rem', color: '#28a745', marginTop: '2px' }}>
                           {batch.csvDownloads > 0 && `${batch.csvDownloads} CSV download${batch.csvDownloads > 1 ? 's' : ''}`}

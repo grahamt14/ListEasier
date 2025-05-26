@@ -583,7 +583,7 @@ function BatchOverview() {
   );
 }
 
-// Updated BatchWizard component with proper imports
+// Updated BatchWizard component with proper imports and fixes
 function BatchWizard() {
   const { createBatch, templates, dispatch } = useBatch();
   const [currentStep, setCurrentStep] = useState(0);
@@ -868,7 +868,7 @@ function BatchWizard() {
                 </button>
               </div>
 
-              {/* Validation Summary */}
+              {/* Validation Summary with fixed text color */}
               <div style={{ 
                 marginTop: '1.5rem',
                 padding: '1rem',
@@ -891,7 +891,7 @@ function BatchWizard() {
                     }}>
                       {batchData.name.trim() ? '✓' : '○'}
                     </span>
-                    <span>Batch Name</span>
+                    <span style={{ color: '#333' }}>Batch Name</span>
                   </div>
                   <div style={{ 
                     display: 'flex', 
@@ -904,7 +904,7 @@ function BatchWizard() {
                     }}>
                       {batchData.category !== '--' ? '✓' : '○'}
                     </span>
-                    <span>Category</span>
+                    <span style={{ color: '#333' }}>Category</span>
                   </div>
                   <div style={{ 
                     display: 'flex', 
@@ -917,7 +917,7 @@ function BatchWizard() {
                     }}>
                       {batchData.subCategory !== '--' ? '✓' : '○'}
                     </span>
-                    <span>SubCategory</span>
+                    <span style={{ color: '#333' }}>SubCategory</span>
                   </div>
                 </div>
               </div>
@@ -954,7 +954,8 @@ function BatchWizard() {
                 </div>
               </div>
 
-              <div className="form-row">
+              {/* Fixed form row for price inputs */}
+              <div className="form-row price-row">
                 <div className="form-group">
                   <label>Purchase Price</label>
                   <div className="input-group">
@@ -966,6 +967,7 @@ function BatchWizard() {
                       onChange={(e) => setBatchData({...batchData, purchasePrice: e.target.value})}
                       placeholder="0.00"
                       className="form-control"
+                      style={{ paddingLeft: '2rem' }}
                     />
                   </div>
                 </div>
@@ -980,6 +982,7 @@ function BatchWizard() {
                       onChange={(e) => setBatchData({...batchData, salePrice: e.target.value})}
                       placeholder="0.00"
                       className="form-control"
+                      style={{ paddingLeft: '2rem' }}
                     />
                   </div>
                 </div>
@@ -1093,19 +1096,26 @@ function BatchEditor() {
   // Initialize app state from batch data when batch changes
   useEffect(() => {
     if (currentBatch && currentBatch.appState) {
+      console.log('Loading batch state into app state:', currentBatch);
+      
       // Load batch state into app state
       Object.entries(currentBatch.appState).forEach(([key, value]) => {
-        appDispatch({ type: `SET_${key.toUpperCase()}`, payload: value });
+        const actionType = `SET_${key.toUpperCase()}`;
+        console.log(`Dispatching ${actionType} with:`, value);
+        appDispatch({ type: actionType, payload: value });
       });
       
-      // Set category and form data
-      if (currentBatch.category) {
+      // Set category and form data - Fixed to properly set both category and subcategory
+      if (currentBatch.category && currentBatch.category !== '--') {
+        console.log('Setting category to:', currentBatch.category);
         appDispatch({ type: 'SET_CATEGORY', payload: currentBatch.category });
       }
-      if (currentBatch.subCategory) {
+      if (currentBatch.subCategory && currentBatch.subCategory !== '--') {
+        console.log('Setting subcategory to:', currentBatch.subCategory);
         appDispatch({ type: 'SET_SUBCATEGORY', payload: currentBatch.subCategory });
       }
       if (currentBatch.salePrice) {
+        console.log('Setting price to:', currentBatch.salePrice);
         appDispatch({ type: 'SET_PRICE', payload: currentBatch.salePrice });
       }
     }

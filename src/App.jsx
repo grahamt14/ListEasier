@@ -4,11 +4,15 @@ import FormSection, { getSelectedCategoryOptionsJSON } from './FormSection';
 import JSZip from 'jszip';
 import { saveAs } from 'file-saver';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
+import { DynamoDBDocumentClient, ScanCommand } from '@aws-sdk/lib-dynamodb';
 import { fromCognitoIdentityPool } from "@aws-sdk/credential-provider-cognito-identity";
 import { AppStateProvider, useAppState } from './StateContext';
 import { EbayAuthProvider, useEbayAuth } from './EbayAuthContext';
 import EbayListingManager from './EbayListingManager';
 import BatchPreviewSection from './BatchPreviewSection';
+
+// Import caching service
+import { cacheService } from './CacheService';
 
 // Batch Context for managing batches and templates
 import React, { createContext, useContext, useReducer } from 'react';
@@ -41,6 +45,14 @@ function batchReducer(state, action) {
           batch.id === action.payload.id ? action.payload : batch
         ),
         currentBatch: action.payload
+      };
+    case 'DELETE_BATCH':
+      const remainingBatches = state.batches.filter(batch => batch.id !== action.payload);
+      return {
+        ...state,
+        batches: remainingBatches,
+        currentBatch: state.currentBatch?.id === action.payload ? null : state.currentBatch,
+        viewMode: state.currentBatch?.id === action.payload ? 'overview' : state.viewMode
       };
     case 'SET_CURRENT_BATCH':
       return { ...state, currentBatch: action.payload, viewMode: 'edit' };
@@ -131,6 +143,10 @@ function BatchProvider({ children }) {
     dispatch({ type: 'UPDATE_BATCH', payload: updatedBatch });
   };
 
+  const deleteBatch = (batchId) => {
+    dispatch({ type: 'DELETE_BATCH', payload: batchId });
+  };
+
   const createTemplate = (templateData) => {
     const newTemplate = {
       id: Date.now().toString(),
@@ -154,6 +170,7 @@ function BatchProvider({ children }) {
     dispatch,
     createBatch,
     updateBatch,
+    deleteBatch,
     createTemplate,
     updateTemplate,
     deleteTemplate
@@ -374,9 +391,56 @@ function TemplateModal({ isOpen, onClose, template, category, subCategory }) {
   );
 }
 
+// Delete Confirmation Modal
+function DeleteBatchModal({ isOpen, onClose, onConfirm, batchName }) {
+  if (!isOpen) return null;
+
+  return (
+    <div className="modal-overlay">
+      <div className="modal-content" style={{ maxWidth: '500px', width: '90%' }}>
+        <div className="modal-header">
+          <h3>Delete Batch</h3>
+          <button onClick={onClose} className="modal-close">×</button>
+        </div>
+        
+        <div className="modal-body">
+          <div style={{ textAlign: 'center', padding: '1rem 0' }}>
+            <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>⚠️</div>
+            <h4 style={{ color: '#dc3545', marginBottom: '1rem' }}>
+              Are you sure you want to delete this batch?
+            </h4>
+            <p style={{ marginBottom: '1rem', fontSize: '1.1rem' }}>
+              <strong>"{batchName}"</strong>
+            </p>
+            <p style={{ color: '#666', marginBottom: '0' }}>
+              This action cannot be undone. All data associated with this batch will be permanently deleted from the system.
+            </p>
+          </div>
+        </div>
+        
+        <div className="modal-footer">
+          <button onClick={onClose} className="btn btn-secondary">Cancel</button>
+          <button 
+            onClick={onConfirm} 
+            className="btn"
+            style={{
+              backgroundColor: '#dc3545',
+              color: 'white',
+              border: 'none'
+            }}
+          >
+            Delete Batch
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // Batch Overview Page
 function BatchOverview() {
-  const { batches, dispatch } = useBatch();
+  const { batches, dispatch, deleteBatch } = useBatch();
+  const [deleteModal, setDeleteModal] = useState({ isOpen: false, batch: null });
 
   const getStatusColor = (status) => {
     switch (status) {
@@ -404,6 +468,21 @@ function BatchOverview() {
 
   const handleEditBatch = (batch) => {
     dispatch({ type: 'SET_CURRENT_BATCH', payload: batch });
+  };
+
+  const handleDeleteBatch = (batch) => {
+    setDeleteModal({ isOpen: true, batch });
+  };
+
+  const confirmDeleteBatch = () => {
+    if (deleteModal.batch) {
+      deleteBatch(deleteModal.batch.id);
+      setDeleteModal({ isOpen: false, batch: null });
+    }
+  };
+
+  const closeDeleteModal = () => {
+    setDeleteModal({ isOpen: false, batch: null });
   };
 
   return (
@@ -468,23 +547,43 @@ function BatchOverview() {
                 {formatDate(batch.createdAt)}
               </div>
               <div className="td">
-                <button 
-                  onClick={() => handleEditBatch(batch)}
-                  className="btn btn-sm btn-outline"
-                >
-                  Open
-                </button>
+                <div style={{ display: 'flex', gap: '0.5rem' }}>
+                  <button 
+                    onClick={() => handleEditBatch(batch)}
+                    className="btn btn-sm btn-outline"
+                  >
+                    Open
+                  </button>
+                  <button 
+                    onClick={() => handleDeleteBatch(batch)}
+                    className="btn btn-sm"
+                    style={{
+                      backgroundColor: '#dc3545',
+                      color: 'white',
+                      border: 'none'
+                    }}
+                    title="Delete batch"
+                  >
+                    Delete
+                  </button>
+                </div>
               </div>
             </div>
           ))
         )}
       </div>
+
+      <DeleteBatchModal
+        isOpen={deleteModal.isOpen}
+        onClose={closeDeleteModal}
+        onConfirm={confirmDeleteBatch}
+        batchName={deleteModal.batch?.name || ''}
+      />
     </div>
   );
 }
 
-// Updated BatchWizard component in App.jsx
-
+// Updated BatchWizard component with proper imports
 function BatchWizard() {
   const { createBatch, templates, dispatch } = useBatch();
   const [currentStep, setCurrentStep] = useState(0);
@@ -579,7 +678,7 @@ function BatchWizard() {
     };
 
     fetchCategories();
-  }, []);
+  }, [docClient]);
 
   const subcategories = categories[batchData.category] || ['--'];
 

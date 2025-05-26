@@ -136,7 +136,7 @@ function BatchProvider({ children }) {
   // Load batches and templates from DynamoDB on mount
   useEffect(() => {
     console.log('🚀 BatchProvider: useEffect triggered - loading data...');
-    loadBatchesFromDynamoDB();
+    loadBatchesFromDynamoDBWithScan();
     loadTemplatesFromDynamoDB();
   }, []);
 
@@ -182,6 +182,96 @@ function BatchProvider({ children }) {
     console.log('✅ BatchProvider: Batch compressed successfully');
     return compressed;
   };
+  
+  const loadBatchesFromDynamoDBWithScan = async () => {
+  console.log('📥 BatchProvider: Starting to load batches from DynamoDB using Scan...');
+  setIsLoading(true);
+  try {
+    const sessionId = getSessionId();
+    console.log('🔍 BatchProvider: Using session ID for scan:', sessionId);
+    
+    // Use ScanCommand with FilterExpression as fallback
+    const scanParams = {
+      TableName: 'ListEasierBatches',
+      FilterExpression: 'sessionId = :sessionId AND NOT begins_with(batchId, :templatePrefix)',
+      ExpressionAttributeValues: {
+        ':sessionId': sessionId,
+        ':templatePrefix': 'template_'
+      },
+      Limit: 100
+    };
+
+    console.log('🔍 BatchProvider: Scan parameters:', JSON.stringify(scanParams, null, 2));
+    
+    const command = new ScanCommand(scanParams);
+    console.log('🔍 BatchProvider: Created ScanCommand:', command);
+    
+    console.log('🚀 BatchProvider: Executing DynamoDB scan...');
+    const response = await docClient.send(command);
+    console.log('✅ BatchProvider: DynamoDB scan successful');
+    console.log('📊 BatchProvider: Scan response:', {
+      itemCount: response.Items?.length || 0,
+      hasItems: !!response.Items,
+      responseKeys: Object.keys(response)
+    });
+    
+    const batches = response.Items || [];
+    console.log('📦 BatchProvider: Raw batches from DynamoDB:', batches);
+    
+    // Process batches same as before...
+    const expandedBatches = batches.map((batch, index) => {
+      console.log(`🔄 BatchProvider: Processing batch ${index + 1}:`, batch);
+      
+      const expanded = {
+        ...batch,
+        category: String(batch.category || '--'),
+        subCategory: String(batch.subCategory || '--'),
+        name: String(batch.name || `Batch ${batch.id || Date.now()}`),
+        status: String(batch.status || 'draft'),
+        id: String(batch.id || batch.batchId || Date.now()),
+        appState: {
+          ...batch.appState,
+          category: String(batch.appState?.category || '--'),
+          subCategory: String(batch.appState?.subCategory || '--'),
+          imageGroups: batch.appState?.imageGroups?.map(group => 
+            group && typeof group === 'object' && group.count !== undefined 
+              ? new Array(group.count).fill('') 
+              : (group || [])
+          ) || [[]],
+          price: String(batch.appState?.price || ''),
+          sku: String(batch.appState?.sku || '')
+        }
+      };
+      
+      console.log(`✅ BatchProvider: Processed batch ${index + 1}:`, {
+        id: expanded.id,
+        name: expanded.name,
+        category: expanded.category,
+        subCategory: expanded.subCategory,
+        status: expanded.status
+      });
+      
+      return expanded;
+    });
+    
+    console.log('🎉 BatchProvider: All batches processed successfully:', expandedBatches.length);
+    dispatch({ type: 'LOAD_BATCHES', payload: expandedBatches });
+    console.log(`✅ BatchProvider: Loaded ${batches.length} batches from DynamoDB`);
+    
+  } catch (error) {
+    console.error('❌ BatchProvider: Error loading batches from DynamoDB:', error);
+    console.error('❌ BatchProvider: Error stack:', error.stack);
+    console.error('❌ BatchProvider: Error details:', {
+      name: error.name,
+      message: error.message,
+      code: error.code
+    });
+    dispatch({ type: 'LOAD_BATCHES', payload: [] });
+  } finally {
+    setIsLoading(false);
+    console.log('🏁 BatchProvider: Finished loading batches');
+  }
+};
 
   const loadBatchesFromDynamoDB = async () => {
   console.log('📥 BatchProvider: Starting to load batches from DynamoDB...');

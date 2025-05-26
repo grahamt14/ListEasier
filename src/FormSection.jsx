@@ -1310,41 +1310,46 @@ function FormSection({ onGenerateListing, onCategoryFieldsChange, batchMode = fa
         </div>
       </div>
 
-      <OptimizedImageUploader
+    <OptimizedImageUploader
         onImagesProcessed={handleImageUploaderProcess}
         autoRotateEnabled={autoRotateEnabled}
       />
       
-      <div className="form-group auto-rotate-option">
-        <input 
-          type="checkbox" 
-          id="auto-rotate" 
-          checked={autoRotateEnabled} 
-          onChange={handleAutoRotateToggle} 
-        />
-        <label htmlFor="auto-rotate">
-          Auto-rotate images on upload
-        </label>
-      </div>
-
-      {shouldShowAiToggle() && (
-        <div className="form-group ai-category-fields-option">
+      {/* Condensed checkbox options group */}
+      <div className="checkbox-options-group">
+        <div className="auto-rotate-option">
           <input 
             type="checkbox" 
-            id="ai-resolve-category-fields" 
-            checked={aiResolveCategoryFields} 
-            onChange={handleAiResolveCategoryFieldsToggle} 
+            id="auto-rotate" 
+            checked={autoRotateEnabled} 
+            onChange={handleAutoRotateToggle} 
           />
-          <label htmlFor="ai-resolve-category-fields">
-            🤖 Let AI attempt to determine empty category fields from images
+          <label htmlFor="auto-rotate">
+            Auto-rotate images on upload
           </label>
-          <div className="field-help-text">
-            <small style={{ color: '#666', display: 'block', marginTop: '4px' }}>
-              AI will analyze images to suggest values for unfilled category fields. You can review and edit these suggestions after generation.
-            </small>
-          </div>
         </div>
-      )}
+
+        {shouldShowAiToggle() && (
+          <div className="ai-category-fields-option">
+            <input 
+              type="checkbox" 
+              id="ai-resolve-category-fields" 
+              checked={aiResolveCategoryFields} 
+              onChange={handleAiResolveCategoryFieldsToggle} 
+            />
+            <div>
+              <label htmlFor="ai-resolve-category-fields">
+                🤖 Let AI determine empty category fields from images
+              </label>
+              <div className="field-help-text">
+                <small>
+                  AI will analyze images to suggest values for unfilled fields. You can review and edit suggestions after generation.
+                </small>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
 
       <div className="form-group">
         <label>Images Per Item</label>

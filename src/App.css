@@ -52,13 +52,13 @@ body {
 .sidebar-brand {
   padding: 0; /* Remove all padding */
   border-bottom: 2px solid #374151;
-  background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+  background: #26aae5; /* Changed to solid blue background for PNG logo */
   display: flex;
   align-items: center;
   justify-content: center;
   position: relative;
   overflow: hidden;
-  min-height: 80px; /* Reduced from 120px to 80px (40px reduction) */
+  min-height: 80px; /* Keep the perfect height we established */
 }
 
 .sidebar-brand::before {
@@ -68,8 +68,8 @@ body {
   left: 0;
   right: 0;
   bottom: 0;
-  background-image: radial-gradient(circle at 20% 80%, rgba(96, 165, 250, 0.1) 0%, transparent 50%),
-                    radial-gradient(circle at 80% 20%, rgba(59, 130, 246, 0.1) 0%, transparent 50%);
+  background-image: radial-gradient(circle at 20% 80%, rgba(255, 255, 255, 0.1) 0%, transparent 50%),
+                    radial-gradient(circle at 80% 20%, rgba(255, 255, 255, 0.1) 0%, transparent 50%);
   pointer-events: none;
 }
 
@@ -91,7 +91,7 @@ body {
   border-radius: 12px; /* Rounded corners on the image itself */
   background: none; /* Remove white background */
   padding: 0; /* Remove padding */
-  box-shadow: 0 4px 16px rgba(96, 165, 250, 0.3);
+  box-shadow: 0 4px 16px rgba(38, 170, 229, 0.3); /* Updated shadow color to match background */
   transition: all 0.3s ease;
   cursor: pointer;
   position: relative;
@@ -101,18 +101,18 @@ body {
 
 .brand-logo-only:hover {
   transform: scale(1.05);
-  box-shadow: 0 6px 24px rgba(96, 165, 250, 0.5);
+  box-shadow: 0 6px 24px rgba(38, 170, 229, 0.5); /* Updated hover shadow color */
 }
 
 .brand-logo-only:focus-visible {
-  outline: 2px solid #60a5fa;
+  outline: 2px solid #26aae5;
   outline-offset: 2px;
 }
 
 /* Collapsed sidebar brand adjustments */
 .sidebar.collapsed .sidebar-brand {
   padding: 8px; /* Small padding when collapsed */
-  min-height: 64px; /* Reduced proportionally (was 80px, now 64px) */
+  min-height: 64px; /* Reduced proportionally */
 }
 
 .sidebar.collapsed .brand-logo-only {
@@ -123,10 +123,10 @@ body {
 
 @keyframes logoGlow {
   0%, 100% {
-    box-shadow: 0 4px 16px rgba(96, 165, 250, 0.3);
+    box-shadow: 0 4px 16px rgba(38, 170, 229, 0.3);
   }
   50% {
-    box-shadow: 0 6px 24px rgba(96, 165, 250, 0.5);
+    box-shadow: 0 6px 24px rgba(38, 170, 229, 0.5);
   }
 }
 

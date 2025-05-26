@@ -525,7 +525,7 @@ function Sidebar() {
       {/* Logo-Only Sidebar Brand */}
       <div className="sidebar-brand">
         <img 
-          src="/ListEasier.jpg" 
+          src="/ListEasier.png" 
           alt="ListEasier Logo" 
           className="brand-logo-only"
         />

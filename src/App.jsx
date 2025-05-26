@@ -846,7 +846,6 @@ const loadTemplatesFromDynamoDB = async () => {
       {children}
     </BatchContext.Provider>
   );
-}
 
 function useBatch() {
   const context = useContext(BatchContext);

@@ -24,7 +24,8 @@ const initialBatchState = {
   templates: [],
   currentBatch: null,
   currentStep: 0,
-  viewMode: 'overview' // 'overview', 'create', 'edit'
+  viewMode: 'overview', // 'overview', 'create', 'edit'
+  statusFilter: 'all' // 'all', 'open', 'closed'
 };
 
 function batchReducer(state, action) {
@@ -60,6 +61,8 @@ function batchReducer(state, action) {
       return { ...state, viewMode: action.payload };
     case 'SET_CURRENT_STEP':
       return { ...state, currentStep: action.payload };
+    case 'SET_STATUS_FILTER':
+      return { ...state, statusFilter: action.payload };
     case 'LOAD_TEMPLATES':
       return { ...state, templates: action.payload };
     case 'ADD_TEMPLATE':
@@ -119,6 +122,11 @@ function BatchProvider({ children }) {
       updatedAt: new Date().toISOString(),
       items: [],
       totalItems: 0,
+      // Track batch completion metrics
+      csvDownloads: 0,
+      ebayListingsCreated: 0,
+      lastCsvDownload: null,
+      lastEbayListingCreated: null,
       // Initialize with empty app state structure
       appState: {
         filesBase64: [],
@@ -147,6 +155,58 @@ function BatchProvider({ children }) {
     dispatch({ type: 'DELETE_BATCH', payload: batchId });
   };
 
+  // New function to mark CSV as downloaded
+  const markCsvDownloaded = (batchId) => {
+    const batch = state.batches.find(b => b.id === batchId);
+    if (batch) {
+      const updatedBatch = {
+        ...batch,
+        csvDownloads: (batch.csvDownloads || 0) + 1,
+        lastCsvDownload: new Date().toISOString(),
+        status: determineBatchStatus(batch, { csvDownloaded: true }),
+        updatedAt: new Date().toISOString()
+      };
+      updateBatch(updatedBatch);
+    }
+  };
+
+  // New function to mark eBay listings as created
+  const markEbayListingsCreated = (batchId, listingsCount = 1) => {
+    const batch = state.batches.find(b => b.id === batchId);
+    if (batch) {
+      const updatedBatch = {
+        ...batch,
+        ebayListingsCreated: (batch.ebayListingsCreated || 0) + listingsCount,
+        lastEbayListingCreated: new Date().toISOString(),
+        status: determineBatchStatus(batch, { ebayListingsCreated: listingsCount }),
+        updatedAt: new Date().toISOString()
+      };
+      updateBatch(updatedBatch);
+    }
+  };
+
+  // Helper function to determine batch status
+  const determineBatchStatus = (batch, newActivity = {}) => {
+    const hasValidListings = batch.appState?.responseData?.some(item => item && !item.error) || false;
+    const totalValidListings = batch.appState?.responseData?.filter(item => item && !item.error).length || 0;
+    
+    // If no valid listings generated yet, keep as draft
+    if (!hasValidListings || totalValidListings === 0) {
+      return 'draft';
+    }
+
+    // Check if batch has been "used" (CSV downloaded or eBay listings created)
+    const totalCsvDownloads = (batch.csvDownloads || 0) + (newActivity.csvDownloaded ? 1 : 0);
+    const totalEbayListings = (batch.ebayListingsCreated || 0) + (newActivity.ebayListingsCreated || 0);
+    
+    if (totalCsvDownloads > 0 || totalEbayListings > 0) {
+      return 'completed';
+    }
+
+    // If has valid listings but no downloads/creations, it's ready for use
+    return 'ready';
+  };
+
   const createTemplate = (templateData) => {
     const newTemplate = {
       id: Date.now().toString(),
@@ -171,6 +231,8 @@ function BatchProvider({ children }) {
     createBatch,
     updateBatch,
     deleteBatch,
+    markCsvDownloaded,
+    markEbayListingsCreated,
     createTemplate,
     updateTemplate,
     deleteTemplate
@@ -437,18 +499,28 @@ function DeleteBatchModal({ isOpen, onClose, onConfirm, batchName }) {
   );
 }
 
-// Updated BatchOverview component with clear icon explanations
+// Updated BatchOverview component with working filters and better status tracking
 function BatchOverview() {
-  const { batches, dispatch, deleteBatch } = useBatch();
+  const { batches, dispatch, deleteBatch, statusFilter } = useBatch();
   const [deleteModal, setDeleteModal] = useState({ isOpen: false, batch: null });
 
   const getStatusColor = (status) => {
     switch (status) {
       case 'draft': return '#6c757d';
-      case 'processing': return '#007bff';
+      case 'ready': return '#007bff';
       case 'completed': return '#28a745';
       case 'error': return '#dc3545';
       default: return '#6c757d';
+    }
+  };
+
+  const getStatusLabel = (status) => {
+    switch (status) {
+      case 'draft': return 'Draft';
+      case 'ready': return 'Ready';
+      case 'completed': return 'Completed';
+      case 'error': return 'Error';
+      default: return status;
     }
   };
 
@@ -485,6 +557,10 @@ function BatchOverview() {
     setDeleteModal({ isOpen: false, batch: null });
   };
 
+  const handleFilterChange = (newFilter) => {
+    dispatch({ type: 'SET_STATUS_FILTER', payload: newFilter });
+  };
+
   // Helper function to get batch statistics
   const getBatchStats = (batch) => {
     const appState = batch.appState || {};
@@ -499,6 +575,36 @@ function BatchOverview() {
     };
   };
 
+  // Filter batches based on status
+  const getFilteredBatches = () => {
+    if (statusFilter === 'all') {
+      return batches;
+    } else if (statusFilter === 'open') {
+      // Open batches are draft and ready (not completed)
+      return batches.filter(batch => 
+        batch.status === 'draft' || batch.status === 'ready' || batch.status === 'error'
+      );
+    } else if (statusFilter === 'closed') {
+      // Closed batches are completed
+      return batches.filter(batch => batch.status === 'completed');
+    }
+    return batches;
+  };
+
+  const filteredBatches = getFilteredBatches();
+
+  // Get filter counts for display
+  const getFilterCounts = () => {
+    const open = batches.filter(batch => 
+      batch.status === 'draft' || batch.status === 'ready' || batch.status === 'error'
+    ).length;
+    const closed = batches.filter(batch => batch.status === 'completed').length;
+    
+    return { all: batches.length, open, closed };
+  };
+
+  const filterCounts = getFilterCounts();
+
   return (
     <div className="batch-overview">
       <div className="page-header">
@@ -509,12 +615,27 @@ function BatchOverview() {
       </div>
 
       <div className="batch-filters">
-        <button className="filter-btn active">All</button>
-        <button className="filter-btn">Open</button>
-        <button className="filter-btn">Closed</button>
+        <button 
+          className={`filter-btn ${statusFilter === 'all' ? 'active' : ''}`}
+          onClick={() => handleFilterChange('all')}
+        >
+          All ({filterCounts.all})
+        </button>
+        <button 
+          className={`filter-btn ${statusFilter === 'open' ? 'active' : ''}`}
+          onClick={() => handleFilterChange('open')}
+        >
+          Open ({filterCounts.open})
+        </button>
+        <button 
+          className={`filter-btn ${statusFilter === 'closed' ? 'active' : ''}`}
+          onClick={() => handleFilterChange('closed')}
+        >
+          Closed ({filterCounts.closed})
+        </button>
       </div>
 
-      {/* Add legend for batch preview icons */}
+      {/* Add legend for batch preview icons and status explanation */}
       <div className="batch-legend" style={{
         background: '#f8f9fa',
         border: '1px solid #e9ecef',
@@ -523,21 +644,44 @@ function BatchOverview() {
         marginBottom: '20px',
         fontSize: '0.9rem'
       }}>
-        <h4 style={{ margin: '0 0 10px 0', color: '#333', fontSize: '1rem' }}>
-          Batch Preview Legend:
-        </h4>
-        <div style={{ display: 'flex', gap: '20px', flexWrap: 'wrap' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <span style={{ fontSize: '1.2rem' }}>📝</span>
-            <span>Generated Listings</span>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '20px' }}>
+          <div>
+            <h4 style={{ margin: '0 0 10px 0', color: '#333', fontSize: '1rem' }}>
+              Batch Preview Icons:
+            </h4>
+            <div style={{ display: 'flex', gap: '20px', flexWrap: 'wrap' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <span style={{ fontSize: '1.2rem' }}>📝</span>
+                <span>Generated Listings</span>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <span style={{ fontSize: '1.2rem' }}>📷</span>
+                <span>Image Groups</span>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <span style={{ fontSize: '1.2rem' }}>✅</span>
+                <span>Processed Groups</span>
+              </div>
+            </div>
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <span style={{ fontSize: '1.2rem' }}>📷</span>
-            <span>Image Groups</span>
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <span style={{ fontSize: '1.2rem' }}>✅</span>
-            <span>Processed Groups</span>
+          <div>
+            <h4 style={{ margin: '0 0 10px 0', color: '#333', fontSize: '1rem' }}>
+              Batch Status:
+            </h4>
+            <div style={{ display: 'flex', gap: '20px', flexWrap: 'wrap' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <div style={{ width: '12px', height: '12px', backgroundColor: '#6c757d', borderRadius: '50%' }}></div>
+                <span>Draft - In progress</span>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <div style={{ width: '12px', height: '12px', backgroundColor: '#007bff', borderRadius: '50%' }}></div>
+                <span>Ready - Available for use</span>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <div style={{ width: '12px', height: '12px', backgroundColor: '#28a745', borderRadius: '50%' }}></div>
+                <span>Completed - CSV downloaded or eBay listings created</span>
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -551,16 +695,26 @@ function BatchOverview() {
           <div className="th">Actions</div>
         </div>
 
-        {batches.length === 0 ? (
+        {filteredBatches.length === 0 ? (
           <div className="empty-state">
-            <h3>No batches yet</h3>
-            <p>Create your first batch to get started</p>
-            <button onClick={handleCreateBatch} className="btn btn-primary">
-              Create Batch
-            </button>
+            <h3>
+              {statusFilter === 'all' ? 'No batches yet' : 
+               statusFilter === 'open' ? 'No open batches' : 
+               'No closed batches'}
+            </h3>
+            <p>
+              {statusFilter === 'all' ? 'Create your first batch to get started' :
+               statusFilter === 'open' ? 'All your batches have been completed' :
+               'No batches have been completed yet'}
+            </p>
+            {statusFilter === 'all' && (
+              <button onClick={handleCreateBatch} className="btn btn-primary">
+                Create Batch
+              </button>
+            )}
           </div>
         ) : (
-          batches.map(batch => {
+          filteredBatches.map(batch => {
             const stats = getBatchStats(batch);
             
             return (
@@ -577,6 +731,13 @@ function BatchOverview() {
                       <div style={{ fontSize: '0.85rem', color: '#666' }}>
                         {batch.category} / {batch.subCategory}
                       </div>
+                      {batch.status === 'completed' && (
+                        <div style={{ fontSize: '0.75rem', color: '#28a745', marginTop: '2px' }}>
+                          {batch.csvDownloads > 0 && `${batch.csvDownloads} CSV download${batch.csvDownloads > 1 ? 's' : ''}`}
+                          {batch.csvDownloads > 0 && batch.ebayListingsCreated > 0 && ' • '}
+                          {batch.ebayListingsCreated > 0 && `${batch.ebayListingsCreated} eBay listing${batch.ebayListingsCreated > 1 ? 's' : ''}`}
+                        </div>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -585,7 +746,7 @@ function BatchOverview() {
                     className="status-badge" 
                     style={{ backgroundColor: getStatusColor(batch.status) }}
                   >
-                    {batch.status}
+                    {getStatusLabel(batch.status)}
                   </span>
                 </div>
                 <div className="td">
@@ -1152,7 +1313,7 @@ function BatchWizard() {
 
 // Batch Editor - integrates with existing FormSection and PreviewSection
 function BatchEditor() {
-  const { currentBatch, updateBatch, dispatch } = useBatch();
+  const { currentBatch, updateBatch, dispatch, markCsvDownloaded, markEbayListingsCreated } = useBatch();
   const [showListingManager, setShowListingManager] = useState(false);
   const { state, dispatch: appDispatch } = useAppState();
   
@@ -1191,6 +1352,14 @@ function BatchEditor() {
   // Save app state to batch with debouncing to prevent flickering
   useEffect(() => {
     if (currentBatch) {
+      const hasValidListings = state.responseData.some(item => item && !item.error);
+      
+      // Determine new status based on current state
+      let newStatus = currentBatch.status;
+      if (hasValidListings && currentBatch.status === 'draft') {
+        newStatus = 'ready'; // Batch has listings and is ready for use
+      }
+      
       const updatedBatch = {
         ...currentBatch,
         appState: {
@@ -1208,7 +1377,8 @@ function BatchEditor() {
           sku: state.sku,
           categoryID: state.categoryID
         },
-        totalItems: state.responseData.filter(item => item && !item.error).length
+        totalItems: state.responseData.filter(item => item && !item.error).length,
+        status: newStatus
       };
       
       // Only update if the data has actually changed
@@ -1559,6 +1729,20 @@ function BatchEditor() {
     // appDispatch({ type: 'SET_IMAGE_GROUPS', payload: [[]] });
   };
 
+  const handleCsvDownload = () => {
+    // Mark CSV as downloaded for this batch
+    if (currentBatch) {
+      markCsvDownloaded(currentBatch.id);
+    }
+  };
+
+  const handleEbayListingsCreated = (listingsCount) => {
+    // Mark eBay listings as created for this batch
+    if (currentBatch) {
+      markEbayListingsCreated(currentBatch.id, listingsCount);
+    }
+  };
+
   if (!currentBatch) {
     return null;
   }
@@ -1589,6 +1773,8 @@ function BatchEditor() {
         <BatchPreviewSection 
           onShowListingManager={() => setShowListingManager(true)}
           currentBatch={currentBatch}
+          onCsvDownload={handleCsvDownload}
+          onEbayListingsCreated={handleEbayListingsCreated}
         />
       </main>
 
@@ -1597,6 +1783,7 @@ function BatchEditor() {
           <div className="listing-modal">
             <EbayListingManager 
               onClose={() => setShowListingManager(false)}
+              onListingsCreated={handleEbayListingsCreated}
             />
           </div>
         </div>

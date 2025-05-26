@@ -6,7 +6,7 @@ import { useEbayAuth } from './EbayAuthContext';
 import EbayAuth from './EbayAuth';
 import EbayPolicySelector from './EbayPolicySelector';
 
-function BatchPreviewSection({ onShowListingManager, currentBatch }) {
+function BatchPreviewSection({ onShowListingManager, currentBatch, onCsvDownload, onEbayListingsCreated }) {
   const { state, dispatch } = useAppState();
   const [showListingManager, setShowListingManager] = useState(false);
   const [showEbaySection, setShowEbaySection] = useState(false);
@@ -288,6 +288,11 @@ Action(SiteID=US|Country=US|Currency=USD|Version=1193|CC=UTF-8),Custom label (SK
         document.body.removeChild(link);
       }
     }
+
+    // Track CSV download for batch status - call the callback from BatchEditor
+    if (onCsvDownload) {
+      onCsvDownload();
+    }
   };
 
   const downloadSingleListing = (groupIndex) => {
@@ -398,6 +403,18 @@ Action(SiteID=US|Country=US|Currency=USD|Version=1193|CC=UTF-8),Custom label (SK
         link.click();
         document.body.removeChild(link);
       }
+    }
+
+    // Track single CSV download for batch status - call the callback from BatchEditor
+    if (onCsvDownload) {
+      onCsvDownload();
+    }
+  };
+
+  // Updated function to handle eBay listing manager with callback support
+  const handleEbayListingManager = () => {
+    if (onShowListingManager) {
+      onShowListingManager();
     }
   };
 
@@ -732,7 +749,7 @@ Action(SiteID=US|Country=US|Currency=USD|Version=1193|CC=UTF-8),Custom label (SK
               {canCreateEbayListings() && (
                 <button 
                   className="create-ebay-listings-button"
-                  onClick={onShowListingManager}
+                  onClick={handleEbayListingManager}
                   disabled={displayIsLoading}
                 >
                   Create eBay Listings
@@ -974,7 +991,7 @@ Action(SiteID=US|Country=US|Currency=USD|Version=1193|CC=UTF-8),Custom label (SK
                   {canCreateEbayListings() && responseData[gi] && !responseData[gi].error && (
                     <button 
                       className="create-single-listing-button"
-                      onClick={onShowListingManager}
+                      onClick={handleEbayListingManager}
                       disabled={processingGroups[gi]}
                       title="Create this listing on eBay"
                     >
@@ -987,9 +1004,8 @@ Action(SiteID=US|Country=US|Currency=USD|Version=1193|CC=UTF-8),Custom label (SK
           })}
         </div>
       ) : (
-        // Row view implementation continues as before...
+        // Row view implementation - completing the truncated code
         <div className="row-view-container">
-          {/* Row view code remains the same as it was working */}
           {imageGroups.some(group => group.length > 0) && (
             <div className="row-view-table">
               <div 

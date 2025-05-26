@@ -4,6 +4,7 @@ import FormSection, { getSelectedCategoryOptionsJSON } from './FormSection';
 import JSZip from 'jszip';
 import { saveAs } from 'file-saver';
 import { DynamoDBClient, QueryCommand, ScanCommand } from '@aws-sdk/client-dynamodb';
+import { unmarshall } from '@aws-sdk/util-dynamodb'; // Add this import
 import { DynamoDBDocumentClient, PutCommand, DeleteCommand } from '@aws-sdk/lib-dynamodb';
 import { fromCognitoIdentityPool } from "@aws-sdk/credential-provider-cognito-identity";
 import { AppStateProvider, useAppState } from './StateContext';
@@ -183,19 +184,19 @@ function BatchProvider({ children }) {
     return compressed;
   };
   
- const loadBatchesFromDynamoDBWithScan = async () => {
+const loadBatchesFromDynamoDBWithScan = async () => {
   console.log('📥 BatchProvider: Starting to load batches from DynamoDB using Scan...');
   setIsLoading(true);
   try {
     const sessionId = getSessionId();
     console.log('🔍 BatchProvider: Using session ID for scan:', sessionId);
     
-    // FIXED: Use a simpler scan without the NOT begins_with operator
+    // FIXED: Use proper DynamoDB attribute value format
     const scanParams = {
       TableName: 'ListEasierBatches',
       FilterExpression: 'sessionId = :sessionId',
       ExpressionAttributeValues: {
-        ':sessionId': sessionId
+        ':sessionId': { S: sessionId } // Use proper DynamoDB format
       },
       Limit: 100
     };
@@ -206,7 +207,7 @@ function BatchProvider({ children }) {
     console.log('🔍 BatchProvider: Created ScanCommand:', command);
     
     console.log('🚀 BatchProvider: Executing DynamoDB scan...');
-    const response = await docClient.send(command);
+    const response = await client.send(command); // Use client, not docClient for ScanCommand
     console.log('✅ BatchProvider: DynamoDB scan successful');
     console.log('📊 BatchProvider: Scan response:', {
       itemCount: response.Items?.length || 0,
@@ -217,8 +218,12 @@ function BatchProvider({ children }) {
     const allItems = response.Items || [];
     console.log('📦 BatchProvider: Raw items from DynamoDB:', allItems);
     
+    // Convert DynamoDB items to plain objects using unmarshall
+    const unmarshallItems = allItems.map(item => unmarshall(item));
+    console.log('📦 BatchProvider: Unmarshalled items:', unmarshallItems);
+    
     // Filter out templates on the client side
-    const batches = allItems.filter(item => 
+    const batches = unmarshallItems.filter(item => 
       !item.batchId || !item.batchId.startsWith('template_')
     );
     
@@ -385,26 +390,28 @@ function BatchProvider({ children }) {
   }
 };
 
- const loadTemplatesFromDynamoDB = async () => {
+const loadTemplatesFromDynamoDB = async () => {
   console.log('📥 BatchProvider: Starting to load templates from DynamoDB...');
   try {
     const sessionId = getSessionId();
     
-    // FIXED: Use a simpler scan for templates too
+    // FIXED: Use proper DynamoDB attribute value format
     const scanParams = {
       TableName: 'ListEasierBatches',
       FilterExpression: 'sessionId = :sessionId',
       ExpressionAttributeValues: {
-        ':sessionId': sessionId
+        ':sessionId': { S: sessionId } // Use proper DynamoDB format
       }
     };
 
     console.log('🔍 BatchProvider: Template scan parameters:', scanParams);
     const command = new ScanCommand(scanParams);
-    const response = await docClient.send(command);
+    const response = await client.send(command); // Use client, not docClient
+    
+    // Convert DynamoDB items to plain objects using unmarshall
+    const allItems = (response.Items || []).map(item => unmarshall(item));
     
     // Filter templates on the client side
-    const allItems = response.Items || [];
     const templates = allItems.filter(item => 
       item.batchId && item.batchId.startsWith('template_')
     );

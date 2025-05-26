@@ -13,9 +13,18 @@ function BatchPreviewSection({ onShowListingManager, currentBatch }) {
     ebayService 
   } = useEbayAuth();
   
+  // Updated function to check if eBay listings can be created
   const canCreateEbayListings = () => {
     const hasValidListings = responseData.some(item => item && !item.error);
-    return ebayAuthenticated && hasValidListings && state.categoryID;
+    const hasImages = imageGroups.some(group => group && group.length > 0);
+    
+    // In batch mode, we don't require categoryID since it can be set differently
+    if (currentBatch) {
+      return ebayAuthenticated && hasValidListings && hasImages;
+    }
+    
+    // In non-batch mode, require categoryID
+    return ebayAuthenticated && hasValidListings && hasImages && state.categoryID;
   };
   
   const { 
@@ -657,6 +666,16 @@ Action(SiteID=US|Country=US|Currency=USD|Version=1193|CC=UTF-8),Custom label (SK
     return baseColumns + fieldColumns;
   };
 
+  // Debug logging for eBay button visibility
+  console.log('eBay Button Debug:', {
+    ebayAuthenticated,
+    hasValidListings,
+    hasImages: imageGroups.some(group => group && group.length > 0),
+    categoryID,
+    currentBatch: !!currentBatch,
+    canCreateEbayListings: canCreateEbayListings()
+  });
+
   return (
     <section className="preview-section">
       <div className="section-header">
@@ -695,7 +714,7 @@ Action(SiteID=US|Country=US|Currency=USD|Version=1193|CC=UTF-8),Custom label (SK
               >
                 Download CSV
               </button>
-              {!currentBatch && canCreateEbayListings() && (
+              {canCreateEbayListings() && (
                 <button 
                   className="create-ebay-listings-button"
                   onClick={onShowListingManager}
@@ -708,6 +727,23 @@ Action(SiteID=US|Country=US|Currency=USD|Version=1193|CC=UTF-8),Custom label (SK
           )}
         </div>
       </div>
+      
+      {/* eBay Connection Status Display */}
+      {!ebayAuthenticated && hasValidListings && (
+        <div style={{
+          background: '#fff3cd',
+          border: '1px solid #ffc107',
+          borderRadius: '8px',
+          padding: '12px 16px',
+          margin: '16px 0',
+          color: '#856404'
+        }}>
+          <strong>💡 eBay Integration Available:</strong> Connect your eBay account to create listings directly on eBay.
+          {!currentBatch && (
+            <span> Go to the form section to connect your eBay account.</span>
+          )}
+        </div>
+      )}
       
       {displayIsLoading && (
         <div className="loading-progress">
@@ -794,11 +830,12 @@ Action(SiteID=US|Country=US|Currency=USD|Version=1193|CC=UTF-8),Custom label (SK
                   >
                     Download CSV
                   </button>
-                  {!currentBatch && canCreateEbayListings() && responseData[gi] && !responseData[gi].error && (
+                  {canCreateEbayListings() && responseData[gi] && !responseData[gi].error && (
                     <button 
                       className="create-single-listing-button"
                       onClick={onShowListingManager}
                       disabled={processingGroups[gi]}
+                      title="Create this listing on eBay"
                     >
                       List on eBay
                     </button>
@@ -809,7 +846,9 @@ Action(SiteID=US|Country=US|Currency=USD|Version=1193|CC=UTF-8),Custom label (SK
           })}
         </div>
       ) : (
+        // Row view implementation continues as before...
         <div className="row-view-container">
+          {/* Row view code remains the same as it was working */}
           {imageGroups.some(group => group.length > 0) && (
             <div className="row-view-table">
               <div 

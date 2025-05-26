@@ -1,4 +1,4 @@
-// FormSection.jsx - Enhanced for Batch Mode with proper batch state handling
+// FormSection.jsx - Enhanced for Batch Mode with eBay Integration
 import { useState, useRef, useEffect } from 'react';
 import { DynamoDBClient, QueryCommand, ScanCommand } from '@aws-sdk/client-dynamodb';
 import { unmarshall } from '@aws-sdk/util-dynamodb';
@@ -1238,38 +1238,77 @@ function FormSection({ onGenerateListing, onCategoryFieldsChange, batchMode = fa
         </div>
       </div>
 
-      {/* Only show eBay Integration in non-batch mode */}
-      {!batchMode && (
-        <div className="form-group">
-          <label>eBay Integration</label>
-          <div className="ebay-integration-section">
-            {!showEbayAuth ? (
-              <button 
-                className="ebay-toggle-button"
-                onClick={() => setShowEbayAuth(true)}
-              >
-                {ebayAuthenticated ? '✅ Configure eBay Policies' : '🔗 Connect eBay Account'}
-              </button>
-            ) : (
-              <div className="ebay-auth-expanded">
-                <button 
-                  className="ebay-collapse-button"
-                  onClick={() => setShowEbayAuth(false)}
-                >
-                  ▼ Hide eBay Integration
-                </button>
-                <EbayAuth 
-                  onAuthSuccess={handleEbayAuthSuccess}
-                  onAuthError={handleEbayAuthError}
-                />
-                {ebayAuthenticated && (
-                  <EbayPolicySelector onPolicyChange={handlePolicyChange} />
+      {/* eBay Integration - Updated to show in batch mode with conditional messaging */}
+      <div className="form-group">
+        <label>eBay Integration</label>
+        <div className="ebay-integration-section">
+          {batchMode ? (
+            // In batch mode, show a simplified eBay status
+            <div style={{
+              background: ebayAuthenticated ? '#e8f5e8' : '#fff3cd',
+              border: `1px solid ${ebayAuthenticated ? '#4CAF50' : '#ffc107'}`,
+              borderRadius: '8px',
+              padding: '12px 16px',
+              color: ebayAuthenticated ? '#2e7d32' : '#856404'
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+                <span style={{ fontSize: '1.2em' }}>
+                  {ebayAuthenticated ? '✅' : '⚠️'}
+                </span>
+                <strong>
+                  {ebayAuthenticated ? 'eBay Account Connected' : 'eBay Integration Available'}
+                </strong>
+              </div>
+              <div style={{ fontSize: '0.9rem' }}>
+                {ebayAuthenticated ? (
+                  <>
+                    Your eBay account is connected. You can create listings directly on eBay after generating them.
+                    {selectedPolicies.paymentPolicyId && selectedPolicies.fulfillmentPolicyId && selectedPolicies.returnPolicyId ? (
+                      <div style={{ marginTop: '6px', color: '#2e7d32' }}>
+                        ✓ Business policies are configured
+                      </div>
+                    ) : (
+                      <div style={{ marginTop: '6px', color: '#f57c00' }}>
+                        ⚠️ Some business policies missing - listings will be created as drafts
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  'Connect your eBay account to create listings directly on eBay. You can still generate and download CSV files without connecting.'
                 )}
               </div>
-            )}
-          </div>
+            </div>
+          ) : (
+            // In normal mode, show full eBay integration
+            <>
+              {!showEbayAuth ? (
+                <button 
+                  className="ebay-toggle-button"
+                  onClick={() => setShowEbayAuth(true)}
+                >
+                  {ebayAuthenticated ? '✅ Configure eBay Policies' : '🔗 Connect eBay Account'}
+                </button>
+              ) : (
+                <div className="ebay-auth-expanded">
+                  <button 
+                    className="ebay-collapse-button"
+                    onClick={() => setShowEbayAuth(false)}
+                  >
+                    ▼ Hide eBay Integration
+                  </button>
+                  <EbayAuth 
+                    onAuthSuccess={handleEbayAuthSuccess}
+                    onAuthError={handleEbayAuthError}
+                  />
+                  {ebayAuthenticated && (
+                    <EbayPolicySelector onPolicyChange={handlePolicyChange} />
+                  )}
+                </div>
+              )}
+            </>
+          )}
         </div>
-      )}
+      </div>
 
       <OptimizedImageUploader
         onImagesProcessed={handleImageUploaderProcess}

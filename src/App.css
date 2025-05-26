@@ -85,9 +85,9 @@ body {
 
 .brand-logo-only {
   width: 100%; /* Fill entire width */
-  height: 120px; /* Fixed height larger than container to maintain logo size */
-  object-fit: cover; /* Changed from contain to cover to crop excess */
-  object-position: center; /* Center the image for best cropping */
+  height: 100%; /* Fill entire height of the div */
+  object-fit: contain; /* Changed back to contain to show full logo without cropping */
+  object-position: center; /* Center the image */
   border-radius: 12px; /* Rounded corners on the image itself */
   background: none; /* Remove white background */
   padding: 0; /* Remove padding */
@@ -117,7 +117,7 @@ body {
 
 .sidebar.collapsed .brand-logo-only {
   width: calc(100% - 16px); /* Account for padding when collapsed */
-  height: 80px; /* Fixed height for collapsed state */
+  height: calc(100% - 16px); /* Account for padding when collapsed */
   border-radius: 8px; /* Smaller border radius when collapsed */
 }
 

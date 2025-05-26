@@ -427,6 +427,28 @@ useEffect(() => {
       console.error("Error rotating image:", error);
     }
   };
+  
+  // Handle category change
+  const handleCategoryChange = (e) => {
+    const cat = e.target.value;
+    setSelectedCategory(cat);
+    if (categories[cat]) {
+      setSubcategories(categories[cat]);
+    }
+    dispatch({ type: 'SET_CATEGORY', payload: cat });
+    dispatch({ type: 'SET_SUBCATEGORY', payload: '--' });
+    validateSelection(cat, '--');
+  };
+
+  // Synchronize selected category with global state
+  useEffect(() => {
+    if (category !== selectedCategory) {
+      setSelectedCategory(category);
+      if (categories[selectedCategory]) {
+        setSubcategories(categories[selectedCategory]);
+      }
+    }
+  }, [category, categories, selectedCategory]);
 
   const handleImageUploaderProcess = (processedImages, processedRawFiles) => {
     dispatch({ type: 'ADD_FILES_BASE64', payload: processedImages });

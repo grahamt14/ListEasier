@@ -184,130 +184,143 @@ function BatchProvider({ children }) {
   };
 
   const loadBatchesFromDynamoDB = async () => {
-    console.log('📥 BatchProvider: Starting to load batches from DynamoDB...');
-    setIsLoading(true);
-    try {
-      const sessionId = getSessionId();
-      console.log('🔍 BatchProvider: Using session ID for query:', sessionId);
-      
-      const queryParams = {
-        TableName: 'ListEasierBatches',
-        KeyConditionExpression: 'sessionId = :sessionId AND NOT begins_with(batchId, :templatePrefix)',
-        ExpressionAttributeValues: {
-          ':sessionId': sessionId,
-          ':templatePrefix': 'template_'
-        },
-        ScanIndexForward: false, // Most recent first
-        Limit: 100
-      };
+  console.log('📥 BatchProvider: Starting to load batches from DynamoDB...');
+  setIsLoading(true);
+  try {
+    const sessionId = getSessionId();
+    console.log('🔍 BatchProvider: Using session ID for query:', sessionId);
+    
+    // Fixed: Use a simpler query approach to avoid the NOT begins_with issue
+    const queryParams = {
+      TableName: 'ListEasierBatches',
+      KeyConditionExpression: 'sessionId = :sessionId',
+      ExpressionAttributeValues: {
+        ':sessionId': sessionId
+      },
+      ScanIndexForward: false, // Most recent first
+      Limit: 100
+    };
 
-      console.log('🔍 BatchProvider: Query parameters:', JSON.stringify(queryParams, null, 2));
-      console.log('🔍 BatchProvider: Document client type:', typeof docClient);
-      console.log('🔍 BatchProvider: Document client send method:', typeof docClient.send);
-      
-      if (!docClient.send) {
-        console.error('❌ BatchProvider: Document client does not have send method!');
-        console.log('🔍 BatchProvider: Available methods:', Object.getOwnPropertyNames(docClient));
-        throw new Error('Document client not properly initialized');
-      }
-
-      const command = new QueryCommand(queryParams);
-      console.log('🔍 BatchProvider: Created QueryCommand:', command);
-      
-      console.log('🚀 BatchProvider: Executing DynamoDB query...');
-      const response = await docClient.send(command);
-      console.log('✅ BatchProvider: DynamoDB query successful');
-      console.log('📊 BatchProvider: Query response:', {
-        itemCount: response.Items?.length || 0,
-        hasItems: !!response.Items,
-        responseKeys: Object.keys(response)
-      });
-      
-      const batches = response.Items || [];
-      console.log('📦 BatchProvider: Raw batches from DynamoDB:', batches);
-      
-      // Expand compressed image groups and ensure proper string types
-      const expandedBatches = batches.map((batch, index) => {
-        console.log(`🔄 BatchProvider: Processing batch ${index + 1}:`, batch);
-        
-        const expanded = {
-          ...batch,
-          // Ensure category and subCategory are always strings
-          category: String(batch.category || '--'),
-          subCategory: String(batch.subCategory || '--'),
-          name: String(batch.name || `Batch ${batch.id || Date.now()}`),
-          status: String(batch.status || 'draft'),
-          id: String(batch.id || batch.batchId || Date.now()),
-          appState: {
-            ...batch.appState,
-            category: String(batch.appState?.category || '--'),
-            subCategory: String(batch.appState?.subCategory || '--'),
-            imageGroups: batch.appState?.imageGroups?.map(group => 
-              group && typeof group === 'object' && group.count !== undefined 
-                ? new Array(group.count).fill('') 
-                : (group || [])
-            ) || [[]],
-            price: String(batch.appState?.price || ''),
-            sku: String(batch.appState?.sku || '')
-          }
-        };
-        
-        console.log(`✅ BatchProvider: Processed batch ${index + 1}:`, {
-          id: expanded.id,
-          name: expanded.name,
-          category: expanded.category,
-          subCategory: expanded.subCategory,
-          status: expanded.status
-        });
-        
-        return expanded;
-      });
-      
-      console.log('🎉 BatchProvider: All batches processed successfully:', expandedBatches.length);
-      dispatch({ type: 'LOAD_BATCHES', payload: expandedBatches });
-      console.log(`✅ BatchProvider: Loaded ${batches.length} batches from DynamoDB`);
-      
-    } catch (error) {
-      console.error('❌ BatchProvider: Error loading batches from DynamoDB:', error);
-      console.error('❌ BatchProvider: Error stack:', error.stack);
-      console.error('❌ BatchProvider: Error details:', {
-        name: error.name,
-        message: error.message,
-        code: error.code
-      });
-      dispatch({ type: 'LOAD_BATCHES', payload: [] });
-    } finally {
-      setIsLoading(false);
-      console.log('🏁 BatchProvider: Finished loading batches');
+    console.log('🔍 BatchProvider: Query parameters:', JSON.stringify(queryParams, null, 2));
+    console.log('🔍 BatchProvider: Document client type:', typeof docClient);
+    console.log('🔍 BatchProvider: Document client send method:', typeof docClient.send);
+    
+    if (!docClient.send) {
+      console.error('❌ BatchProvider: Document client does not have send method!');
+      console.log('🔍 BatchProvider: Available methods:', Object.getOwnPropertyNames(docClient));
+      throw new Error('Document client not properly initialized');
     }
-  };
 
-  const loadTemplatesFromDynamoDB = async () => {
-    console.log('📥 BatchProvider: Starting to load templates from DynamoDB...');
-    try {
-      const sessionId = getSessionId();
+    const command = new QueryCommand(queryParams);
+    console.log('🔍 BatchProvider: Created QueryCommand:', command);
+    
+    console.log('🚀 BatchProvider: Executing DynamoDB query...');
+    const response = await docClient.send(command);
+    console.log('✅ BatchProvider: DynamoDB query successful');
+    console.log('📊 BatchProvider: Query response:', {
+      itemCount: response.Items?.length || 0,
+      hasItems: !!response.Items,
+      responseKeys: Object.keys(response)
+    });
+    
+    const allItems = response.Items || [];
+    console.log('📦 BatchProvider: Raw items from DynamoDB:', allItems);
+    
+    // Filter out templates on the client side
+    const batches = allItems.filter(item => 
+      !item.batchId || !item.batchId.startsWith('template_')
+    );
+    
+    console.log('📦 BatchProvider: Filtered batches from DynamoDB:', batches);
+    
+    // Expand compressed image groups and ensure proper string types
+    const expandedBatches = batches.map((batch, index) => {
+      console.log(`🔄 BatchProvider: Processing batch ${index + 1}:`, batch);
       
-      const queryParams = {
-        TableName: 'ListEasierBatches',
-        KeyConditionExpression: 'sessionId = :sessionId AND begins_with(batchId, :prefix)',
-        ExpressionAttributeValues: {
-          ':sessionId': sessionId,
-          ':prefix': 'template_'
+      const expanded = {
+        ...batch,
+        // Ensure category and subCategory are always strings
+        category: String(batch.category || '--'),
+        subCategory: String(batch.subCategory || '--'),
+        name: String(batch.name || `Batch ${batch.id || Date.now()}`),
+        status: String(batch.status || 'draft'),
+        id: String(batch.id || batch.batchId || Date.now()),
+        appState: {
+          ...batch.appState,
+          category: String(batch.appState?.category || '--'),
+          subCategory: String(batch.appState?.subCategory || '--'),
+          imageGroups: batch.appState?.imageGroups?.map(group => 
+            group && typeof group === 'object' && group.count !== undefined 
+              ? new Array(group.count).fill('') 
+              : (group || [])
+          ) || [[]],
+          price: String(batch.appState?.price || ''),
+          sku: String(batch.appState?.sku || '')
         }
       };
-
-      console.log('🔍 BatchProvider: Template query parameters:', queryParams);
-      const command = new QueryCommand(queryParams);
-      const response = await docClient.send(command);
-      const templates = response.Items || [];
-      console.log('✅ BatchProvider: Loaded templates:', templates.length);
-      dispatch({ type: 'LOAD_TEMPLATES', payload: templates });
       
-    } catch (error) {
-      console.error('❌ BatchProvider: Error loading templates from DynamoDB:', error);
-      dispatch({ type: 'LOAD_TEMPLATES', payload: [] });
-    }
-  };
+      console.log(`✅ BatchProvider: Processed batch ${index + 1}:`, {
+        id: expanded.id,
+        name: expanded.name,
+        category: expanded.category,
+        subCategory: expanded.subCategory,
+        status: expanded.status
+      });
+      
+      return expanded;
+    });
+    
+    console.log('🎉 BatchProvider: All batches processed successfully:', expandedBatches.length);
+    dispatch({ type: 'LOAD_BATCHES', payload: expandedBatches });
+    console.log(`✅ BatchProvider: Loaded ${batches.length} batches from DynamoDB`);
+    
+  } catch (error) {
+    console.error('❌ BatchProvider: Error loading batches from DynamoDB:', error);
+    console.error('❌ BatchProvider: Error stack:', error.stack);
+    console.error('❌ BatchProvider: Error details:', {
+      name: error.name,
+      message: error.message,
+      code: error.code
+    });
+    dispatch({ type: 'LOAD_BATCHES', payload: [] });
+  } finally {
+    setIsLoading(false);
+    console.log('🏁 BatchProvider: Finished loading batches');
+  }
+};
+
+ const loadTemplatesFromDynamoDB = async () => {
+  console.log('📥 BatchProvider: Starting to load templates from DynamoDB...');
+  try {
+    const sessionId = getSessionId();
+    
+    // Fixed: Use a simpler query and filter client-side
+    const queryParams = {
+      TableName: 'ListEasierBatches',
+      KeyConditionExpression: 'sessionId = :sessionId',
+      ExpressionAttributeValues: {
+        ':sessionId': sessionId
+      }
+    };
+
+    console.log('🔍 BatchProvider: Template query parameters:', queryParams);
+    const command = new QueryCommand(queryParams);
+    const response = await docClient.send(command);
+    
+    // Filter templates on the client side
+    const allItems = response.Items || [];
+    const templates = allItems.filter(item => 
+      item.batchId && item.batchId.startsWith('template_')
+    );
+    
+    console.log('✅ BatchProvider: Loaded templates:', templates.length);
+    dispatch({ type: 'LOAD_TEMPLATES', payload: templates });
+    
+  } catch (error) {
+    console.error('❌ BatchProvider: Error loading templates from DynamoDB:', error);
+    dispatch({ type: 'LOAD_TEMPLATES', payload: [] });
+  }
+};
 
   const createBatch = (batchData) => {
     console.log('🆕 BatchProvider: Creating new batch with data:', batchData);

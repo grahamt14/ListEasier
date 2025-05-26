@@ -411,10 +411,21 @@ Action(SiteID=US|Country=US|Currency=USD|Version=1193|CC=UTF-8),Custom label (SK
     }
   };
 
-  // Updated function to handle eBay listing manager with callback support
+  // **UPDATED: Function to handle eBay listing manager with proper callback chain**
   const handleEbayListingManager = () => {
+    console.log('BatchPreviewSection: handleEbayListingManager called');
     if (onShowListingManager) {
+      console.log('BatchPreviewSection: Calling onShowListingManager');
       onShowListingManager();
+    }
+  };
+
+  // **NEW: Handle when eBay listings are successfully created**
+  const handleEbayListingsCreated = (listingsCount) => {
+    console.log('BatchPreviewSection: eBay listings created:', listingsCount);
+    if (onEbayListingsCreated) {
+      console.log('BatchPreviewSection: Calling onEbayListingsCreated callback');
+      onEbayListingsCreated(listingsCount);
     }
   };
 

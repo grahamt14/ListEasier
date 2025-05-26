@@ -1,11 +1,11 @@
-// EbayListingManager.jsx - Complete with Environment-Aware URLs
+// EbayListingManager.jsx - Complete with Environment-Aware URLs and Auto-Navigation
 import React, { useState } from 'react';
 import { useAppState } from './StateContext';
 import { useEbayAuth } from './EbayAuthContext';
 import EbayListingService from './EbayListingService';
 import './EbayListingManager.css';
 
-const EbayListingManager = ({ onClose }) => {
+const EbayListingManager = ({ onClose, onListingsCreated }) => {
   const { state } = useAppState();
   const { isAuthenticated, selectedPolicies, ebayService } = useEbayAuth();
   const [listingStatus, setListingStatus] = useState({
@@ -110,6 +110,22 @@ const EbayListingManager = ({ onClose }) => {
         isListing: false,
         results: results
       }));
+
+      // **NEW: Call the callback to track listings created and auto-close after successful creation**
+      const totalCreated = (results.successful?.length || 0) + (results.drafts?.length || 0);
+      if (totalCreated > 0 && onListingsCreated) {
+        console.log('Calling onListingsCreated callback with count:', totalCreated);
+        onListingsCreated(totalCreated);
+        
+        // Auto-close after 3 seconds when all listings are successful
+        if (results.failed?.length === 0) {
+          setTimeout(() => {
+            console.log('Auto-closing EbayListingManager after successful listings creation');
+            onClose();
+          }, 3000);
+        }
+      }
+
     } catch (error) {
       console.error('Error creating listings:', error);
       setListingStatus(prev => ({
@@ -134,19 +150,34 @@ const EbayListingManager = ({ onClose }) => {
     try {
       const result = await listingService.createListingFromGroup(groupIndex, state);
       
+      const results = {
+        successful: result.success && !result.isDraft ? [result] : [],
+        drafts: result.success && result.isDraft ? [result] : [],
+        failed: result.success ? [] : [result],
+        total: 1
+      };
+
       setListingStatus({
         isListing: false,
         progress: 100,
         currentIndex: 1,
         total: 1,
-        results: {
-          successful: result.success && !result.isDraft ? [result] : [],
-          drafts: result.success && result.isDraft ? [result] : [],
-          failed: result.success ? [] : [result],
-          total: 1
-        },
+        results: results,
         error: null
       });
+
+      // **NEW: Call the callback for single listing creation too**
+      if (result.success && onListingsCreated) {
+        console.log('Calling onListingsCreated callback for single listing');
+        onListingsCreated(1);
+        
+        // Auto-close after 2 seconds for single successful listing
+        setTimeout(() => {
+          console.log('Auto-closing EbayListingManager after single listing creation');
+          onClose();
+        }, 2000);
+      }
+
     } catch (error) {
       console.error('Error creating listing:', error);
       setListingStatus(prev => ({
@@ -316,19 +347,6 @@ const EbayListingManager = ({ onClose }) => {
             </div>
           </div>
 
-          {/* Debug info - remove this in production */}
-          <div style={{ background: '#f0f0f0', padding: '10px', margin: '10px 0', fontSize: '12px', borderRadius: '4px' }}>
-            <strong>Debug Info:</strong><br/>
-            Environment: {ebayService?.environment || 'unknown'}<br/>
-            Results object keys: {Object.keys(listingStatus.results || {}).join(', ')}<br/>
-            Successful count: {listingStatus.results.successful?.length || 0}<br/>
-            Drafts count: {listingStatus.results.drafts?.length || 0}<br/>
-            Failed count: {listingStatus.results.failed?.length || 0}<br/>
-            Total created: {getTotalCreatedCount()}<br/>
-            Draft URLs: {ebayUrls.drafts}<br/>
-            Active URLs: {ebayUrls.active}
-          </div>
-
           {/* Success message for any created listings (published or drafts) */}
           {getTotalCreatedCount() > 0 && (
             <div className="status-message success">
@@ -347,6 +365,12 @@ const EbayListingManager = ({ onClose }) => {
                 <div style={{ marginTop: '8px', fontSize: '0.85rem', color: '#065f46' }}>
                   💡 Tip: You can view and manage all your listings using the buttons below.
                 </div>
+                {/* **NEW: Auto-close countdown message** */}
+                {listingStatus.results.failed?.length === 0 && (
+                  <div style={{ marginTop: '12px', fontSize: '0.85rem', color: '#0654ba', fontWeight: '500' }}>
+                    ⏱️ Returning to batch overview in 3 seconds...
+                  </div>
+                )}
               </div>
             </div>
           )}
@@ -485,7 +509,7 @@ const EbayListingManager = ({ onClose }) => {
 };
 
 // Component to add to each listing card for individual listing creation
-export const CreateListingButton = ({ groupIndex, disabled = false }) => {
+export const CreateListingButton = ({ groupIndex, disabled = false, onListingsCreated }) => {
   const [showManager, setShowManager] = useState(false);
   const { isAuthenticated } = useEbayAuth();
 
@@ -507,6 +531,7 @@ export const CreateListingButton = ({ groupIndex, disabled = false }) => {
           <div className="listing-modal">
             <EbayListingManager 
               onClose={() => setShowManager(false)}
+              onListingsCreated={onListingsCreated}
               singleListingIndex={groupIndex}
             />
           </div>

@@ -1317,6 +1317,9 @@ function BatchWizard() {
 // Updated BatchEditor function in App.jsx
 // Fix the eBay listing creation callback chain
 
+// Updated BatchEditor function in App.jsx
+// Fix the eBay listing creation callback chain
+
 function BatchEditor() {
   const { currentBatch, updateBatch, dispatch, markCsvDownloaded, markEbayListingsCreated } = useBatch();
   const [showListingManager, setShowListingManager] = useState(false);
@@ -1750,6 +1753,18 @@ function BatchEditor() {
     }
   };
 
+  // **NEW: Handle showing the eBay listing manager**
+  const handleShowEbayListingManager = () => {
+    console.log('BatchEditor: Showing eBay listing manager');
+    setShowListingManager(true);
+  };
+
+  // **NEW: Handle when eBay listing manager closes**
+  const handleCloseEbayListingManager = () => {
+    console.log('BatchEditor: Closing eBay listing manager');
+    setShowListingManager(false);
+  };
+
   if (!currentBatch) {
     return null;
   }
@@ -1778,19 +1793,20 @@ function BatchEditor() {
           currentBatch={currentBatch}
         />
         <BatchPreviewSection 
-          onShowListingManager={() => setShowListingManager(true)}
+          onShowListingManager={handleShowEbayListingManager}
           currentBatch={currentBatch}
           onCsvDownload={handleCsvDownload}
           onEbayListingsCreated={handleEbayListingsCreated}
         />
       </main>
 
+      {/* **NEW: Properly handle the eBay listing manager modal** */}
       {showListingManager && (
         <div className="listing-modal-overlay">
           <div className="listing-modal">
             <EbayListingManager 
-              onClose={() => setShowListingManager(false)}
-              onListingsCreated={handleEbayListingsCreated}  // FIX: Added this callback
+              onClose={handleCloseEbayListingManager}
+              onListingsCreated={handleEbayListingsCreated}
             />
           </div>
         </div>

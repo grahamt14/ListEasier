@@ -494,7 +494,7 @@ function DeleteBatchModal({ isOpen, onClose, onConfirm, batchName }) {
   );
 }
 
-// Sidebar Component with Preline Integration
+// Updated Sidebar Component with Logo Image
 function Sidebar() {
   const { batches, dispatch, statusFilter, sidebarCollapsed, viewMode } = useBatch();
   
@@ -526,9 +526,17 @@ function Sidebar() {
       <div className="sidebar-brand">
         <div className="brand-content">
           <div className="brand-logo">
-            <svg className="brand-icon" viewBox="0 0 24 24" fill="currentColor">
-              <path d="M13 3L4 14h6v7l9-11h-6V3z"/>
-            </svg>
+            <img 
+              src="/ListEasier.jpg" 
+              alt="ListEasier Logo" 
+              className="brand-icon"
+              style={{
+                width: '32px',
+                height: '32px',
+                objectFit: 'contain',
+                borderRadius: '4px'
+              }}
+            />
             {!sidebarCollapsed && <span className="brand-text">ListEasier</span>}
           </div>
         </div>

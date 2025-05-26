@@ -483,7 +483,8 @@ function BatchOverview() {
   );
 }
 
-// Multi-step Batch Creation Wizard
+// Updated BatchWizard component in App.jsx
+
 function BatchWizard() {
   const { createBatch, templates, dispatch } = useBatch();
   const [currentStep, setCurrentStep] = useState(0);
@@ -505,14 +506,80 @@ function BatchWizard() {
   });
 
   const [showTemplateModal, setShowTemplateModal] = useState(false);
+  
+  // Add states for categories (same as FormSection)
+  const [categories, setCategories] = useState({});
+  const [categoriesLoading, setCategoriesLoading] = useState(true);
+  
+  // AWS Configuration (same as FormSection)
+  const REGION = "us-east-2";
+  const IDENTITY_POOL_ID = "us-east-2:f81d1240-32a8-4aff-87e8-940effdf5908";
 
-  // Mock categories - in real app, fetch from your existing API
-  const categories = {
-    '--': ['--'],
-    'Electronics': ['Cell Phones', 'Computers', 'Gaming'],
-    'Collectibles': ['Sports Cards', 'Coins', 'Comics'],
-    'Clothing': ['Men', 'Women', 'Children']
-  };
+  const client = new DynamoDBClient({
+    region: REGION,
+    credentials: fromCognitoIdentityPool({
+      clientConfig: { region: REGION },
+      identityPoolId: IDENTITY_POOL_ID,
+    }),
+  });
+
+  const docClient = DynamoDBDocumentClient.from(client);
+
+  // Fetch categories from DynamoDB (same logic as FormSection)
+  useEffect(() => {
+    const fetchCategories = async () => {
+      try {
+        setCategoriesLoading(true);
+        
+        const cacheKey = 'categories_all';
+        const cachedCategories = cacheService.get(cacheKey);
+        
+        if (cachedCategories) {
+          setCategories(cachedCategories);
+          setCategoriesLoading(false);
+          return;
+        }
+
+        const scanCommand = new ScanCommand({
+          TableName: 'ListCategory',
+        });
+
+        const response = await docClient.send(scanCommand);
+        const categoryData = {};
+        response.Items.forEach(item => {
+          const category = item.Category;
+          const subcategory = item.SubCategory;
+          if (!categoryData[category]) {
+            categoryData[category] = [];
+          }
+          categoryData[category].push(subcategory);
+        });
+        categoryData['--'] = ['--'];
+        
+        cacheService.set(cacheKey, categoryData, null, 'categories');
+        
+        setCategories(categoryData);
+      } catch (err) {
+        console.error('Error fetching categories:', err);
+        const fallbackData = cacheService.get('categories_all');
+        if (fallbackData) {
+          setCategories(fallbackData);
+        } else {
+          // Fallback categories if DynamoDB fails
+          setCategories({
+            '--': ['--'],
+            'Electronics': ['Cell Phones', 'Computers', 'Gaming'],
+            'Collectibles': ['Sports Cards', 'Coins', 'Comics'],
+            'Clothing': ['Men', 'Women', 'Children']
+          });
+        }
+      } finally {
+        setCategoriesLoading(false);
+      }
+    };
+
+    fetchCategories();
+  }, []);
 
   const subcategories = categories[batchData.category] || ['--'];
 
@@ -589,20 +656,29 @@ function BatchWizard() {
 
               <div className="form-row">
                 <div className="form-group">
-                  <label>Batch Type</label>
-                  <select
-                    value={batchData.category}
-                    onChange={(e) => setBatchData({
-                      ...batchData, 
-                      category: e.target.value,
-                      subCategory: '--'
-                    })}
-                    className="form-control"
-                  >
-                    {Object.keys(categories).map(cat => (
-                      <option key={cat} value={cat}>{cat}</option>
-                    ))}
-                  </select>
+                  <label>Category</label>
+                  {categoriesLoading ? (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                      <div className="spinner">
+                        <div className="spinner-circle"></div>
+                      </div>
+                      <span>Loading categories...</span>
+                    </div>
+                  ) : (
+                    <select
+                      value={batchData.category}
+                      onChange={(e) => setBatchData({
+                        ...batchData, 
+                        category: e.target.value,
+                        subCategory: '--'
+                      })}
+                      className="form-control"
+                    >
+                      {Object.keys(categories).map(cat => (
+                        <option key={cat} value={cat}>{cat}</option>
+                      ))}
+                    </select>
+                  )}
                 </div>
                 <div className="form-group">
                   <label>SubCategory</label>
@@ -610,6 +686,7 @@ function BatchWizard() {
                     value={batchData.subCategory}
                     onChange={(e) => setBatchData({...batchData, subCategory: e.target.value})}
                     className="form-control"
+                    disabled={categoriesLoading}
                   >
                     {subcategories.map(sub => (
                       <option key={sub} value={sub}>{sub}</option>

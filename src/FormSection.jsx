@@ -333,38 +333,31 @@ function FormSection({ onGenerateListing, onCategoryFieldsChange, batchMode = fa
     return () => clearInterval(interval);
   }, []);
 
-  // Initialize form from batch data when in batch mode
-  useEffect(() => {
-    if (batchMode && currentBatch && categories && Object.keys(categories).length > 0) {
-      // Set category and subcategory from batch
-      if (currentBatch.category && categories[currentBatch.category]) {
+useEffect(() => {
+  if (batchMode && currentBatch && categories && Object.keys(categories).length > 0) {
+    // Set category and subcategory from batch
+    if (currentBatch.category && currentBatch.category !== '--' && categories[currentBatch.category]) {
+      // Only set if different from current to avoid loops
+      if (category !== currentBatch.category) {
         setSelectedCategory(currentBatch.category);
         setSubcategories(categories[currentBatch.category]);
         dispatch({ type: 'SET_CATEGORY', payload: currentBatch.category });
-        
-        if (currentBatch.subCategory && categories[currentBatch.category].includes(currentBatch.subCategory)) {
-          dispatch({ type: 'SET_SUBCATEGORY', payload: currentBatch.subCategory });
-        }
       }
       
-      // Set price from batch
-      if (currentBatch.salePrice) {
-        dispatch({ type: 'SET_PRICE', payload: currentBatch.salePrice });
+      if (currentBatch.subCategory && 
+          currentBatch.subCategory !== '--' && 
+          categories[currentBatch.category].includes(currentBatch.subCategory) &&
+          subCategory !== currentBatch.subCategory) {
+        dispatch({ type: 'SET_SUBCATEGORY', payload: currentBatch.subCategory });
       }
     }
-  }, [batchMode, currentBatch, categories, dispatch]);
-
-  const handleCategoryChange = (e) => {
-    const cat = e.target.value;
-    setSelectedCategory(cat);
-    setSubcategories(categories[cat] || ['--']);
-    const defaultSub = categories[cat]?.[0] || '--';
     
-    dispatch({ type: 'SET_CATEGORY', payload: cat });
-    dispatch({ type: 'SET_SUBCATEGORY', payload: defaultSub });
-    
-    validateSelection(cat, defaultSub);
-  };
+    // Set price from batch
+    if (currentBatch.salePrice && price !== currentBatch.salePrice) {
+      dispatch({ type: 'SET_PRICE', payload: currentBatch.salePrice });
+    }
+  }
+}, [batchMode, currentBatch, categories, category, subCategory, price, dispatch]);
 
   const handleSubCategoryChange = (e) => {
     const sub = e.target.value;
@@ -1105,34 +1098,34 @@ function FormSection({ onGenerateListing, onCategoryFieldsChange, batchMode = fa
         </div>
       )}
       
-      <div className="form-group">
-        <label>Category</label>
-        {categoriesLoading ? (
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-            <Spinner />
-            <span>Loading categories from cache...</span>
-          </div>
-        ) : (
-          <select 
-            onChange={handleCategoryChange} 
-            value={selectedCategory}
-            disabled={batchMode && currentBatch && currentBatch.category !== '--'}
-          >
-            {Object.keys(categories).map(cat => <option key={cat} value={cat}>{cat}</option>)}
-          </select>
-        )}
-      </div>
+<div className="form-group">
+  <label>Category</label>
+  {categoriesLoading ? (
+    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+      <Spinner />
+      <span>Loading categories from cache...</span>
+    </div>
+  ) : (
+    <select 
+      onChange={handleCategoryChange} 
+      value={selectedCategory}
+      // REMOVED: disabled={batchMode && currentBatch && currentBatch.category !== '--'}
+    >
+      {Object.keys(categories).map(cat => <option key={cat} value={cat}>{cat}</option>)}
+    </select>
+  )}
+</div>
 
-      <div className="form-group">
-        <label>SubCategory</label>
-        <select 
-          onChange={handleSubCategoryChange} 
-          value={subCategory}
-          disabled={batchMode && currentBatch && currentBatch.subCategory !== '--'}
-        >
-          {subcategories.map((sub, i) => <option key={i} value={sub}>{sub}</option>)}
-        </select>
-      </div>
+<div className="form-group">
+  <label>SubCategory</label>
+  <select 
+    onChange={handleSubCategoryChange} 
+    value={subCategory}
+    // REMOVED: disabled={batchMode && currentBatch && currentBatch.subCategory !== '--'}
+  >
+    {subcategories.map((sub, i) => <option key={i} value={sub}>{sub}</option>)}
+  </select>
+</div>
 
       <div className="form-group">
         <label>Price ($)</label>
@@ -1146,16 +1139,16 @@ function FormSection({ onGenerateListing, onCategoryFieldsChange, batchMode = fa
         />
       </div>
 
-      <div className="form-group">
-        <label>SKU</label>
-        <input 
-          type="text" 
-          value={sku} 
-          onChange={handleSkuChange} 
-          placeholder="Enter SKU" 
-          className="form-control" 
-        />
-      </div>
+<div className="form-group">
+  <label>SKU</label>
+  <input 
+    type="text" 
+    value={sku} 
+    onChange={handleSkuChange} 
+    placeholder="Enter SKU"  // Simple placeholder instead of dynamic one
+    className="form-control" 
+  />
+</div>
 
       <div className="form-group">
         <label>Category Fields</label>

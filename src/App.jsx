@@ -958,11 +958,7 @@ function BatchWizard() {
     purchaseDate: '',
     purchasePrice: '',
     salePrice: '',
-    cabinet: '',
-    shelf: '',
-    box: '',
-    row: '',
-    section: '',
+    sku: '',
     batchDescription: ''
   });
 
@@ -1324,7 +1320,7 @@ function BatchWizard() {
                 </div>
               </div>
 
-              {/* Fixed form row for price inputs */}
+              {/* Updated form row for price and SKU inputs */}
               <div className="form-row price-row">
                 <div className="form-group">
                   <label>Purchase Price</label>
@@ -1358,57 +1354,19 @@ function BatchWizard() {
                 </div>
               </div>
 
-              <div className="location-grid">
-                <div className="form-group">
-                  <label>Cabinet</label>
-                  <input
-                    type="text"
-                    value={batchData.cabinet}
-                    onChange={(e) => setBatchData({...batchData, cabinet: e.target.value})}
-                    placeholder="Cabinet"
-                    className="form-control"
-                  />
-                </div>
-                <div className="form-group">
-                  <label>Shelf</label>
-                  <input
-                    type="text"
-                    value={batchData.shelf}
-                    onChange={(e) => setBatchData({...batchData, shelf: e.target.value})}
-                    placeholder="Shelf"
-                    className="form-control"
-                  />
-                </div>
-                <div className="form-group">
-                  <label>Box</label>
-                  <input
-                    type="text"
-                    value={batchData.box}
-                    onChange={(e) => setBatchData({...batchData, box: e.target.value})}
-                    placeholder="Box"
-                    className="form-control"
-                  />
-                </div>
-                <div className="form-group">
-                  <label>Row</label>
-                  <input
-                    type="text"
-                    value={batchData.row}
-                    onChange={(e) => setBatchData({...batchData, row: e.target.value})}
-                    placeholder="Row"
-                    className="form-control"
-                  />
-                </div>
-                <div className="form-group">
-                  <label>Section</label>
-                  <input
-                    type="text"
-                    value={batchData.section}
-                    onChange={(e) => setBatchData({...batchData, section: e.target.value})}
-                    placeholder="Section"
-                    className="form-control"
-                  />
-                </div>
+              {/* New SKU field */}
+              <div className="form-group">
+                <label>Default SKU</label>
+                <input
+                  type="text"
+                  value={batchData.sku}
+                  onChange={(e) => setBatchData({...batchData, sku: e.target.value})}
+                  placeholder="Enter default SKU for this batch"
+                  className="form-control"
+                />
+                <small style={{ color: '#666', fontSize: '0.8rem', marginTop: '4px', display: 'block' }}>
+                  This will be the default SKU for all items in this batch. You can modify individual SKUs later.
+                </small>
               </div>
 
               <div className="form-group">
@@ -1416,7 +1374,7 @@ function BatchWizard() {
                 <textarea
                   value={batchData.batchDescription}
                   onChange={(e) => setBatchData({...batchData, batchDescription: e.target.value})}
-                  placeholder="Batch description"
+                  placeholder="Optional description for this batch"
                   className="form-control"
                   rows="4"
                 />
@@ -1453,7 +1411,6 @@ function BatchWizard() {
   );
 }
 
-// Updated BatchEditor function with proper layout
 function BatchEditor() {
   const { currentBatch, updateBatch, dispatch, markCsvDownloaded, markEbayListingsCreated } = useBatch();
   const [showListingManager, setShowListingManager] = useState(false);
@@ -1483,6 +1440,11 @@ function BatchEditor() {
       if (currentBatch.salePrice) {
         console.log('Setting price to:', currentBatch.salePrice);
         appDispatch({ type: 'SET_PRICE', payload: currentBatch.salePrice });
+      }
+      // Set SKU from batch if available
+      if (currentBatch.sku) {
+        console.log('Setting SKU to:', currentBatch.sku);
+        appDispatch({ type: 'SET_SKU', payload: currentBatch.sku });
       }
     }
   }, [currentBatch, appDispatch]);
@@ -1514,7 +1476,10 @@ function BatchEditor() {
           categoryID: state.categoryID
         },
         totalItems: state.responseData.filter(item => item && !item.error).length,
-        status: newStatus
+        status: newStatus,
+        // Update the batch's default price and SKU with current values
+        salePrice: state.price || currentBatch.salePrice,
+        sku: state.sku || currentBatch.sku
       };
       
       const currentDataString = JSON.stringify(updatedBatch);
@@ -1584,9 +1549,10 @@ function BatchEditor() {
           while (updatedMetadata.length <= insertIndex) {
             updatedMetadata.push(null);
           }
+          // Use current SKU and price values, fallback to batch defaults, then global defaults
           updatedMetadata[insertIndex] = { 
-            price: state.price, 
-            sku: state.sku,
+            price: state.price || currentBatch?.salePrice || '', 
+            sku: state.sku || currentBatch?.sku || '',
             fieldSelections: { ...fieldSelections }
           };
           

@@ -207,7 +207,7 @@ const loadBatchesFromDynamoDBWithScan = async () => {
     console.log('🔍 BatchProvider: Created ScanCommand:', command);
     
     console.log('🚀 BatchProvider: Executing DynamoDB scan...');
-    const response = await client.send(command); // Use client, not docClient for ScanCommand
+    const response = await dynamoClient.send(command); // FIXED: Use dynamoClient, not client
     console.log('✅ BatchProvider: DynamoDB scan successful');
     console.log('📊 BatchProvider: Scan response:', {
       itemCount: response.Items?.length || 0,
@@ -406,7 +406,7 @@ const loadTemplatesFromDynamoDB = async () => {
 
     console.log('🔍 BatchProvider: Template scan parameters:', scanParams);
     const command = new ScanCommand(scanParams);
-    const response = await client.send(command); // Use client, not docClient
+    const response = await dynamoClient.send(command); // FIXED: Use dynamoClient, not client
     
     // Convert DynamoDB items to plain objects using unmarshall
     const allItems = (response.Items || []).map(item => unmarshall(item));

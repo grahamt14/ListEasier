@@ -1,22 +1,17 @@
-import { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useMemo, createContext, useContext, useReducer } from 'react';
 import './App.css';
 import FormSection, { getSelectedCategoryOptionsJSON } from './FormSection';
 import JSZip from 'jszip';
 import { saveAs } from 'file-saver';
 import { DynamoDBClient, QueryCommand, ScanCommand } from '@aws-sdk/client-dynamodb';
-import { unmarshall } from '@aws-sdk/util-dynamodb'; // Add this import
+import { unmarshall } from '@aws-sdk/util-dynamodb';
 import { DynamoDBDocumentClient, PutCommand, DeleteCommand } from '@aws-sdk/lib-dynamodb';
 import { fromCognitoIdentityPool } from "@aws-sdk/credential-provider-cognito-identity";
 import { AppStateProvider, useAppState } from './StateContext';
 import { EbayAuthProvider, useEbayAuth } from './EbayAuthContext';
 import EbayListingManager from './EbayListingManager';
 import BatchPreviewSection from './BatchPreviewSection';
-
-// Import caching service
 import { cacheService } from './CacheService';
-
-// Batch Context for managing batches and templates
-import React, { createContext, useContext, useReducer } from 'react';
 
 const BatchContext = createContext();
 
@@ -1543,71 +1538,76 @@ function BatchWizard() {
   const REGION = "us-east-2";
   const IDENTITY_POOL_ID = "us-east-2:f81d1240-32a8-4aff-87e8-940effdf5908";
 
-  const client = new DynamoDBClient({
-    region: REGION,
-    credentials: fromCognitoIdentityPool({
-      clientConfig: { region: REGION },
-      identityPoolId: IDENTITY_POOL_ID,
-    }),
-  });
-
-  const docClient = DynamoDBDocumentClient.from(client);
+  const dynamoClient = useMemo(() => {
+    return new DynamoDBClient({
+      region: REGION,
+      credentials: fromCognitoIdentityPool({
+        clientConfig: { region: REGION },
+        identityPoolId: IDENTITY_POOL_ID,
+      }),
+    });
+  }, []);
 
   // Fetch categories from DynamoDB (same logic as FormSection)
-  useEffect(() => {
-    const fetchCategories = async () => {
-      try {
-        setCategoriesLoading(true);
-        
-        const cacheKey = 'categories_all';
-        const cachedCategories = cacheService.get(cacheKey);
-        
-        if (cachedCategories) {
-          setCategories(cachedCategories);
-          setCategoriesLoading(false);
-          return;
-        }
-
-        const scanCommand = new ScanCommand({
-          TableName: 'ListCategory',
-        });
-
-        const response = await docClient.send(scanCommand);
-        const categoryData = {};
-        response.Items.forEach(item => {
-          const category = item.Category;
-          const subcategory = item.SubCategory;
-          if (!categoryData[category]) {
-            categoryData[category] = [];
-          }
-          categoryData[category].push(subcategory);
-        });
-        categoryData['--'] = ['--'];
-        
-        cacheService.set(cacheKey, categoryData, null, 'categories');
-        
-        setCategories(categoryData);
-      } catch (err) {
-        console.error('Error fetching categories:', err);
-        const fallbackData = cacheService.get('categories_all');
-        if (fallbackData) {
-          setCategories(fallbackData);
-        } else {
-          // Fallback categories if DynamoDB fails
-          setCategories({
-            '--': ['--'],
-            'Electronics': ['Cell Phones', 'Computers', 'Gaming'],
-            'Collectibles': ['Sports Cards', 'Coins', 'Comics'],
-            'Clothing': ['Men', 'Women', 'Children']
-          });
-        }
-      } finally {
+ // Fetch categories from DynamoDB (same logic as FormSection)
+useEffect(() => {
+  const fetchCategories = async () => {
+    try {
+      setCategoriesLoading(true);
+      
+      const cacheKey = 'categories_all';
+      const cachedCategories = cacheService.get(cacheKey);
+      
+      if (cachedCategories) {
+        setCategories(cachedCategories);
         setCategoriesLoading(false);
+        return;
       }
-    };
 
-    fetchCategories();
-  }, [docClient]);
+      const scanCommand = new ScanCommand({
+        TableName: 'ListCategory',
+      });
+
+      const response = await dynamoClient.send(scanCommand); // Use dynamoClient, not docClient
+      const categoryData = {};
+      
+      // FIXED: Properly unmarshall DynamoDB items
+      const items = response.Items?.map(item => unmarshall(item)) || [];
+      
+      items.forEach(item => {
+        const category = item.Category;
+        const subcategory = item.SubCategory;
+        if (!categoryData[category]) {
+          categoryData[category] = [];
+        }
+        categoryData[category].push(subcategory);
+      });
+      categoryData['--'] = ['--'];
+      
+      cacheService.set(cacheKey, categoryData, null, 'categories');
+      
+      setCategories(categoryData);
+    } catch (err) {
+      console.error('Error fetching categories:', err);
+      const fallbackData = cacheService.get('categories_all');
+      if (fallbackData) {
+        setCategories(fallbackData);
+      } else {
+        // Fallback categories if DynamoDB fails
+        setCategories({
+          '--': ['--'],
+          'Electronics': ['Cell Phones', 'Computers', 'Gaming'],
+          'Collectibles': ['Sports Cards', 'Coins', 'Comics'],
+          'Clothing': ['Men', 'Women', 'Children']
+        });
+      }
+    } finally {
+      setCategoriesLoading(false);
+    }
+  };
+
+  fetchCategories();
+}, [dynamoClient]); // Add dynamoClient as dependency
 
   const subcategories = categories[batchData.category] || ['--'];
 

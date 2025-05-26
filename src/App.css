@@ -58,7 +58,7 @@ body {
   justify-content: center;
   position: relative;
   overflow: hidden;
-  min-height: 120px; /* Increased from 80px */
+  min-height: 90px; /* Increased from 80px */
 }
 
 .sidebar-brand::before {

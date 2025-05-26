@@ -437,7 +437,7 @@ function DeleteBatchModal({ isOpen, onClose, onConfirm, batchName }) {
   );
 }
 
-// Batch Overview Page
+// Updated BatchOverview component with clear icon explanations
 function BatchOverview() {
   const { batches, dispatch, deleteBatch } = useBatch();
   const [deleteModal, setDeleteModal] = useState({ isOpen: false, batch: null });
@@ -485,6 +485,20 @@ function BatchOverview() {
     setDeleteModal({ isOpen: false, batch: null });
   };
 
+  // Helper function to get batch statistics
+  const getBatchStats = (batch) => {
+    const appState = batch.appState || {};
+    const totalListings = appState.responseData?.filter(item => item && !item.error).length || 0;
+    const totalImageGroups = appState.imageGroups?.filter(g => g && g.length > 0).length || 0;
+    const processedGroups = appState.processedGroupIndices?.length || 0;
+    
+    return {
+      totalListings,
+      totalImageGroups,
+      processedGroups
+    };
+  };
+
   return (
     <div className="batch-overview">
       <div className="page-header">
@@ -498,6 +512,34 @@ function BatchOverview() {
         <button className="filter-btn active">All</button>
         <button className="filter-btn">Open</button>
         <button className="filter-btn">Closed</button>
+      </div>
+
+      {/* Add legend for batch preview icons */}
+      <div className="batch-legend" style={{
+        background: '#f8f9fa',
+        border: '1px solid #e9ecef',
+        borderRadius: '8px',
+        padding: '15px',
+        marginBottom: '20px',
+        fontSize: '0.9rem'
+      }}>
+        <h4 style={{ margin: '0 0 10px 0', color: '#333', fontSize: '1rem' }}>
+          Batch Preview Legend:
+        </h4>
+        <div style={{ display: 'flex', gap: '20px', flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <span style={{ fontSize: '1.2rem' }}>📝</span>
+            <span>Generated Listings</span>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <span style={{ fontSize: '1.2rem' }}>📷</span>
+            <span>Image Groups</span>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <span style={{ fontSize: '1.2rem' }}>✅</span>
+            <span>Processed Groups</span>
+          </div>
+        </div>
       </div>
 
       <div className="batch-table">
@@ -518,58 +560,83 @@ function BatchOverview() {
             </button>
           </div>
         ) : (
-          batches.map(batch => (
-            <div key={batch.id} className="table-row">
-              <div className="td">
-                <div className="batch-name-cell">
-                  <div className="batch-thumbnail">
-                    {batch.category && batch.category.charAt(0)}
+          batches.map(batch => {
+            const stats = getBatchStats(batch);
+            
+            return (
+              <div key={batch.id} className="table-row">
+                <div className="td">
+                  <div className="batch-name-cell">
+                    <div className="batch-thumbnail">
+                      {batch.category && batch.category.charAt(0)}
+                    </div>
+                    <div>
+                      <div style={{ fontWeight: '500', marginBottom: '4px' }}>
+                        {batch.name}
+                      </div>
+                      <div style={{ fontSize: '0.85rem', color: '#666' }}>
+                        {batch.category} / {batch.subCategory}
+                      </div>
+                    </div>
                   </div>
-                  <span>{batch.name}</span>
                 </div>
-              </div>
-              <div className="td">
-                <span 
-                  className="status-badge" 
-                  style={{ backgroundColor: getStatusColor(batch.status) }}
-                >
-                  {batch.status}
-                </span>
-              </div>
-              <div className="td">
-                <div className="batch-preview">
-                  <span className="preview-icon">📝</span> {batch.appState?.responseData?.length || 0}
-                  <span className="preview-icon">📷</span> {batch.appState?.imageGroups?.filter(g => g.length > 0).length || 0}
-                  <span className="preview-icon">✅</span> {batch.appState?.processedGroupIndices?.length || 0}
-                </div>
-              </div>
-              <div className="td">
-                {formatDate(batch.createdAt)}
-              </div>
-              <div className="td">
-                <div style={{ display: 'flex', gap: '0.5rem' }}>
-                  <button 
-                    onClick={() => handleEditBatch(batch)}
-                    className="btn btn-sm btn-outline"
+                <div className="td">
+                  <span 
+                    className="status-badge" 
+                    style={{ backgroundColor: getStatusColor(batch.status) }}
                   >
-                    Open
-                  </button>
-                  <button 
-                    onClick={() => handleDeleteBatch(batch)}
-                    className="btn btn-sm"
-                    style={{
-                      backgroundColor: '#dc3545',
-                      color: 'white',
-                      border: 'none'
-                    }}
-                    title="Delete batch"
-                  >
-                    Delete
-                  </button>
+                    {batch.status}
+                  </span>
+                </div>
+                <div className="td">
+                  <div className="batch-preview">
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                      <span className="preview-icon" title="Generated Listings">📝</span> 
+                      <span>{stats.totalListings}</span>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                      <span className="preview-icon" title="Image Groups">📷</span> 
+                      <span>{stats.totalImageGroups}</span>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                      <span className="preview-icon" title="Processed Groups">✅</span> 
+                      <span>{stats.processedGroups}</span>
+                    </div>
+                  </div>
+                </div>
+                <div className="td">
+                  <div>{formatDate(batch.createdAt)}</div>
+                  {batch.updatedAt !== batch.createdAt && (
+                    <div style={{ fontSize: '0.8rem', color: '#666' }}>
+                      Updated: {formatDate(batch.updatedAt)}
+                    </div>
+                  )}
+                </div>
+                <div className="td">
+                  <div style={{ display: 'flex', gap: '0.5rem' }}>
+                    <button 
+                      onClick={() => handleEditBatch(batch)}
+                      className="btn btn-sm btn-outline"
+                    >
+                      Open
+                    </button>
+                    <button 
+                      onClick={() => handleDeleteBatch(batch)}
+                      className="btn btn-sm"
+                      style={{
+                        backgroundColor: '#dc3545',
+                        color: 'white',
+                        border: 'none'
+                      }}
+                      title="Delete batch"
+                    >
+                      Delete
+                    </button>
+                  </div>
                 </div>
               </div>
-            </div>
-          ))
+            );
+          })
         )}
       </div>
 

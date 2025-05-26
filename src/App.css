@@ -1,4 +1,4 @@
-/* App.css - Complete Styles with Editable Title/Description Fields */
+/* App.css - Complete Styles with Batch Management System */
 
 /* Container setup */
 #root, .app-container {
@@ -11,6 +11,663 @@
   min-height: 100vh;
   background-color: #f9f9f9;
 }
+
+/* =================== BATCH MANAGEMENT STYLES =================== */
+
+/* Batch Overview */
+.batch-overview {
+  padding: 2rem;
+  max-width: 1200px;
+  margin: 0 auto;
+  background: white;
+  border-radius: 16px;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+}
+
+.page-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 2rem;
+  padding-bottom: 1rem;
+  border-bottom: 2px solid #f0f0f0;
+}
+
+.page-header h1 {
+  margin: 0;
+  color: #333;
+  font-size: 2.5rem;
+  font-weight: 600;
+}
+
+.batch-filters {
+  display: flex;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.filter-btn {
+  padding: 0.75rem 1.5rem;
+  border: 2px solid #ddd;
+  background: white;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s;
+  font-weight: 500;
+  color: #666;
+}
+
+.filter-btn.active {
+  background: #007bff;
+  color: white;
+  border-color: #007bff;
+  box-shadow: 0 2px 8px rgba(0, 123, 255, 0.2);
+}
+
+.filter-btn:hover:not(.active) {
+  border-color: #007bff;
+  background: #f8f9ff;
+}
+
+/* Batch Table */
+.batch-table {
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+  overflow: hidden;
+}
+
+.table-header, .table-row {
+  display: grid;
+  grid-template-columns: 2fr 1fr 2fr 1.5fr 1fr;
+  gap: 1rem;
+  padding: 1.5rem;
+  align-items: center;
+}
+
+.table-header {
+  background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+  font-weight: 600;
+  color: #333;
+  border-bottom: 2px solid #dee2e6;
+}
+
+.table-row {
+  border-bottom: 1px solid #f0f0f0;
+  transition: all 0.2s;
+}
+
+.table-row:hover {
+  background: #f8f9ff;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+}
+
+.table-row:last-child {
+  border-bottom: none;
+}
+
+.batch-name-cell {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.batch-thumbnail {
+  width: 50px;
+  height: 50px;
+  background: linear-gradient(135deg, #007bff, #0056b3);
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-weight: bold;
+  font-size: 1.5rem;
+  box-shadow: 0 2px 8px rgba(0, 123, 255, 0.2);
+}
+
+.batch-name-cell span {
+  font-weight: 500;
+  color: #333;
+  font-size: 1.1rem;
+}
+
+.status-badge {
+  display: inline-block;
+  padding: 0.4rem 1rem;
+  border-radius: 20px;
+  color: white;
+  font-size: 0.85rem;
+  font-weight: 600;
+  text-transform: capitalize;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.batch-preview {
+  display: flex;
+  gap: 1.5rem;
+  align-items: center;
+  font-size: 0.9rem;
+  color: #666;
+}
+
+.preview-icon {
+  margin-right: 0.5rem;
+  font-size: 1.1rem;
+}
+
+.empty-state {
+  text-align: center;
+  padding: 4rem 2rem;
+  color: #666;
+}
+
+.empty-state h3 {
+  color: #333;
+  margin-bottom: 1rem;
+  font-size: 1.5rem;
+}
+
+.empty-state p {
+  margin-bottom: 2rem;
+  font-size: 1.1rem;
+}
+
+/* Batch Wizard */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0,0,0,0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  backdrop-filter: blur(4px);
+}
+
+.modal-content {
+  background: white;
+  border-radius: 16px;
+  max-height: 90vh;
+  overflow-y: auto;
+  width: 90%;
+  max-width: 900px;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.2);
+  animation: modalSlideIn 0.3s ease;
+}
+
+@keyframes modalSlideIn {
+  from {
+    opacity: 0;
+    transform: scale(0.9) translateY(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+.batch-wizard {
+  max-width: 1000px;
+}
+
+.wizard-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 2rem 2.5rem;
+  border-bottom: 2px solid #f0f0f0;
+  background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+}
+
+.wizard-header h2 {
+  margin: 0;
+  color: #333;
+  font-size: 1.8rem;
+  font-weight: 600;
+}
+
+.modal-close {
+  background: none;
+  border: none;
+  font-size: 2rem;
+  color: #666;
+  cursor: pointer;
+  padding: 0.5rem;
+  border-radius: 8px;
+  transition: all 0.2s;
+}
+
+.modal-close:hover {
+  background: #f0f0f0;
+  color: #333;
+}
+
+/* Wizard Steps */
+.wizard-steps {
+  display: flex;
+  justify-content: center;
+  padding: 2.5rem;
+  background: #f8f9fa;
+  gap: 2rem;
+}
+
+.step {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0 1rem;
+  position: relative;
+  color: #999;
+  transition: all 0.3s;
+}
+
+.step:not(:last-child)::after {
+  content: '';
+  position: absolute;
+  right: -2rem;
+  width: 3rem;
+  height: 3px;
+  background: #ddd;
+  top: 50%;
+  transform: translateY(-50%);
+  border-radius: 2px;
+}
+
+.step.active {
+  color: #007bff;
+  transform: scale(1.05);
+}
+
+.step.completed {
+  color: #28a745;
+}
+
+.step.completed::after {
+  background: linear-gradient(90deg, #28a745, #20c997);
+}
+
+.step-number {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: 50%;
+  background: #ddd;
+  color: white;
+  font-weight: bold;
+  font-size: 1rem;
+  transition: all 0.3s;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+
+.step.active .step-number {
+  background: linear-gradient(135deg, #007bff, #0056b3);
+  box-shadow: 0 4px 12px rgba(0, 123, 255, 0.3);
+}
+
+.step.completed .step-number {
+  background: linear-gradient(135deg, #28a745, #20c997);
+  box-shadow: 0 4px 12px rgba(40, 167, 69, 0.3);
+}
+
+.step span:not(.step-number) {
+  font-weight: 500;
+  font-size: 0.95rem;
+}
+
+/* Wizard Content */
+.wizard-content {
+  padding: 2.5rem;
+}
+
+.step-content h3 {
+  margin: 0 0 1rem 0;
+  color: #333;
+  font-size: 1.5rem;
+  font-weight: 600;
+}
+
+.step-content p {
+  color: #666;
+  margin-bottom: 2rem;
+  font-size: 1rem;
+  line-height: 1.6;
+}
+
+/* Form Styles */
+.form-group {
+  margin-bottom: 1.5rem;
+}
+
+.form-group label {
+  display: block;
+  margin-bottom: 0.5rem;
+  font-weight: 500;
+  color: #333;
+  font-size: 0.95rem;
+}
+
+.form-control {
+  width: 100%;
+  padding: 0.75rem 1rem;
+  border: 2px solid #e0e0e0;
+  border-radius: 8px;
+  font-size: 1rem;
+  background: white;
+  color: #333;
+  transition: all 0.2s;
+}
+
+.form-control:focus {
+  outline: none;
+  border-color: #007bff;
+  box-shadow: 0 0 0 3px rgba(0,123,255,0.1);
+}
+
+.form-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.5rem;
+}
+
+.location-grid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 1rem;
+  margin-top: 1rem;
+}
+
+/* Input Groups */
+.input-group {
+  position: relative;
+}
+
+.input-prefix {
+  position: absolute;
+  left: 1rem;
+  top: 50%;
+  transform: translateY(-50%);
+  color: #666;
+  z-index: 1;
+  font-weight: 500;
+}
+
+.input-group .form-control {
+  padding-left: 2.5rem;
+}
+
+/* Wizard Footer */
+.wizard-footer {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 2rem 2.5rem;
+  border-top: 2px solid #f0f0f0;
+  background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+}
+
+/* Button Styles */
+.btn {
+  padding: 0.75rem 2rem;
+  border: none;
+  border-radius: 8px;
+  font-size: 1rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  text-decoration: none;
+  display: inline-block;
+  text-align: center;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+
+.btn-primary {
+  background: linear-gradient(135deg, #007bff, #0056b3);
+  color: white;
+}
+
+.btn-primary:hover:not(:disabled) {
+  background: linear-gradient(135deg, #0056b3, #004085);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 123, 255, 0.3);
+}
+
+.btn-secondary {
+  background: linear-gradient(135deg, #6c757d, #5a6268);
+  color: white;
+}
+
+.btn-secondary:hover:not(:disabled) {
+  background: linear-gradient(135deg, #5a6268, #495057);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(108, 117, 125, 0.3);
+}
+
+.btn-outline {
+  background: transparent;
+  border: 2px solid #007bff;
+  color: #007bff;
+  box-shadow: none;
+}
+
+.btn-outline:hover {
+  background: #007bff;
+  color: white;
+  box-shadow: 0 2px 8px rgba(0, 123, 255, 0.2);
+}
+
+.btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+
+.btn-sm {
+  padding: 0.5rem 1rem;
+  font-size: 0.9rem;
+}
+
+/* Utility Classes */
+.mt-2 {
+  margin-top: 0.5rem;
+}
+
+/* Batch Editor Styles */
+.batch-editor {
+  min-height: 100vh;
+  background: #f5f5f5;
+}
+
+.batch-editor-header {
+  background: white;
+  padding: 1.5rem 2rem;
+  border-bottom: 2px solid #e9ecef;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+  position: sticky;
+  top: 0;
+  z-index: 100;
+}
+
+.back-button {
+  background: #f8f9fa;
+  border: 2px solid #dee2e6;
+  padding: 0.5rem 1rem;
+  border-radius: 8px;
+  color: #495057;
+  text-decoration: none;
+  font-weight: 500;
+  transition: all 0.2s;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.back-button:hover {
+  background: #e9ecef;
+  border-color: #adb5bd;
+  color: #495057;
+  text-decoration: none;
+  transform: translateX(-2px);
+}
+
+.batch-info h1 {
+  margin: 0.5rem 0 0 0;
+  color: #333;
+  font-size: 2rem;
+}
+
+.batch-status {
+  display: inline-block;
+  padding: 0.25rem 0.75rem;
+  border-radius: 12px;
+  font-size: 0.8rem;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-left: 1rem;
+}
+
+/* Batch Mode Header */
+.batch-mode-header {
+  background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%);
+  border: 2px solid #2196f3;
+  border-radius: 12px;
+  padding: 1.5rem;
+  margin-bottom: 2rem;
+  box-shadow: 0 4px 12px rgba(33, 150, 243, 0.1);
+}
+
+.batch-mode-header h3 {
+  margin: 0 0 0.5rem 0;
+  color: #1565c0;
+  font-size: 1.3rem;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.batch-mode-header h3::before {
+  content: "📦";
+  font-size: 1.2em;
+}
+
+.batch-details {
+  display: flex;
+  gap: 2rem;
+  font-size: 0.95rem;
+  color: #1976d2;
+}
+
+.batch-details span {
+  background: white;
+  padding: 0.25rem 0.75rem;
+  border-radius: 6px;
+  border: 1px solid #e3f2fd;
+  font-weight: 500;
+}
+
+/* WYSIWYG Editor Styles */
+.wysiwyg-container {
+  border: 2px solid #e0e0e0;
+  border-radius: 8px;
+  overflow: hidden;
+  background: white;
+}
+
+.wysiwyg-toolbar {
+  display: flex;
+  gap: 0.25rem;
+  padding: 0.75rem;
+  background: #f8f9fa;
+  border-bottom: 1px solid #dee2e6;
+  flex-wrap: wrap;
+}
+
+.toolbar-btn {
+  padding: 0.5rem;
+  background: white;
+  border: 1px solid #dee2e6;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  min-width: 2rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+}
+
+.toolbar-btn:hover {
+  background: #e9ecef;
+  border-color: #adb5bd;
+}
+
+.toolbar-btn:active {
+  background: #dee2e6;
+}
+
+.toolbar-separator {
+  width: 1px;
+  background: #dee2e6;
+  margin: 0.25rem;
+  align-self: stretch;
+}
+
+.wysiwyg-editor {
+  min-height: 120px;
+  padding: 1rem;
+  border: none;
+  outline: none;
+  background: white;
+  color: #333;
+  line-height: 1.5;
+}
+
+.wysiwyg-editor:empty::before {
+  content: attr(data-placeholder);
+  color: #999;
+  font-style: italic;
+}
+
+/* Modal Styles */
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1.5rem 2rem;
+  border-bottom: 2px solid #e9ecef;
+  background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+}
+
+.modal-header h3 {
+  margin: 0;
+  color: #333;
+  font-size: 1.3rem;
+  font-weight: 600;
+}
+
+.modal-body {
+  padding: 2rem;
+}
+
+.modal-footer {
+  display: flex;
+  gap: 1rem;
+  justify-content: flex-end;
+  padding: 1.5rem 2rem;
+  border-top: 2px solid #e9ecef;
+  background: #f8f9fa;
+}
+
+/* =================== EXISTING STYLES (Updated) =================== */
 
 .image-container {
   position: relative;
@@ -33,6 +690,37 @@
   font-size: 14px;
 }
 
+.ai-category-fields-option {
+  display: flex;
+  align-items: flex-start;
+  margin: 15px 0;
+  padding: 12px;
+  background: linear-gradient(135deg, #f0f7ff 0%, #e8f4f8 100%);
+  border: 1px solid #4a90e2;
+  border-radius: 8px;
+}
+
+.ai-category-fields-option input[type="checkbox"] {
+  margin-right: 12px;
+  margin-top: 2px;
+}
+
+.ai-category-fields-option label {
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  color: #333;
+  flex: 1;
+}
+
+.field-help-text {
+  margin-top: 8px;
+}
+
+.field-help-text small {
+  line-height: 1.4;
+}
+
 /* Updated image controls to span full height */
 .image-controls {
   position: absolute;
@@ -43,7 +731,7 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
-  pointer-events: none; /* This makes sure clicks pass through to the image for selection */
+  pointer-events: none;
 }
 
 /* Updated rotation button styles */
@@ -60,11 +748,10 @@
   align-items: center;
   justify-content: center;
   transition: background-color 0.2s;
-  margin: 0 5px; /* Add some margin for spacing from the edge */
-  pointer-events: auto; /* Make sure buttons can be clicked */
+  margin: 0 5px;
+  pointer-events: auto;
 }
 
-/* Specific positioning for left and right buttons */
 .rotate-button.left {
   margin-left: 5px;
 }
@@ -104,7 +791,7 @@
 .main-card {
   flex: 1;
   display: grid;
-  grid-template-columns: 1fr 3fr; /* Changed from 1fr 2fr to give more space to listings */
+  grid-template-columns: 1fr 3fr;
   gap: 2rem;
   margin-top: 2rem;
   max-width: 1600px;
@@ -116,7 +803,7 @@
 /* Responsive layout for smaller screens */
 @media (max-width: 900px) {
   .main-card {
-    grid-template-columns: 1fr; /* Stack on small screens */
+    grid-template-columns: 1fr;
   }
 }
 
@@ -144,7 +831,6 @@
   display: block;
 }
 
-/* Ensure the preview doesn't go off screen */
 @media (max-width: 768px) {
   .image-preview-popup {
     max-width: 200px;
@@ -345,7 +1031,7 @@
   flex-direction: column;
   gap: 1rem;
   width: 100%;
-  overflow-x: hidden; /* Prevent horizontal scrolling */
+  overflow-x: hidden;
 }
 
 .preview-section h2 {
@@ -363,7 +1049,6 @@
   max-width: 100%;
 }
 
-/* Media queries for responsive grid */
 @media (min-width: 768px) {
   .groups-container {
     grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
@@ -532,20 +1217,18 @@
   border: 1px solid #ccc;
   font-size: 1rem;
   background-color: #3b3b3b;
-  color: white; /* Explicitly setting text color to white for dark backgrounds */
+  color: white;
 }
 
-/* Make sure all selects in the form have consistent styling */
 .form-group select {
   padding: 0.5rem;
   border-radius: 4px;
   border: 1px solid #ccc;
   background-color: #3b3b3b;
   font-size: 1rem;
-  color: white; /* Explicitly setting text color for light backgrounds */
+  color: white;
 }
 
-/* For consistency, make sure your .uniform-select also has an explicit text color */
 .uniform-select {
   width: 100%;
   padding: 0.5rem;
@@ -554,7 +1237,7 @@
   font-size: 1rem;
   height: 38px;
   background-color: #3b3b3b;
-  color: white; /* Explicitly setting text color */
+  color: white;
   appearance: auto;
 }
 
@@ -611,314 +1294,6 @@
   z-index: 10;
 }
 
-/* Styles for group metadata management in FormSection */
-.group-metadata-form {
-  background: #f8f8f8;
-  padding: 15px;
-  border-radius: 8px;
-  border: 1px solid #eee;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  margin-top: 5px;
-}
-
-.group-metadata-form select {
-  width: 100%;
-  padding: 0.5rem;
-  border-radius: 4px;
-  border: 1px solid #ccc;
-  margin-bottom: 5px;
-  background-color: #3b3b3b;
-  color: white;
-}
-
-.primary.small {
-  padding: 0.5rem 1rem;
-  font-size: 0.9rem;
-  margin-top: 8px;
-  align-self: flex-start;
-}
-
-/* Styles for displaying group metadata in PreviewSection */
-.group-metadata {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 8px 12px;
-  background-color: #f0f0f0;
-  border-bottom: 1px solid #ddd;
-  border-top-left-radius: 8px;
-  border-top-right-radius: 8px;
-}
-
-.group-number {
-  font-weight: bold;
-  color: #333;
-  font-size: 0.9rem;
-}
-
-.metadata-details {
-  display: flex;
-  gap: 15px;
-}
-
-.metadata-item {
-  font-size: 0.85rem;
-  color: #555;
-  background-color: #fff;
-  padding: 3px 8px;
-  border-radius: 4px;
-  border: 1px solid #ddd;
-}
-
-/* Ensure thumbs section appears below metadata */
-.thumbs {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem;
-  padding: 1rem;
-  border-bottom: 1px solid #eee;
-}
-
-/* Style for the individual download button */
-.download-single-button {
-  background-color: #2196F3;
-  color: white;
-  padding: 8px 12px;
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
-  margin-top: 10px;
-  font-size: 0.9em;
-  transition: background-color 0.3s;
-  display: block;
-  width: fit-content;
-}
-
-.download-single-button:hover {
-  background-color: #0b7dda;
-}
-
-/* New styles for group header (replacing metadata header) */
-.group-header {
-  display: flex;
-  justify-content: flex-start;
-  padding: 8px 12px;
-  background-color: #f0f0f0;
-  border-bottom: 1px solid #ddd;
-  border-top-left-radius: 8px;
-  border-top-right-radius: 8px;
-}
-
-/* Style for listing metadata inside the listing content */
-.listing-metadata {
-  background-color: #f9f9f9;
-  padding: 6px 10px;
-  border-radius: 4px;
-  margin-top: 8px;
-  border-left: 3px solid #2196F3;
-}
-
-/* Make the response fields look nicer */
-.response-fields {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.response-field {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.response-field strong {
-  font-size: 0.9rem;
-  color: #555;
-}
-
-.response-field span {
-  word-break: break-word;
-}
-
-/* Make the title and description stand out */
-.response-field:first-child strong,
-.response-field:nth-child(2) strong {
-  font-size: 1.1rem;
-  color: #333;
-}
-
-.response-field:first-child span,
-.response-field:nth-child(2) span {
-  font-weight: 500;
-}
-
-/* Category fields metadata section */
-.category-fields-metadata {
-  margin-top: 15px;
-  padding-top: 10px;
-  border-top: 1px solid #eee;
-}
-
-/* Better styling for primary fields (title and description) */
-.response-field.primary-field {
-  padding-bottom: 8px;
-  margin-bottom: 8px;
-  border-bottom: 1px dashed #eee;
-}
-
-.response-field.primary-field strong {
-  font-size: 1rem;
-  color: #333;
-}
-
-.response-field.primary-field span {
-  font-weight: 500;
-  line-height: 1.4;
-}
-
-/* Styles for editable title and description fields */
-.editable-title-field,
-.editable-description-field {
-  background-color: #f8f9fa;
-  padding: 12px;
-  border-radius: 6px;
-  border: 1px solid #e9ecef;
-  margin-bottom: 12px;
-}
-
-.editable-title-input,
-.editable-description-input {
-  transition: border-color 0.2s, box-shadow 0.2s;
-}
-
-.editable-title-input:focus,
-.editable-description-input:focus {
-  outline: none;
-  border-color: #007bff !important;
-  box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.1) !important;
-}
-
-/* Row view title and description input styles */
-.row-title-input,
-.row-description-input {
-  transition: border-color 0.2s, box-shadow 0.2s;
-}
-
-.row-title-input:focus,
-.row-description-input:focus {
-  outline: none;
-  border-color: #007bff !important;
-  box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.1) !important;
-}
-
-/* Updated styles for category fields metadata */
-.category-fields-metadata {
-  margin-top: 15px;
-  padding: 12px;
-  border-radius: 6px;
-  background-color: #f8f8f8;
-  border: 1px solid #eee;
-}
-
-.category-fields-metadata h5 {
-  color: #333;
-  font-size: 0.95rem;
-  margin: 0 0 10px 0;
-  padding-bottom: 6px;
-  border-bottom: 1px solid #ddd;
-}
-
-/* Better styling for listing metadata items */
-.listing-metadata {
-  background-color: #fff;
-  padding: 8px 12px;
-  border-radius: 4px;
-  margin-top: 6px;
-  border-left: 3px solid #2196F3;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.05);
-  transition: all 0.2s;
-}
-
-/* Special styling for price and SKU */
-.listing-metadata.price-field,
-.listing-metadata.sku-field {
-  border-left-color: #4CAF50;
-}
-
-/* Enhanced styles for editable category fields in listings */
-.editable-field {
-  display: flex !important;
-  align-items: center;
-  justify-content: space-between;
-  padding: 6px 12px;
-  background-color: #fff;
-  border: 1px solid #e0e0e0;
-  border-radius: 4px;
-  margin-top: 4px;
-  transition: border-color 0.2s, box-shadow 0.2s;
-}
-
-.editable-field:hover {
-  border-color: #2196F3;
-  box-shadow: 0 0 0 2px rgba(33, 150, 243, 0.1);
-}
-
-.editable-field strong {
-  flex-shrink: 0;
-  min-width: 120px;
-}
-
-.editable-field input[type="text"] {
-  flex-grow: 1;
-  margin-left: 8px !important;
-  max-width: 250px;
-}
-
-/* Style for the datalist dropdown indicator */
-.editable-field input[list]::-webkit-calendar-picker-indicator {
-  display: block;
-  background: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 12 12"><path fill="gray" d="M2 4l4 4 4-4z"/></svg>') no-repeat center;
-  cursor: pointer;
-  opacity: 0.7;
-}
-
-.editable-field input[list]::-webkit-calendar-picker-indicator:hover {
-  opacity: 1;
-}
-
-/* Firefox datalist styling */
-.editable-field input[list] {
-  background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 12 12"><path fill="gray" d="M2 4l4 4 4-4z"/></svg>');
-  background-repeat: no-repeat;
-  background-position: right 8px center;
-  background-size: 12px;
-  padding-right: 30px;
-}
-
-/* Override the default listing-metadata styles for editable fields */
-.listing-metadata.editable-field {
-  background-color: #fff;
-  border-left: 3px solid #4CAF50;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.05);
-}
-
-.listing-metadata.editable-field:hover {
-  border-left-color: #2196F3;
-}
-
-/* Additional styling for better datalist UX */
-.editable-field input[list]:focus {
-  outline: 2px solid #2196F3;
-  outline-offset: 1px;
-}
-
-/* Style for when field has a custom value (not in the original options) */
-.editable-field.custom-value {
-  border-left-color: #FF9800;
-}
-
 /* Header layout update */
 .header-left {
   display: flex;
@@ -926,9 +1301,9 @@
   gap: 1rem;
 }
 
-/* View Toggle Styles - Fixed to be exactly as wide as buttons */
+/* View Toggle Styles */
 .view-toggle {
-  display: inline-flex; /* Changed from flex to inline-flex */
+  display: inline-flex;
   border-radius: 6px;
   border: 1px solid #ddd;
   overflow: hidden;
@@ -946,7 +1321,7 @@
   color: #666;
   transition: all 0.2s;
   border-right: 1px solid #ddd;
-  flex-shrink: 0; /* Prevent buttons from shrinking */
+  flex-shrink: 0;
 }
 
 .view-toggle-btn:last-child {
@@ -968,7 +1343,7 @@
   height: 16px;
 }
 
-/* Row View Container - Fixed background scrolling issue */
+/* Row View Container */
 .row-view-container {
   width: 100%;
   overflow-x: auto;
@@ -977,7 +1352,6 @@
   box-shadow: 0 2px 8px rgba(0,0,0,0.1);
 }
 
-/* Row View Table - Extended background to cover all content */
 .row-view-table {
   display: flex;
   flex-direction: column;
@@ -985,10 +1359,8 @@
   background: #fff;
 }
 
-/* Row View Header - Dynamic grid with inline styles */
 .row-view-header {
   display: grid;
-  /* Grid template columns will be set via inline styles */
   background-color: #f8f9fa;
   border-bottom: 2px solid #dee2e6;
   font-weight: bold;
@@ -1015,58 +1387,50 @@
   border-right: none;
 }
 
-/* Header-specific styling */
 .images-header {
   justify-content: center;
   color: #000 !important;
 }
 
-/* Row View Row - UPDATED with better alternating colors */
 .row-view-row {
   display: grid;
-  /* Grid template columns will be set via inline styles */
   border-bottom: 1px solid #e9ecef;
   transition: background-color 0.2s;
   position: relative;
   width: 100%;
   color: #000 !important;
-  min-height: 60px; /* Ensure consistent row height */
-  background-color: #ffffff; /* Default white background */
+  min-height: 60px;
+  background-color: #ffffff;
 }
 
-/* JavaScript-controlled alternating row colors */
 .row-view-row.row-even {
-  background-color: #ffffff !important; /* White for even rows */
+  background-color: #ffffff !important;
 }
 
 .row-view-row.row-odd {
-  background-color: #f1f3f5 !important; /* Light gray for odd rows */
+  background-color: #f1f3f5 !important;
 }
 
-/* Hover state - more prominent */
 .row-view-row:hover {
-  background-color: #e3f2fd !important; /* Light blue on hover, override alternating colors */
-  //transform: translateY(-1px); /* Subtle lift effect */
+  background-color: #e3f2fd !important;
   box-shadow: 0 2px 4px rgba(0,0,0,0.1);
 }
 
-/* Status-based backgrounds (these override alternating colors when active) */
 .row-view-row.processing {
-  background-color: #e3f2fd !important; /* Light blue for processing */
-  border-left: 4px solid #2196F3; /* Add colored border for status */
+  background-color: #e3f2fd !important;
+  border-left: 4px solid #2196F3;
 }
 
 .row-view-row.processed {
-  background-color: #e8f5e8 !important; /* Light green for processed */
-  border-left: 4px solid #4CAF50; /* Add colored border for status */
+  background-color: #e8f5e8 !important;
+  border-left: 4px solid #4CAF50;
 }
 
 .row-view-row.new {
-  background-color: #fff3cd !important; /* Light yellow for new */
-  border-left: 4px solid #FF9800; /* Add colored border for status */
+  background-color: #fff3cd !important;
+  border-left: 4px solid #FF9800;
 }
 
-/* Row Cells - Ensure all text is black and inherit background */
 .row-cell {
   padding: 12px 8px;
   border-right: 1px solid #e9ecef;
@@ -1075,14 +1439,13 @@
   font-size: 0.9rem;
   overflow: hidden;
   color: #000 !important;
-  background-color: inherit; /* Inherit background from parent row */
+  background-color: inherit;
 }
 
 .row-cell:last-child {
   border-right: none;
 }
 
-/* Images Cell */
 .images-cell {
   flex-direction: column;
   align-items: center;
@@ -1098,7 +1461,6 @@
   width: 100%;
 }
 
-/* Group header with status indicator */
 .group-header-with-status {
   display: flex;
   align-items: center;
@@ -1117,7 +1479,6 @@
   font-weight: bold;
 }
 
-/* Status indicators in images column */
 .status-indicator {
   display: flex;
   align-items: center;
@@ -1172,7 +1533,6 @@
   z-index: 1;
 }
 
-/* Title Cell - Updated for editable textarea */
 .title-cell {
   align-items: flex-start;
   flex-direction: column;
@@ -1194,7 +1554,6 @@
   color: #000 !important;
 }
 
-/* Description Cell - Updated for editable textarea */
 .description-cell {
   align-items: flex-start;
   flex-direction: column;
@@ -1215,7 +1574,6 @@
   color: #000 !important;
 }
 
-/* Input Cells */
 .price-cell,
 .sku-cell,
 .field-cell {
@@ -1230,7 +1588,7 @@
   border: 1px solid #ccc;
   border-radius: 4px;
   font-size: 0.85rem;
-  background-color: #fff !important; /* Force white background for inputs */
+  background-color: #fff !important;
   color: #000 !important;
   transition: border-color 0.2s, box-shadow 0.2s;
 }
@@ -1258,7 +1616,6 @@
   color: #000 !important;
 }
 
-/* Loading states */
 .row-loading {
   display: flex;
   align-items: center;
@@ -1282,7 +1639,6 @@
   color: #000 !important;
 }
 
-/* Error states */
 .row-error {
   color: #dc3545 !important;
   font-style: italic;
@@ -1292,16 +1648,175 @@
   overflow: hidden;
 }
 
-/* Placeholder states */
 .row-placeholder {
-  color: #666 !important; /* Slightly gray for placeholders to distinguish from content */
+  color: #666 !important;
   font-style: italic;
+}
+
+.create-ebay-listings-button {
+  background: linear-gradient(135deg, #0654ba, #4a90e2);
+  color: white;
+  padding: 10px 20px;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 600;
+  transition: all 0.3s ease;
+  margin-left: 10px;
+}
+
+.create-ebay-listings-button:hover:not(:disabled) {
+  background: linear-gradient(135deg, #0545a0, #3a7bc8);
+  transform: translateY(-1px);
+  box-shadow: 0 6px 20px rgba(6, 84, 186, 0.3);
+}
+
+.create-ebay-listings-button:disabled {
+  background: #ccc;
+  cursor: not-allowed;
+}
+
+.header-buttons {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.card-actions {
+  display: flex;
+  gap: 10px;
+  padding: 15px;
+  border-top: 1px solid #eee;
+  background: #f8f9fa;
+}
+
+.create-single-listing-button {
+  background: #0654ba;
+  color: white;
+  padding: 8px 16px;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  flex: 1;
+  transition: all 0.2s;
+}
+
+.create-single-listing-button:hover:not(:disabled) {
+  background: #0545a0;
+}
+
+.create-single-listing-button:disabled {
+  background: #ccc;
+  cursor: not-allowed;
+}
+
+.listing-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 20px;
+}
+
+.listing-modal {
+  width: 100%;
+  max-width: 600px;
+  max-height: 90vh;
+  overflow-y: auto;
 }
 
 /* Responsive adjustments for mobile */
 @media (max-width: 600px) {
   #root, .app-container {
     padding: 1rem;
+  }
+  
+  .batch-overview {
+    padding: 1rem;
+  }
+  
+  .page-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 1rem;
+  }
+  
+  .page-header h1 {
+    font-size: 2rem;
+  }
+  
+  .batch-filters {
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+  
+  .filter-btn {
+    padding: 0.5rem 1rem;
+    font-size: 0.9rem;
+  }
+  
+  .table-header, .table-row {
+    grid-template-columns: 1fr;
+    gap: 0.5rem;
+    padding: 1rem;
+  }
+  
+  .batch-name-cell {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.5rem;
+  }
+  
+  .batch-thumbnail {
+    width: 40px;
+    height: 40px;
+    font-size: 1.2rem;
+  }
+  
+  .wizard-content {
+    padding: 1.5rem;
+  }
+  
+  .wizard-footer {
+    padding: 1.5rem;
+    flex-direction: column;
+  }
+  
+  .form-row {
+    grid-template-columns: 1fr;
+  }
+  
+  .location-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  
+  .wizard-steps {
+    padding: 1.5rem;
+    gap: 1rem;
+  }
+  
+  .step span:not(.step-number) {
+    display: none;
+  }
+  
+  .batch-editor-header {
+    padding: 1rem;
+  }
+  
+  .batch-info h1 {
+    font-size: 1.5rem;
+  }
+  
+  .batch-details {
+    flex-direction: column;
+    gap: 0.5rem;
   }
   
   .header {
@@ -1330,46 +1845,31 @@
     width: 100%;
   }
   
-  .metadata-details {
-    flex-direction: column;
-    gap: 5px;
-  }
-  
-  .group-metadata {
+  .header-left {
     flex-direction: column;
     align-items: flex-start;
-    gap: 5px;
+    gap: 0.5rem;
   }
   
-  .editable-field {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 4px;
-  }
-  
-  .editable-field strong {
-    min-width: auto;
-  }
-  
-  .editable-field input[type="text"] {
-    margin-left: 0 !important;
-    width: 100%;
-    max-width: 100%;
+  .view-toggle {
+    align-self: flex-start;
   }
 
-  /* Mobile styles for editable title and description */
-  .editable-title-field,
-  .editable-description-field {
-    padding: 8px;
+  .row-title-input,
+  .row-description-input {
+    font-size: 0.8rem;
+    padding: 4px 6px;
   }
 
-  .editable-title-input,
-  .editable-description-input {
-    font-size: 0.9rem;
+  .row-title-input {
+    min-height: 35px;
+  }
+
+  .row-description-input {
+    min-height: 50px;
   }
 }
 
-/* Responsive adjustments for row view */
 @media (max-width: 1400px) {
   .row-view-table {
     min-width: 1000px;
@@ -1390,158 +1890,4 @@
     width: 30px;
     height: 30px;
   }
-}
-
-@media (max-width: 768px) {
-  .header-left {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 0.5rem;
-  }
-  
-  .view-toggle {
-    align-self: flex-start;
-  }
-
-  /* Adjust textarea sizes for mobile in row view */
-  .row-title-input,
-  .row-description-input {
-    font-size: 0.8rem;
-    padding: 4px 6px;
-  }
-
-  .row-title-input {
-    min-height: 35px;
-  }
-
-  .row-description-input {
-    min-height: 50px;
-  }
-}
-
-/* Marketplace Selector Styles */
-.marketplace-selector {
-  margin-top: 15px;
-  padding-top: 15px;
-  border-top: 1px solid #eee;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.marketplace-label {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-weight: 500;
-  color: #333;
-  font-size: 0.9rem;
-}
-
-.marketplace-icon {
-  font-size: 1.1rem;
-}
-
-.marketplace-select {
-  flex: 1;
-  padding: 8px 12px;
-  border: 1px solid #ced4da;
-  border-radius: 6px;
-  font-size: 0.9rem;
-  background-color: white;
-  color: #333;
-  transition: border-color 0.2s ease, box-shadow 0.2s ease;
-  max-width: 250px;
-}
-
-.marketplace-select:focus {
-  outline: none;
-  border-color: #0654ba;
-  box-shadow: 0 0 0 2px rgba(6, 84, 186, 0.1);
-}
-
-.marketplace-select:disabled {
-  background-color: #f8f9fa;
-  color: #6c757d;
-  cursor: not-allowed;
-}
-
-/* Responsive adjustments */
-  .create-ebay-listings-button {
-    background: linear-gradient(135deg, #0654ba, #4a90e2);
-    color: white;
-    padding: 10px 20px;
-    border: none;
-    border-radius: 6px;
-    cursor: pointer;
-    font-weight: 600;
-    transition: all 0.3s ease;
-    margin-left: 10px;
-  }
-
-  .create-ebay-listings-button:hover:not(:disabled) {
-    background: linear-gradient(135deg, #0545a0, #3a7bc8);
-    transform: translateY(-1px);
-    box-shadow: 0 6px 20px rgba(6, 84, 186, 0.3);
-  }
-
-  .create-ebay-listings-button:disabled {
-    background: #ccc;
-    cursor: not-allowed;
-  }
-
-  .header-buttons {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-  }
-
-  .card-actions {
-    display: flex;
-    gap: 10px;
-    padding: 15px;
-    border-top: 1px solid #eee;
-    background: #f8f9fa;
-  }
-
-  .create-single-listing-button {
-    background: #0654ba;
-    color: white;
-    padding: 8px 16px;
-    border: none;
-    border-radius: 4px;
-    cursor: pointer;
-    font-size: 0.9rem;
-    flex: 1;
-    transition: all 0.2s;
-  }
-
-  .create-single-listing-button:hover:not(:disabled) {
-    background: #0545a0;
-  }
-
-  .create-single-listing-button:disabled {
-    background: #ccc;
-    cursor: not-allowed;
-  }
-  
-  .listing-modal-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: rgba(0, 0, 0, 0.5);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 1000;
-  padding: 20px;
-}
-
-.listing-modal {
-  width: 100%;
-  max-width: 600px;
-  max-height: 90vh;
-  overflow-y: auto;
 }

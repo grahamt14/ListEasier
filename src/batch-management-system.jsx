@@ -1,26 +1,13 @@
-import { useState, useEffect } from 'react';
-import './App.css';
-import FormSection, { getSelectedCategoryOptionsJSON } from './FormSection';
-import JSZip from 'jszip';
-import { saveAs } from 'file-saver';
-import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
-import { fromCognitoIdentityPool } from "@aws-sdk/credential-provider-cognito-identity";
-import { AppStateProvider, useAppState } from './StateContext';
-import { EbayAuthProvider, useEbayAuth } from './EbayAuthContext';
-import EbayListingManager from './EbayListingManager';
-import BatchPreviewSection from './BatchPreviewSection';
+import React, { useState, useEffect, createContext, useContext, useReducer } from 'react';
 
 // Batch Context for managing batches and templates
-import React, { createContext, useContext, useReducer } from 'react';
-
 const BatchContext = createContext();
 
 const initialBatchState = {
   batches: [],
   templates: [],
   currentBatch: null,
-  currentStep: 0,
-  viewMode: 'overview' // 'overview', 'create', 'edit'
+  currentStep: 0
 };
 
 function batchReducer(state, action) {
@@ -31,8 +18,7 @@ function batchReducer(state, action) {
       return { 
         ...state, 
         batches: [...state.batches, action.payload],
-        currentBatch: action.payload,
-        viewMode: 'edit'
+        currentBatch: action.payload
       };
     case 'UPDATE_BATCH':
       return {
@@ -43,9 +29,7 @@ function batchReducer(state, action) {
         currentBatch: action.payload
       };
     case 'SET_CURRENT_BATCH':
-      return { ...state, currentBatch: action.payload, viewMode: 'edit' };
-    case 'SET_VIEW_MODE':
-      return { ...state, viewMode: action.payload };
+      return { ...state, currentBatch: action.payload };
     case 'SET_CURRENT_STEP':
       return { ...state, currentStep: action.payload };
     case 'LOAD_TEMPLATES':
@@ -72,7 +56,7 @@ function batchReducer(state, action) {
   }
 }
 
-function BatchProvider({ children }) {
+export function BatchProvider({ children }) {
   const [state, dispatch] = useReducer(batchReducer, initialBatchState);
 
   // Load batches and templates from localStorage on mount
@@ -106,18 +90,7 @@ function BatchProvider({ children }) {
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
       items: [],
-      totalItems: 0,
-      // Initialize with empty app state structure
-      appState: {
-        filesBase64: [],
-        rawFiles: [],
-        imageGroups: [[]],
-        s3ImageGroups: [[]],
-        responseData: [],
-        groupMetadata: [],
-        fieldSelections: {},
-        processedGroupIndices: []
-      }
+      totalItems: 0
     };
     dispatch({ type: 'CREATE_BATCH', payload: newBatch });
     return newBatch;
@@ -166,7 +139,7 @@ function BatchProvider({ children }) {
   );
 }
 
-function useBatch() {
+export function useBatch() {
   const context = useContext(BatchContext);
   if (!context) {
     throw new Error('useBatch must be used within a BatchProvider');
@@ -272,7 +245,7 @@ function WYSIWYGEditor({ value, onChange, placeholder = "Enter description..." }
 
 // Template Management Modal
 function TemplateModal({ isOpen, onClose, template, category, subCategory }) {
-  const { createTemplate, updateTemplate } = useBatch();
+  const { createTemplate, updateTemplate, templates } = useBatch();
   const [formData, setFormData] = useState({
     name: '',
     content: '',
@@ -375,8 +348,8 @@ function TemplateModal({ isOpen, onClose, template, category, subCategory }) {
 }
 
 // Batch Overview Page
-function BatchOverview() {
-  const { batches, dispatch } = useBatch();
+function BatchOverview({ onCreateBatch, onEditBatch }) {
+  const { batches } = useBatch();
 
   const getStatusColor = (status) => {
     switch (status) {
@@ -398,19 +371,11 @@ function BatchOverview() {
     });
   };
 
-  const handleCreateBatch = () => {
-    dispatch({ type: 'SET_VIEW_MODE', payload: 'create' });
-  };
-
-  const handleEditBatch = (batch) => {
-    dispatch({ type: 'SET_CURRENT_BATCH', payload: batch });
-  };
-
   return (
     <div className="batch-overview">
       <div className="page-header">
         <h1>Your Batches</h1>
-        <button onClick={handleCreateBatch} className="btn btn-primary">
+        <button onClick={onCreateBatch} className="btn btn-primary">
           + Add Batch
         </button>
       </div>
@@ -434,7 +399,7 @@ function BatchOverview() {
           <div className="empty-state">
             <h3>No batches yet</h3>
             <p>Create your first batch to get started</p>
-            <button onClick={handleCreateBatch} className="btn btn-primary">
+            <button onClick={onCreateBatch} className="btn btn-primary">
               Create Batch
             </button>
           </div>
@@ -459,9 +424,10 @@ function BatchOverview() {
               </div>
               <div className="td">
                 <div className="batch-preview">
-                  <span className="preview-icon">📝</span> {batch.appState?.responseData?.length || 0}
-                  <span className="preview-icon">📷</span> {batch.appState?.imageGroups?.filter(g => g.length > 0).length || 0}
-                  <span className="preview-icon">✅</span> {batch.appState?.processedGroupIndices?.length || 0}
+                  <span className="preview-icon">📝</span> {batch.totalItems || 0}
+                  <span className="preview-icon">⏱️</span> {batch.totalItems || 0}
+                  <span className="preview-icon">⏰</span> 1
+                  <span className="preview-icon">✅</span> 0
                 </div>
               </div>
               <div className="td">
@@ -469,7 +435,7 @@ function BatchOverview() {
               </div>
               <div className="td">
                 <button 
-                  onClick={() => handleEditBatch(batch)}
+                  onClick={() => onEditBatch(batch)}
                   className="btn btn-sm btn-outline"
                 >
                   Open
@@ -484,8 +450,8 @@ function BatchOverview() {
 }
 
 // Multi-step Batch Creation Wizard
-function BatchWizard() {
-  const { createBatch, templates, dispatch } = useBatch();
+function BatchWizard({ isOpen, onClose, editingBatch }) {
+  const { createBatch, updateBatch, templates } = useBatch();
   const [currentStep, setCurrentStep] = useState(0);
   const [batchData, setBatchData] = useState({
     name: '',
@@ -521,13 +487,23 @@ function BatchWizard() {
     (!template.subCategory || template.subCategory === batchData.subCategory)
   );
 
+  useEffect(() => {
+    if (editingBatch) {
+      setBatchData(editingBatch);
+    }
+  }, [editingBatch]);
+
   const handleNext = () => {
-    if (currentStep < 1) {
+    if (currentStep < 2) {
       setCurrentStep(currentStep + 1);
     } else {
-      // Save batch and switch to edit mode
-      const newBatch = createBatch(batchData);
-      dispatch({ type: 'SET_CURRENT_BATCH', payload: newBatch });
+      // Save batch
+      if (editingBatch) {
+        updateBatch(batchData);
+      } else {
+        createBatch(batchData);
+      }
+      onClose();
     }
   };
 
@@ -537,27 +513,27 @@ function BatchWizard() {
     }
   };
 
-  const handleCancel = () => {
-    dispatch({ type: 'SET_VIEW_MODE', payload: 'overview' });
-  };
-
   const canProceed = () => {
     switch (currentStep) {
       case 0:
         return batchData.name && batchData.category !== '--' && batchData.subCategory !== '--';
       case 1:
         return true; // Optional step
+      case 2:
+        return true; // Image upload step would have its own validation
       default:
         return false;
     }
   };
+
+  if (!isOpen) return null;
 
   return (
     <div className="modal-overlay">
       <div className="modal-content batch-wizard">
         <div className="wizard-header">
           <h2>Create a new batch</h2>
-          <button onClick={handleCancel} className="modal-close">×</button>
+          <button onClick={onClose} className="modal-close">×</button>
         </div>
 
         <div className="wizard-steps">
@@ -565,9 +541,13 @@ function BatchWizard() {
             <span className="step-number">1</span>
             <span>General Settings</span>
           </div>
-          <div className={`step ${currentStep >= 1 ? 'active' : ''}`}>
+          <div className={`step ${currentStep >= 1 ? 'active' : ''} ${currentStep > 1 ? 'completed' : ''}`}>
             <span className="step-number">2</span>
-            <span>Additional Details</span>
+            <span>Optional Details</span>
+          </div>
+          <div className={`step ${currentStep >= 2 ? 'active' : ''}`}>
+            <span className="step-number">3</span>
+            <span>Upload Images</span>
           </div>
         </div>
 
@@ -646,7 +626,7 @@ function BatchWizard() {
           {currentStep === 1 && (
             <div className="step-content">
               <h3>Additional Bulk Settings</h3>
-              <p>Attributes selected below will be applied to all items added in your batch. Don't worry, you can always make changes later.</p>
+              <p>Attributes selected below will be applied to all cards added in your batch. Don't worry, you can always make changes later.</p>
 
               <div className="form-row">
                 <div className="form-group">
@@ -769,6 +749,32 @@ function BatchWizard() {
               </div>
             </div>
           )}
+
+          {currentStep === 2 && (
+            <div className="step-content">
+              <h3>Upload Images</h3>
+              <p>Upload and organize your images for this batch.</p>
+              
+              <div className="image-upload-placeholder">
+                <div className="upload-zone">
+                  <div className="upload-icon">📁</div>
+                  <h4>Drag and drop images here</h4>
+                  <p>or click to browse</p>
+                  <button className="btn btn-primary">Choose Files</button>
+                </div>
+              </div>
+              
+              <div className="image-tools">
+                <h4>Image Tools</h4>
+                <div className="tools-grid">
+                  <button className="tool-btn">🔄 Rotate Selected</button>
+                  <button className="tool-btn">🖼️ Replace Image</button>
+                  <button className="tool-btn">🗑️ Delete Selected</button>
+                  <button className="tool-btn">📋 Group Images</button>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
 
         <div className="wizard-footer">
@@ -784,7 +790,7 @@ function BatchWizard() {
             disabled={!canProceed()}
             className="btn btn-primary"
           >
-            {currentStep === 1 ? 'Create Batch' : 'Continue'}
+            {currentStep === 2 ? 'Create Batch' : 'Continue'}
           </button>
         </div>
       </div>
@@ -795,568 +801,566 @@ function BatchWizard() {
         category={batchData.category}
         subCategory={batchData.subCategory}
       />
-    </div>
-  );
-}
 
-// Batch Editor - integrates with existing FormSection and PreviewSection
-function BatchEditor() {
-  const { currentBatch, updateBatch, dispatch } = useBatch();
-  const [showListingManager, setShowListingManager] = useState(false);
-  const { state, dispatch: appDispatch } = useAppState();
-  
-  // Initialize app state from batch data when batch changes
-  useEffect(() => {
-    if (currentBatch && currentBatch.appState) {
-      // Load batch state into app state
-      Object.entries(currentBatch.appState).forEach(([key, value]) => {
-        appDispatch({ type: `SET_${key.toUpperCase()}`, payload: value });
-      });
-      
-      // Set category and form data
-      if (currentBatch.category) {
-        appDispatch({ type: 'SET_CATEGORY', payload: currentBatch.category });
-      }
-      if (currentBatch.subCategory) {
-        appDispatch({ type: 'SET_SUBCATEGORY', payload: currentBatch.subCategory });
-      }
-      if (currentBatch.salePrice) {
-        appDispatch({ type: 'SET_PRICE', payload: currentBatch.salePrice });
-      }
-    }
-  }, [currentBatch, appDispatch]);
-
-  // Save app state to batch whenever app state changes
-  useEffect(() => {
-    if (currentBatch) {
-      const updatedBatch = {
-        ...currentBatch,
-        appState: {
-          filesBase64: state.filesBase64,
-          rawFiles: state.rawFiles,
-          imageGroups: state.imageGroups,
-          s3ImageGroups: state.s3ImageGroups,
-          responseData: state.responseData,
-          groupMetadata: state.groupMetadata,
-          fieldSelections: state.fieldSelections,
-          processedGroupIndices: state.processedGroupIndices,
-          category: state.category,
-          subCategory: state.subCategory,
-          price: state.price,
-          sku: state.sku,
-          categoryID: state.categoryID
-        },
-        totalItems: state.responseData.filter(item => item && !item.error).length
-      };
-      updateBatch(updatedBatch);
-    }
-  }, [state, currentBatch, updateBatch]);
-
-  const handleGenerateListing = async (aiResolveCategoryFields = false, categoryFields = []) => {
-    try {
-      const { imageGroups, filesBase64, batchSize, processedGroupIndices, fieldSelections } = state;
-   
-      const nonEmptyGroups = imageGroups.filter(g => g.length > 0);
-
-      if (nonEmptyGroups.length === 0 && filesBase64.length === 0) {
-        return;
-      }
-
-      appDispatch({ type: 'SET_IS_LOADING', payload: true });
-
-      const newGroupsToProcess = nonEmptyGroups.filter((group, idx) => {
-        const originalIndex = imageGroups.findIndex(g => g === group);
-        return !processedGroupIndices || !processedGroupIndices.includes(originalIndex);
-      });
-      
-      const newGroupIndices = newGroupsToProcess.map(group => {
-        return imageGroups.findIndex(g => g === group);
-      });
-      
-      let allGroupsToProcess = [...newGroupsToProcess];
-      let newPoolGroupIndices = [];
-      
-      if (filesBase64.length > 0 && batchSize > 0) {
-        const poolGroups = [];
-        for (let i = 0; i < filesBase64.length; i += batchSize) {
-          poolGroups.push(filesBase64.slice(i, i + batchSize));
+      <style jsx>{`
+        .batch-overview {
+          padding: 2rem;
+          max-width: 1200px;
+          margin: 0 auto;
         }
-        
-        allGroupsToProcess = [...newGroupsToProcess, ...poolGroups];
-        
-        let updatedGroups = [...imageGroups];
-        
-        const firstEmptyGroupIndex = updatedGroups.findIndex(g => g.length === 0);
-        let insertIndex = firstEmptyGroupIndex !== -1 ? firstEmptyGroupIndex : updatedGroups.length;
-        
-        const updatedMetadata = [...state.groupMetadata || []];
-        
-        poolGroups.forEach(group => {
-          updatedGroups.splice(insertIndex, 0, group);
-          newPoolGroupIndices.push(insertIndex);
-          
-          while (updatedMetadata.length <= insertIndex) {
-            updatedMetadata.push(null);
+
+        .page-header {
+          display: flex;
+          justify-content: between;
+          align-items: center;
+          margin-bottom: 2rem;
+        }
+
+        .page-header h1 {
+          margin: 0;
+          color: #333;
+        }
+
+        .batch-filters {
+          display: flex;
+          gap: 1rem;
+          margin-bottom: 1.5rem;
+        }
+
+        .filter-btn {
+          padding: 0.5rem 1rem;
+          border: 1px solid #ddd;
+          background: white;
+          border-radius: 4px;
+          cursor: pointer;
+          transition: all 0.2s;
+        }
+
+        .filter-btn.active {
+          background: #007bff;
+          color: white;
+          border-color: #007bff;
+        }
+
+        .batch-table {
+          background: white;
+          border-radius: 8px;
+          box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+          overflow: hidden;
+        }
+
+        .table-header, .table-row {
+          display: grid;
+          grid-template-columns: 2fr 1fr 2fr 1.5fr 1fr;
+          gap: 1rem;
+          padding: 1rem;
+          border-bottom: 1px solid #eee;
+        }
+
+        .table-header {
+          background: #f8f9fa;
+          font-weight: 600;
+          color: #333;
+        }
+
+        .table-row:hover {
+          background: #f8f9fa;
+        }
+
+        .batch-name-cell {
+          display: flex;
+          align-items: center;
+          gap: 0.75rem;
+        }
+
+        .batch-thumbnail {
+          width: 40px;
+          height: 40px;
+          background: #007bff;
+          border-radius: 8px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          color: white;
+          font-weight: bold;
+          font-size: 1.2rem;
+        }
+
+        .status-badge {
+          display: inline-block;
+          padding: 0.25rem 0.75rem;
+          border-radius: 12px;
+          color: white;
+          font-size: 0.85rem;
+          font-weight: 500;
+          text-transform: capitalize;
+        }
+
+        .batch-preview {
+          display: flex;
+          gap: 1rem;
+          align-items: center;
+          font-size: 0.9rem;
+          color: #666;
+        }
+
+        .preview-icon {
+          margin-right: 0.25rem;
+        }
+
+        .empty-state {
+          text-align: center;
+          padding: 3rem 2rem;
+          color: #666;
+        }
+
+        .modal-overlay {
+          position: fixed;
+          top: 0;
+          left: 0;
+          right: 0;
+          bottom: 0;
+          background: rgba(0,0,0,0.5);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          z-index: 1000;
+        }
+
+        .modal-content {
+          background: white;
+          border-radius: 8px;
+          max-height: 90vh;
+          overflow-y: auto;
+          width: 90%;
+          max-width: 800px;
+        }
+
+        .batch-wizard {
+          max-width: 900px;
+        }
+
+        .wizard-header {
+          display: flex;
+          justify-content: between;
+          align-items: center;
+          padding: 1.5rem 2rem;
+          border-bottom: 1px solid #eee;
+        }
+
+        .wizard-header h2 {
+          margin: 0;
+          color: #333;
+        }
+
+        .modal-close {
+          background: none;
+          border: none;
+          font-size: 1.5rem;
+          color: #666;
+          cursor: pointer;
+          padding: 0.5rem;
+        }
+
+        .wizard-steps {
+          display: flex;
+          justify-content: center;
+          padding: 2rem;
+          background: #f8f9fa;
+        }
+
+        .step {
+          display: flex;
+          align-items: center;
+          gap: 0.5rem;
+          padding: 0 2rem;
+          position: relative;
+          color: #666;
+        }
+
+        .step:not(:last-child)::after {
+          content: '';
+          position: absolute;
+          right: -1rem;
+          width: 2rem;
+          height: 2px;
+          background: #ddd;
+          top: 50%;
+          transform: translateY(-50%);
+        }
+
+        .step.active {
+          color: #007bff;
+        }
+
+        .step.completed {
+          color: #28a745;
+        }
+
+        .step.completed::after {
+          background: #28a745;
+        }
+
+        .step-number {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          width: 2rem;
+          height: 2rem;
+          border-radius: 50%;
+          background: #ddd;
+          color: white;
+          font-weight: bold;
+          font-size: 0.9rem;
+        }
+
+        .step.active .step-number {
+          background: #007bff;
+        }
+
+        .step.completed .step-number {
+          background: #28a745;
+        }
+
+        .wizard-content {
+          padding: 2rem;
+        }
+
+        .step-content h3 {
+          margin: 0 0 1rem 0;
+          color: #333;
+        }
+
+        .step-content p {
+          color: #666;
+          margin-bottom: 1.5rem;
+        }
+
+        .form-group {
+          margin-bottom: 1.5rem;
+        }
+
+        .form-group label {
+          display: block;
+          margin-bottom: 0.5rem;
+          font-weight: 500;
+          color: #333;
+        }
+
+        .form-control {
+          width: 100%;
+          padding: 0.75rem;
+          border: 1px solid #ddd;
+          border-radius: 4px;
+          font-size: 1rem;
+          background: white;
+          color: #333;
+        }
+
+        .form-control:focus {
+          outline: none;
+          border-color: #007bff;
+          box-shadow: 0 0 0 2px rgba(0,123,255,0.1);
+        }
+
+        .form-row {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 1.5rem;
+        }
+
+        .location-grid {
+          display: grid;
+          grid-template-columns: repeat(5, 1fr);
+          gap: 1rem;
+        }
+
+        .input-group {
+          position: relative;
+        }
+
+        .input-prefix {
+          position: absolute;
+          left: 0.75rem;
+          top: 50%;
+          transform: translateY(-50%);
+          color: #666;
+          z-index: 1;
+        }
+
+        .input-group .form-control {
+          padding-left: 2rem;
+        }
+
+        .wizard-footer {
+          display: flex;
+          justify-content: between;
+          gap: 1rem;
+          padding: 1.5rem 2rem;
+          border-top: 1px solid #eee;
+          background: #f8f9fa;
+        }
+
+        .btn {
+          padding: 0.75rem 1.5rem;
+          border: none;
+          border-radius: 4px;
+          font-size: 1rem;
+          cursor: pointer;
+          transition: all 0.2s;
+          text-decoration: none;
+          display: inline-block;
+          text-align: center;
+        }
+
+        .btn-primary {
+          background: #007bff;
+          color: white;
+        }
+
+        .btn-primary:hover:not(:disabled) {
+          background: #0056b3;
+        }
+
+        .btn-secondary {
+          background: #6c757d;
+          color: white;
+        }
+
+        .btn-secondary:hover:not(:disabled) {
+          background: #545b62;
+        }
+
+        .btn-outline {
+          background: transparent;
+          border: 1px solid #007bff;
+          color: #007bff;
+        }
+
+        .btn-outline:hover {
+          background: #007bff;
+          color: white;
+        }
+
+        .btn:disabled {
+          opacity: 0.6;
+          cursor: not-allowed;
+        }
+
+        .btn-sm {
+          padding: 0.5rem 1rem;
+          font-size: 0.9rem;
+        }
+
+        .mt-2 {
+          margin-top: 0.5rem;
+        }
+
+        .image-upload-placeholder {
+          border: 2px dashed #ddd;
+          border-radius: 8px;
+          padding: 3rem;
+          text-align: center;
+          margin-bottom: 2rem;
+        }
+
+        .upload-zone {
+          color: #666;
+        }
+
+        .upload-icon {
+          font-size: 3rem;
+          margin-bottom: 1rem;
+        }
+
+        .upload-zone h4 {
+          margin: 0.5rem 0;
+          color: #333;
+        }
+
+        .image-tools {
+          background: #f8f9fa;
+          padding: 1.5rem;
+          border-radius: 8px;
+        }
+
+        .image-tools h4 {
+          margin: 0 0 1rem 0;
+          color: #333;
+        }
+
+        .tools-grid {
+          display: grid;
+          grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+          gap: 1rem;
+        }
+
+        .tool-btn {
+          padding: 0.75rem;
+          background: white;
+          border: 1px solid #ddd;
+          border-radius: 4px;
+          cursor: pointer;
+          transition: all 0.2s;
+          text-align: left;
+        }
+
+        .tool-btn:hover {
+          background: #e9ecef;
+          border-color: #007bff;
+        }
+
+        .wysiwyg-container {
+          border: 1px solid #ddd;
+          border-radius: 4px;
+          overflow: hidden;
+        }
+
+        .wysiwyg-toolbar {
+          display: flex;
+          gap: 0.25rem;
+          padding: 0.5rem;
+          background: #f8f9fa;
+          border-bottom: 1px solid #ddd;
+        }
+
+        .toolbar-btn {
+          padding: 0.5rem;
+          background: white;
+          border: 1px solid #ddd;
+          border-radius: 3px;
+          cursor: pointer;
+          font-size: 0.9rem;
+          min-width: 2rem;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+        }
+
+        .toolbar-btn:hover {
+          background: #e9ecef;
+        }
+
+        .toolbar-separator {
+          width: 1px;
+          background: #ddd;
+          margin: 0.25rem;
+        }
+
+        .wysiwyg-editor {
+          min-height: 120px;
+          padding: 12px;
+          border: none;
+          outline: none;
+          background: white;
+          color: #333;
+        }
+
+        .wysiwyg-editor:empty::before {
+          content: attr(data-placeholder);
+          color: #999;
+          font-style: italic;
+        }
+
+        .modal-header {
+          display: flex;
+          justify-content: between;
+          align-items: center;
+          padding: 1.5rem;
+          border-bottom: 1px solid #eee;
+        }
+
+        .modal-body {
+          padding: 1.5rem;
+        }
+
+        .modal-footer {
+          display: flex;
+          gap: 1rem;
+          justify-content: flex-end;
+          padding: 1.5rem;
+          border-top: 1px solid #eee;
+          background: #f8f9fa;
+        }
+
+        @media (max-width: 768px) {
+          .batch-overview {
+            padding: 1rem;
           }
-          updatedMetadata[insertIndex] = { 
-            price: state.price, 
-            sku: state.sku,
-            fieldSelections: { ...fieldSelections }
-          };
-          
-          insertIndex++;
-        });
-        
-        appDispatch({ type: 'UPDATE_GROUP_METADATA', payload: updatedMetadata });
-        
-        if (updatedGroups[updatedGroups.length - 1]?.length !== 0) {
-          updatedGroups.push([]);
-        }
-        
-        appDispatch({ type: 'SET_IMAGE_GROUPS', payload: updatedGroups });
-      }
 
-      if (allGroupsToProcess.length === 0) {
-        alert("No new images to process. All existing groups have already been generated.");
-        appDispatch({ type: 'SET_IS_LOADING', payload: false });
-        return;
-      }
-
-      const totalGroups = allGroupsToProcess.length;
-      
-      const processingStatus = {
-        isProcessing: true,
-        processTotal: totalGroups,
-        processCompleted: 0
-      };
-      
-      appDispatch({ 
-        type: 'SET_PROCESSING_STATUS', 
-        payload: processingStatus
-      });
-      
-      appDispatch({ type: 'SET_TOTAL_CHUNKS', payload: totalGroups });
-      appDispatch({ type: 'SET_COMPLETED_CHUNKS', payload: 0 });
-      
-      const updatedResponseData = [...state.responseData];
-      const updatedProcessingGroups = [...state.processingGroups];
-      
-      [...newGroupIndices, ...newPoolGroupIndices].forEach(index => {
-        while (updatedResponseData.length <= index) {
-          updatedResponseData.push(null);
-        }
-        
-        while (updatedProcessingGroups.length <= index) {
-          updatedProcessingGroups.push(false);
-        }
-        
-        updatedResponseData[index] = null;
-        updatedProcessingGroups[index] = true;
-      });
-      
-      appDispatch({ type: 'SET_RESPONSE_DATA', payload: updatedResponseData });
-      appDispatch({ type: 'SET_IS_DIRTY', payload: false });
-      appDispatch({ type: 'SET_PROCESSING_GROUPS', payload: updatedProcessingGroups });
-
-      const selectedCategoryOptions = getSelectedCategoryOptionsJSON(
-        fieldSelections, 
-        state.price, 
-        state.sku, 
-        {} // No eBay policies in batch mode
-      );   
-      
-      if (aiResolveCategoryFields) {
-        selectedCategoryOptions._aiResolveCategoryFields = true;
-        selectedCategoryOptions._categoryFields = categoryFields;
-      }
-      
-      const currentFieldSelections = {...fieldSelections};
-      const processedIndices = [];
-      
-      const PROCESSING_BATCH_SIZE = 40;
-      const MAX_RETRIES = 3;
-      const RETRY_DELAY_MS = 2000;
-      
-      const processGroupWithRetry = async (group, actualIndex, retryCount = 0) => {
-        try {
-          const response = await fetch(
-            "https://7f26uyyjs5.execute-api.us-east-2.amazonaws.com/ListEasily/ListEasilyAPI",
-            {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                category: state.category,
-                subCategory: state.subCategory,
-                Base64Key: [group],
-                SelectedCategoryOptions: selectedCategoryOptions
-              })
-            }
-          );
-          
-          if (!response.ok) {
-            if (response.status === 504 && retryCount < MAX_RETRIES) {
-              await new Promise(resolve => setTimeout(resolve, RETRY_DELAY_MS * (retryCount + 1)));
-              return processGroupWithRetry(group, actualIndex, retryCount + 1);
-            }
-            
-            throw new Error(`API error: ${response.status} ${response.statusText}`);
+          .batch-table {
+            overflow-x: auto;
           }
-          
-          const data = await response.json();
-          let parsed = data.body;
-          if (typeof parsed === "string") parsed = JSON.parse(parsed);
-          
-          return { 
-            index: actualIndex, 
-            result: Array.isArray(parsed) ? parsed[0] : parsed,
-            success: true
-          };
-        } catch (err) {
-          return { 
-            index: actualIndex, 
-            error: true, 
-            result: { 
-              error: "Failed to fetch listing data", 
-              raw_content: err.message 
-            },
-            success: false
-          };
-        }
-      };
-      
-      const results = [];
-      
-      for (let batchStart = 0; batchStart < allGroupsToProcess.length; batchStart += PROCESSING_BATCH_SIZE) {
-        const currentBatch = allGroupsToProcess.slice(batchStart, batchStart + PROCESSING_BATCH_SIZE);
-        const batchIndices = [];
-        
-        for (let i = 0; i < currentBatch.length; i++) {
-          const batchItemIndex = batchStart + i;
-          let actualIndex;
-          
-          if (batchItemIndex < newGroupIndices.length) {
-            actualIndex = newGroupIndices[batchItemIndex];
-          } else {
-            const poolArrayIndex = batchItemIndex - newGroupIndices.length;
-            actualIndex = newPoolGroupIndices[poolArrayIndex];
+
+          .table-header, .table-row {
+            grid-template-columns: 1fr;
+            gap: 0.5rem;
           }
-          
-          batchIndices.push(actualIndex);
-          processedIndices.push(actualIndex);
-        }
-        
-        processingStatus.currentGroup = batchStart + 1;
-        appDispatch({ 
-          type: 'SET_PROCESSING_STATUS', 
-          payload: { ...processingStatus }
-        });
-        
-        const batchPromises = currentBatch.map((group, idx) => 
-          processGroupWithRetry(group, batchIndices[idx])
-        );
-        
-        const batchResults = await Promise.all(batchPromises);
-        results.push(...batchResults);
-        
-        const completedCount = Math.min(batchStart + PROCESSING_BATCH_SIZE, allGroupsToProcess.length);
-        processingStatus.processCompleted = completedCount;
-        appDispatch({ 
-          type: 'SET_PROCESSING_STATUS', 
-          payload: { ...processingStatus }
-        });
-        
-        batchResults.forEach(({ index, result, error, success }) => {
-          let finalStoredSelections = { ...currentFieldSelections };
-          
-          if (aiResolveCategoryFields && success && result && typeof result === 'object' && result.aiResolvedFields) {
-            try {
-              const merged = { ...currentFieldSelections };
-              
-              Object.entries(result.aiResolvedFields).forEach(([fieldName, aiValue]) => {
-                const currentValue = currentFieldSelections[fieldName];
-                
-                if (!currentValue || currentValue === "-- Select --" || currentValue.trim() === "") {
-                  if (aiValue && aiValue !== "Unknown" && aiValue !== "Not Specified" && aiValue.trim() !== "") {
-                    merged[fieldName] = aiValue.trim();
-                  }
-                }
-              });
 
-              finalStoredSelections = merged;
-            } catch (mergeError) {
-              console.error(`Error merging AI fields for group ${index}:`, mergeError);
-            }
+          .form-row {
+            grid-template-columns: 1fr;
           }
-          
-          const safeResult = result || { 
-            error: error ? "Processing failed" : "Unknown error",
-            title: "",
-            description: ""
-          };
-          
-          appDispatch({
-            type: 'UPDATE_RESPONSE_DATA',
-            payload: { 
-              index, 
-              value: {
-                ...safeResult,
-                storedFieldSelections: finalStoredSelections
-              }
-            }
-          });
-          
-          appDispatch({
-            type: 'UPDATE_PROCESSING_GROUP',
-            payload: { index, value: false }
-          });
-        });
-        
-        if (batchStart + PROCESSING_BATCH_SIZE < allGroupsToProcess.length) {
-          await new Promise(resolve => setTimeout(resolve, 100));
-        }
-      }
-      
-      processingStatus.processCompleted = totalGroups;
-      processingStatus.currentGroup = totalGroups;
-      
-      appDispatch({ 
-        type: 'SET_PROCESSING_STATUS', 
-        payload: processingStatus
-      });
-      
-      appDispatch({ type: 'SET_COMPLETED_CHUNKS', payload: totalGroups });
-      appDispatch({ type: 'MARK_GROUPS_AS_PROCESSED', payload: processedIndices });
-      
-      if (filesBase64.length > 0) {
-        appDispatch({ type: 'SET_FILES_BASE64', payload: [] });
-      }
-      
-      if (aiResolveCategoryFields) {
-        try {
-          const aiResolvedCount = results.filter(r => 
-            r && r.success && r.result && r.result.aiResolvedFields && 
-            Object.keys(r.result.aiResolvedFields).length > 0
-          ).length;
-          
-          if (aiResolvedCount > 0) {
-            setTimeout(() => {
-              alert(`🤖 AI successfully resolved category fields across ${aiResolvedCount} listings.`);
-            }, 1000);
+
+          .location-grid {
+            grid-template-columns: repeat(2, 1fr);
           }
-        } catch (summaryError) {
-          console.error('Error generating AI resolution summary:', summaryError);
+
+          .wizard-content {
+            padding: 1rem;
+          }
+
+          .wizard-footer {
+            padding: 1rem;
+          }
+
+          .tools-grid {
+            grid-template-columns: 1fr;
+          }
         }
-      }
-      
-      setTimeout(() => {
-        appDispatch({ type: 'RESET_STATUS' });
-        appDispatch({ type: 'SET_IS_LOADING', payload: false });
-      }, 500);
-      
-      return true;
-      
-    } catch (error) {
-      console.error("Error in generate listing process:", error);
-      alert(`An error occurred: ${error.message}`);
-      appDispatch({ type: 'RESET_STATUS' });
-      appDispatch({ type: 'SET_IS_LOADING', payload: false });
-      throw error;
-    }
-  };
-
-  const handleBackToOverview = () => {
-    dispatch({ type: 'SET_VIEW_MODE', payload: 'overview' });
-    dispatch({ type: 'SET_CURRENT_BATCH', payload: null });
-  };
-
-  if (!currentBatch) {
-    return null;
-  }
-
-  return (
-    <div className="batch-editor">
-      <header className="batch-editor-header">
-        <div className="header-left">
-          <button 
-            onClick={handleBackToOverview}
-            className="back-button"
-          >
-            ← Back to Batches
-          </button>
-          <div className="batch-info">
-            <h1>{currentBatch.name}</h1>
-            <span className="batch-status">{currentBatch.status}</span>
-          </div>
-        </div>
-      </header>
-
-      <main className="main-card">
-        <FormSection 
-          onGenerateListing={handleGenerateListing}
-          batchMode={true}
-          currentBatch={currentBatch}
-        />
-        <BatchPreviewSection 
-          onShowListingManager={() => setShowListingManager(true)}
-          currentBatch={currentBatch}
-        />
-      </main>
-
-      {showListingManager && (
-        <div className="listing-modal-overlay">
-          <div className="listing-modal">
-            <EbayListingManager 
-              onClose={() => setShowListingManager(false)}
-            />
-          </div>
-        </div>
-      )}
+      `}</style>
     </div>
   );
 }
 
 // Main App Component
-function AppContent() {
-  const { viewMode } = useBatch();
+function BatchApp() {
+  const [currentView, setCurrentView] = useState('overview'); // 'overview', 'wizard', 'edit'
+  const [selectedBatch, setSelectedBatch] = useState(null);
+  const [isWizardOpen, setIsWizardOpen] = useState(false);
+
+  const handleCreateBatch = () => {
+    setSelectedBatch(null);
+    setIsWizardOpen(true);
+  };
+
+  const handleEditBatch = (batch) => {
+    setSelectedBatch(batch);
+    setCurrentView('edit');
+  };
+
+  const handleCloseWizard = () => {
+    setIsWizardOpen(false);
+    setSelectedBatch(null);
+  };
 
   return (
-    <div className="app-container">
-      {viewMode === 'overview' && <BatchOverview />}
-      {viewMode === 'create' && <BatchWizard />}
-      {viewMode === 'edit' && <BatchEditor />}
+    <BatchProvider>
+      <div style={{ minHeight: '100vh', background: '#f5f5f5' }}>
+        {currentView === 'overview' && (
+          <BatchOverview 
+            onCreateBatch={handleCreateBatch}
+            onEditBatch={handleEditBatch}
+          />
+        )}
 
-      <footer className="footer">
-        <p>© 2025 ListEasier</p>
-      </footer>
-    </div>
+        <BatchWizard
+          isOpen={isWizardOpen}
+          onClose={handleCloseWizard}
+          editingBatch={selectedBatch}
+        />
+      </div>
+    </BatchProvider>
   );
 }
 
-// Updated EbayCallback component
-const EbayCallback = () => {
-  const { handleAuthCallback } = useEbayAuth();
-  const [error, setError] = useState(null);
-
-  useEffect(() => {
-    const urlParams = new URLSearchParams(window.location.search);
-    const authCode = urlParams.get('code');
-    const error = urlParams.get('error');
-    const errorDescription = urlParams.get('error_description');
-    
-    const processedKey = `ebay_callback_processed_${authCode || error || 'unknown'}`;
-    const alreadyProcessed = sessionStorage.getItem(processedKey);
-    
-    if (alreadyProcessed) {
-      setError('This authorization has already been processed. Please try logging in again.');
-      setTimeout(() => {
-        window.location.href = '/';
-      }, 3000);
-      return;
-    }
-
-    if (error) {
-      sessionStorage.setItem(processedKey, 'true');
-      const errorParam = encodeURIComponent(errorDescription || error);
-      window.location.href = '/?ebay_error=' + errorParam;
-      return;
-    }
-
-    if (authCode) {
-      sessionStorage.setItem(processedKey, 'true');
-      
-      const exchangeTimeout = setTimeout(() => {
-        setError('The authentication process timed out. Please try again.');
-        setTimeout(() => {
-          window.location.href = '/?ebay_error=timeout';
-        }, 3000);
-      }, 30000);
-      
-      handleAuthCallback(authCode).then(success => {
-        clearTimeout(exchangeTimeout);
-        
-        if (success) {
-          setTimeout(() => {
-            window.location.href = '/?ebay_connected=true';
-          }, 100);
-        } else {
-          window.location.href = '/?ebay_error=authentication_failed';
-        }
-      }).catch(callbackError => {
-        clearTimeout(exchangeTimeout);
-        
-        if (callbackError.message.includes('already been used')) {
-          setError('This authorization code has already been used. Please log in again.');
-        } else if (callbackError.message.includes('invalid_grant')) {
-          setError('The authorization has expired or is invalid. Please try logging in again.');
-        } else {
-          setError(`Authentication failed: ${callbackError.message}`);
-        }
-        
-        setTimeout(() => {
-          window.location.href = '/?ebay_error=' + encodeURIComponent(callbackError.message || 'callback_error');
-        }, 3000);
-      });
-    } else {
-      window.location.href = '/?ebay_error=invalid_callback';
-    }
-  }, [handleAuthCallback]);
-
-  return (
-    <div style={{ 
-      display: 'flex', 
-      justifyContent: 'center', 
-      alignItems: 'center', 
-      height: '100vh',
-      flexDirection: 'column',
-      padding: '20px'
-    }}>
-      {error ? (
-        <>
-          <div style={{
-            color: '#dc3545',
-            fontSize: '1.2rem',
-            marginBottom: '1rem',
-            textAlign: 'center',
-            maxWidth: '500px'
-          }}>
-            {error}
-          </div>
-          <p style={{ color: '#666' }}>Redirecting...</p>
-        </>
-      ) : (
-        <>
-          <div className="spinner">
-            <div className="spinner-circle"></div>
-          </div>
-          <p>Processing eBay authentication...</p>
-          <p style={{ fontSize: '0.8rem', color: '#666', marginTop: '1rem' }}>
-            This may take a few seconds...
-          </p>
-        </>
-      )}
-    </div>
-  );
-};
-
-function App() {
-  const pathname = window.location.pathname;
-  if (pathname === '/ebay/callback' || pathname === '/ebay/callback/') {
-    return (
-      <EbayAuthProvider>
-        <EbayCallback />
-      </EbayAuthProvider>
-    );
-  }
-
-  return (
-    <EbayAuthProvider>
-      <AppStateProvider>
-        <BatchProvider>
-          <AppContent />
-        </BatchProvider>
-      </AppStateProvider>
-    </EbayAuthProvider>
-  );
-}
-
-export default App;
+export default BatchApp;

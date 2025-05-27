@@ -13,6 +13,7 @@ import { DynamoDBDocumentClient, PutCommand, DeleteCommand } from '@aws-sdk/lib-
 import { fromCognitoIdentityPool } from "@aws-sdk/credential-provider-cognito-identity";
 import { AppStateProvider, useAppState } from './StateContext';
 import { EbayAuthProvider, useEbayAuth } from './EbayAuthContext';
+import { CategoryProvider, useCategories } from './CategoryContext';
 import EbayListingManager from './EbayListingManager';
 import BatchPreviewSection from './BatchPreviewSection';
 import { cacheService } from './CacheService';
@@ -2056,93 +2057,8 @@ function BatchWizard() {
 
   const [showTemplateModal, setShowTemplateModal] = useState(false);
   
-  // Add states for categories (same as FormSection)
-  const [categories, setCategories] = useState({});
-  const [categoriesLoading, setCategoriesLoading] = useState(true);
-  
-  // AWS Configuration (same as FormSection)
-  const REGION = "us-east-2";
-  const IDENTITY_POOL_ID = "us-east-2:f81d1240-32a8-4aff-87e8-940effdf5908";
-
-  const dynamoClient = useMemo(() => {
-    return new DynamoDBClient({
-      region: REGION,
-      credentials: fromCognitoIdentityPool({
-        clientConfig: { region: REGION },
-        identityPoolId: IDENTITY_POOL_ID,
-      }),
-    });
-  }, []);
-
-  // Fetch categories from DynamoDB (same logic as FormSection)
-  useEffect(() => {
-    const fetchCategories = async () => {
-      try {
-        setCategoriesLoading(true);
-        
-        const cacheKey = 'categories_all';
-        const cachedCategories = cacheService.get(cacheKey);
-        
-        if (cachedCategories) {
-          setCategories(cachedCategories);
-          setCategoriesLoading(false);
-          return;
-        }
-
-        const scanCommand = new ScanCommand({
-          TableName: 'ListCategory',
-        });
-
-        const response = await dynamoClient.send(scanCommand);
-        const categoryData = {};
-        
-        // Properly unmarshall DynamoDB items
-        const items = response.Items?.map(item => unmarshall(item)) || [];
-        
-        items.forEach(item => {
-          // Ensure category and subcategory are strings
-          const category = typeof item.Category === 'string' ? item.Category : String(item.Category || '');
-          const subcategory = typeof item.SubCategory === 'string' ? item.SubCategory : String(item.SubCategory || '');
-          
-          // Skip invalid entries
-          if (!category || category === '[object Object]') {
-            console.warn('⚠️ BatchWizard: Skipping invalid category:', item);
-            return;
-          }
-          
-          if (!categoryData[category]) {
-            categoryData[category] = [];
-          }
-          if (subcategory && subcategory !== '[object Object]') {
-            categoryData[category].push(subcategory);
-          }
-        });
-        categoryData['--'] = ['--'];
-        
-        cacheService.set(cacheKey, categoryData, null, 'categories');
-        
-        setCategories(categoryData);
-      } catch (err) {
-        console.error('Error fetching categories:', err);
-        const fallbackData = cacheService.get('categories_all');
-        if (fallbackData) {
-          setCategories(fallbackData);
-        } else {
-          // Fallback categories if DynamoDB fails
-          setCategories({
-            '--': ['--'],
-            'Electronics': ['Cell Phones', 'Computers', 'Gaming'],
-            'Collectibles': ['Sports Cards', 'Coins', 'Comics'],
-            'Clothing': ['Men', 'Women', 'Children']
-          });
-        }
-      } finally {
-        setCategoriesLoading(false);
-      }
-    };
-
-    fetchCategories();
-  }, [dynamoClient]);
+  // Use global categories from context
+  const { categories, categoriesLoading } = useCategories();
 
   const subcategories = categories[batchData.category] || ['--'];
 
@@ -3774,6 +3690,23 @@ function AppLayout() {
 
 // Main App Content
 function AppContent() {
+  const { categoriesLoading } = useCategories();
+  
+  // Show loading state while categories are being loaded
+  if (categoriesLoading) {
+    return (
+      <div style={{ 
+        display: 'flex', 
+        justifyContent: 'center', 
+        alignItems: 'center', 
+        height: '100vh',
+        backgroundColor: '#f8f9fa'
+      }}>
+        <LoadingSpinner message="Loading categories..." />
+      </div>
+    );
+  }
+  
   return <AppLayout />;
 }
 
@@ -3913,13 +3846,15 @@ function App() {
       useRefreshTokens={true}
     >
       <AuthenticationWrapper>
-        <EbayAuthProvider>
-          <AppStateProvider>
-            <BatchProvider>
-              <AppContent />
-            </BatchProvider>
-          </AppStateProvider>
-        </EbayAuthProvider>
+        <CategoryProvider>
+          <EbayAuthProvider>
+            <AppStateProvider>
+              <BatchProvider>
+                <AppContent />
+              </BatchProvider>
+            </AppStateProvider>
+          </EbayAuthProvider>
+        </CategoryProvider>
       </AuthenticationWrapper>
     </Auth0Provider>
   );

@@ -10,6 +10,7 @@ import { useEbayAuth } from './EbayAuthContext';
 
 // Import caching service
 import { cacheService } from './CacheService';
+import { useCategories } from './CategoryContext';
 
 // Import the optimized image handlers and uploader
 import OptimizedImageUploader from './OptimizedImageUploader';
@@ -100,8 +101,9 @@ function FormSection({ onGenerateListing, onCategoryFieldsChange, batchMode = fa
   const [subcategories, setSubcategories] = useState(["--"]);
   const [categoryFields, setCategoryFields] = useState([]);
   const [showTooltip, setShowTooltip] = useState(false);
-  const [categories, setCategories] = useState({});
-  const [categoriesLoading, setCategoriesLoading] = useState(true);
+  
+  // Use global categories from context
+  const { categories, categoriesLoading } = useCategories();
   const [autoRotateEnabled, setAutoRotateEnabled] = useState(false);
   const [showEbayAuth, setShowEbayAuth] = useState(false);
   const [aiResolveCategoryFields, setAiResolveCategoryFields] = useState(false);
@@ -206,82 +208,6 @@ function FormSection({ onGenerateListing, onCategoryFieldsChange, batchMode = fa
     console.log(`Selected ${policyType}:`, policy);
   };
 
-  // Helper function to clean category data
-  const cleanCategoryData = (categoryData) => {
-    const cleaned = {};
-    Object.entries(categoryData).forEach(([category, subcategories]) => {
-      // Skip invalid categories
-      if (!category || category === '[object Object]') {
-        return;
-      }
-      // Filter out invalid subcategories
-      const validSubcategories = (subcategories || []).filter(sub => 
-        sub && sub !== '[object Object]'
-      );
-      if (validSubcategories.length > 0) {
-        cleaned[category] = validSubcategories;
-      }
-    });
-    // Always ensure -- option exists
-    cleaned['--'] = ['--'];
-    return cleaned;
-  };
-
-  // Enhanced categories fetching with caching
-  useEffect(() => {
-    const fetchCategories = async () => {
-      try {
-        setCategoriesLoading(true);
-        
-        const cacheKey = 'categories_all';
-        const cachedCategories = cacheService.get(cacheKey);
-        
-        if (cachedCategories) {
-          setCategories(cleanCategoryData(cachedCategories));
-          setCategoriesLoading(false);
-          return;
-        }
-
-        const scanCommand = new ScanCommand({
-          TableName: 'ListCategory',
-        });
-
-        const response = await docClient.send(scanCommand);
-        const categoryData = {};
-        response.Items.forEach(item => {
-          // Ensure category and subcategory are strings
-          const category = typeof item.Category === 'string' ? item.Category : String(item.Category || '');
-          const subcategory = typeof item.SubCategory === 'string' ? item.SubCategory : String(item.SubCategory || '');
-          
-          // Skip invalid entries
-          if (!category || category === '[object Object]' || !subcategory || subcategory === '[object Object]') {
-            console.warn('⚠️ FormSection: Skipping invalid category entry:', item);
-            return;
-          }
-          
-          if (!categoryData[category]) {
-            categoryData[category] = [];
-          }
-          categoryData[category].push(subcategory);
-        });
-        categoryData['--'] = ['--'];
-        
-        cacheService.set(cacheKey, categoryData, null, 'categories');
-        
-        setCategories(cleanCategoryData(categoryData));
-      } catch (err) {
-        console.error('Error fetching categories:', err);
-        const fallbackData = cacheService.get('categories_all');
-        if (fallbackData) {
-          setCategories(cleanCategoryData(fallbackData));
-        }
-      } finally {
-        setCategoriesLoading(false);
-      }
-    };
-
-    fetchCategories();
-  }, []);
 
   // Enhanced category fields fetching with caching
   useEffect(() => {

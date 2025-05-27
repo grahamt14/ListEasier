@@ -1017,34 +1017,42 @@ function FormSection({ onGenerateListing, onCategoryFieldsChange, batchMode = fa
   };
   
   const uploadToS3 = async (file) => {
-    try {
-      const arrayBuffer = await new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = () => resolve(reader.result);
-        reader.onerror = reject;
-        reader.readAsArrayBuffer(file);
-      });
-      
-      const fileName = `${Date.now()}_${file.name}`;
-      
-      const uploadParams = {
-        Bucket: BUCKET_NAME,
-        Key: fileName,
-        Body: new Uint8Array(arrayBuffer),
-        ContentType: file.type,
-        ACL: "public-read",
-      };
-      
-      const command = new PutObjectCommand(uploadParams);
-      await s3Client.send(command);
-      
-      const s3Url = `https://${BUCKET_NAME}.s3.${REGION}.amazonaws.com/${fileName}`;
-      return s3Url;
-    } catch (error) {
-      console.error("Error uploading to S3:", error);
-      throw error;
-    }
-  };
+  try {
+    const arrayBuffer = await new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result);
+      reader.onerror = reject;
+      reader.readAsArrayBuffer(file);
+    });
+    
+    // Generate a unique filename with user ID for better organization
+    const userId = user?.sub || 'anonymous';
+    const timestamp = Date.now();
+    const randomId = Math.random().toString(36).substring(7);
+    const fileName = `${userId}/${timestamp}_${randomId}_${file.name}`;
+    
+    const uploadParams = {
+      Bucket: BUCKET_NAME,
+      Key: fileName,
+      Body: new Uint8Array(arrayBuffer),
+      ContentType: file.type,
+      ACL: "public-read", // Ensure this is properly public
+      // Add cache control for better performance
+      CacheControl: "max-age=31536000", // 1 year cache
+    };
+    
+    console.log('📤 Uploading to S3:', fileName);
+    const command = new PutObjectCommand(uploadParams);
+    await s3Client.send(command);
+    
+    const s3Url = `https://${BUCKET_NAME}.s3.${REGION}.amazonaws.com/${fileName}`;
+    console.log('✅ S3 upload successful:', s3Url);
+    return s3Url;
+  } catch (error) {
+    console.error("❌ Error uploading to S3:", error);
+    throw error;
+  }
+};
 
   const isValidSelection = selectedCategory !== "--" && subCategory !== "--";
 

@@ -490,41 +490,52 @@ const compressBatchForStorage = (batch) => {
     }
   };
 
-  const updateBatch = (batchData) => {
-    console.log('🔄 BatchProvider: Updating batch:', batchData.id);
-    
-    const safeStringConvert = (value, defaultValue = '--') => {
-      if (value === null || value === undefined) return defaultValue;
-      if (typeof value === 'string') return value;
-      if (typeof value === 'object') {
-        console.warn('⚠️ BatchProvider: Converting object to string:', value);
-        return defaultValue;
-      }
-      return String(value);
-    };
-    
-    const updatedBatch = {
-      ...batchData,
-      category: safeStringConvert(batchData.category, '--'),
-      subCategory: safeStringConvert(batchData.subCategory, '--'),
-      name: safeStringConvert(batchData.name, `Batch ${batchData.id}`),
-      id: safeStringConvert(batchData.id),
-      salePrice: safeStringConvert(batchData.salePrice, ''),
-      sku: safeStringConvert(batchData.sku, ''),
-      updatedAt: new Date().toISOString(),
-      appState: {
-        ...batchData.appState,
-        category: safeStringConvert(batchData.appState?.category || batchData.category, '--'),
-        subCategory: safeStringConvert(batchData.appState?.subCategory || batchData.subCategory, '--'),
-        price: safeStringConvert(batchData.appState?.price || batchData.salePrice, ''),
-        sku: safeStringConvert(batchData.appState?.sku || batchData.sku, '')
-      }
-    };
-    
-    console.log('✅ BatchProvider: Updated batch object created with proper string conversion');
-    dispatch({ type: 'UPDATE_BATCH', payload: updatedBatch });
-    
-    // Throttling to prevent excessive writes - only save at most once per 5 seconds
+ const updateBatch = (batchData, forceSave = false) => {
+  console.log('🔄 BatchProvider: Updating batch:', batchData.id, forceSave ? '(force save)' : '');
+  
+  const safeStringConvert = (value, defaultValue = '--') => {
+    if (value === null || value === undefined) return defaultValue;
+    if (typeof value === 'string') return value;
+    if (typeof value === 'object') {
+      console.warn('⚠️ BatchProvider: Converting object to string:', value);
+      return defaultValue;
+    }
+    return String(value);
+  };
+  
+  const updatedBatch = {
+    ...batchData,
+    category: safeStringConvert(batchData.category, '--'),
+    subCategory: safeStringConvert(batchData.subCategory, '--'),
+    name: safeStringConvert(batchData.name, `Batch ${batchData.id}`),
+    id: safeStringConvert(batchData.id),
+    salePrice: safeStringConvert(batchData.salePrice, ''),
+    sku: safeStringConvert(batchData.sku, ''),
+    updatedAt: new Date().toISOString(),
+    appState: {
+      ...batchData.appState,
+      category: safeStringConvert(batchData.appState?.category || batchData.category, '--'),
+      subCategory: safeStringConvert(batchData.appState?.subCategory || batchData.subCategory, '--'),
+      price: safeStringConvert(batchData.appState?.price || batchData.salePrice, ''),
+      sku: safeStringConvert(batchData.appState?.sku || batchData.sku, '')
+    }
+  };
+  
+  console.log('✅ BatchProvider: Updated batch object created with proper string conversion');
+  dispatch({ type: 'UPDATE_BATCH', payload: updatedBatch });
+  
+  // Check for significant changes that should trigger immediate save
+  const hasNewListings = updatedBatch.appState?.responseData?.some(item => item && !item.error);
+  const hasImages = updatedBatch.appState?.imageGroups?.some(group => group && group.length > 0);
+  
+  if (forceSave || hasNewListings || hasImages) {
+    // Immediate save for important changes
+    console.log('💾 BatchProvider: Immediate save triggered for significant changes');
+    saveBatchToDynamoDB(updatedBatch, true).catch(error => {
+      console.error('❌ BatchProvider: Failed to immediately save batch:', error);
+    });
+  } else {
+    // Throttled save for minor changes
     const batchId = updatedBatch.id;
     
     if (updateTimeouts.has(batchId)) {
@@ -536,10 +547,11 @@ const compressBatchForStorage = (batch) => {
       saveBatchToDynamoDB(updatedBatch).catch(error => {
         console.error('❌ BatchProvider: Failed to update batch in DynamoDB:', error);
       });
-    }, 5000);
+    }, 3000); // Reduced from 5000ms
     
     updateTimeouts.set(batchId, timeoutId);
-  };
+  }
+};
 
   const createBatch = (batchData) => {
     console.log('🆕 BatchProvider: Creating new batch with data:', batchData);
@@ -617,45 +629,51 @@ const compressBatchForStorage = (batch) => {
     return newBatch;
   };
 
-  const saveBatchToDynamoDB = async (batch) => {
-    console.log('💾 BatchProvider: Saving batch to DynamoDB:', batch.id);
-    try {
-      const userId = getUserId();
-      if (!userId) {
-        console.warn('⚠️ BatchProvider: No user ID, cannot save batch');
-        return false;
-      }
-      
-      const compressedBatch = compressBatchForStorage(batch);
-      
-      const item = {
-        userId, // Use userId instead of sessionId
-        batchId: String(batch.id),
-        ...compressedBatch,
-        updatedAt: new Date().toISOString(),
-        ttl: Math.floor(Date.now() / 1000) + (90 * 24 * 60 * 60) // 90 days
-      };
-
-      console.log('🔍 BatchProvider: Item to save:', {
-        userId: item.userId,
-        batchId: item.batchId,
-        name: item.name,
-        category: item.category
-      });
-
-      const command = new PutCommand({
-        TableName: 'ListEasierBatches',
-        Item: item
-      });
-
-      await docClient.send(command);
-      console.log('✅ BatchProvider: Batch saved successfully to DynamoDB');
-      return true;
-    } catch (error) {
-      console.error('❌ BatchProvider: Error saving batch to DynamoDB:', error);
+ const saveBatchToDynamoDB = async (batch, force = false) => {
+  console.log('💾 BatchProvider: Saving batch to DynamoDB:', batch.id, force ? '(forced)' : '');
+  try {
+    const userId = getUserId();
+    if (!userId) {
+      console.warn('⚠️ BatchProvider: No user ID, cannot save batch');
       return false;
     }
-  };
+    
+    const compressedBatch = compressBatchForStorage(batch);
+    
+    const item = {
+      userId,
+      batchId: String(batch.id),
+      ...compressedBatch,
+      updatedAt: new Date().toISOString(),
+      ttl: Math.floor(Date.now() / 1000) + (90 * 24 * 60 * 60), // 90 days
+      // Add version for tracking
+      version: compressedBatch.version ? compressedBatch.version + 1 : 1
+    };
+
+    console.log('🔍 BatchProvider: Item to save:', {
+      userId: item.userId,
+      batchId: item.batchId,
+      name: item.name,
+      category: item.category,
+      totalItems: item.totalItems,
+      version: item.version
+    });
+
+    const command = new PutCommand({
+      TableName: 'ListEasierBatches',
+      Item: item
+    });
+
+    await docClient.send(command);
+    console.log('✅ BatchProvider: Batch saved successfully to DynamoDB');
+    return true;
+  } catch (error) {
+    console.error('❌ BatchProvider: Error saving batch to DynamoDB:', error);
+    return false;
+  }
+};
+
+
 
   const deleteBatch = (batchId) => {
     console.log('🗑️ BatchProvider: Deleting batch:', batchId);
@@ -2165,80 +2183,84 @@ function BatchEditor() {
   }, [currentBatch, currentSku]);
 
   // Load batch state into app state
-  useEffect(() => {
-    if (currentBatch && currentBatch.appState) {
-      console.log('🔄 BatchEditor: Loading batch state into app state:', currentBatch.id);
-      
-      appDispatch({ type: 'CLEAR_ALL_FOR_NEW_BATCH' });
-      
-      setTimeout(() => {
-        const batchState = currentBatch.appState;
-        
-        const safeStringConvert = (value, defaultValue = '--') => {
-          if (value === null || value === undefined) return defaultValue;
-          if (typeof value === 'string') return value;
-          if (typeof value === 'object') {
-            console.warn('⚠️ BatchEditor: Converting object to string:', value);
-            return defaultValue;
-          }
-          return String(value);
-        };
-        
-        const actionMappings = {
-          filesBase64: 'SET_FILES_BASE64',
-          rawFiles: 'SET_RAW_FILES', 
-          imageGroups: 'SET_IMAGE_GROUPS',
-          s3ImageGroups: 'SET_S3_IMAGE_GROUPS',
-          responseData: 'SET_RESPONSE_DATA',
-          groupMetadata: 'UPDATE_GROUP_METADATA',
-          fieldSelections: 'SET_FIELD_SELECTIONS',
-          processedGroupIndices: 'SET_PROCESSED_GROUP_INDICES',
-          imageRotations: 'SET_IMAGE_ROTATIONS',
-          selectedImages: 'SET_SELECTED_IMAGES',
-          processingGroups: 'SET_PROCESSING_GROUPS',
-          errorMessages: 'SET_ERROR_MESSAGES',
-          totalChunks: 'SET_TOTAL_CHUNKS',
-          completedChunks: 'SET_COMPLETED_CHUNKS',
-          categoryID: 'SET_CATEGORY_ID',
-          price: 'SET_PRICE',
-          sku: 'SET_SKU'
-        };
-        
-        // Load all state including preserved responseData with listings
-        Object.entries(actionMappings).forEach(([stateKey, actionType]) => {
-          if (batchState.hasOwnProperty(stateKey)) {
-            console.log(`🔄 BatchEditor: Loading ${stateKey} with`, 
-              stateKey === 'responseData' ? 
-                `${(batchState[stateKey] || []).filter(item => item && !item.error).length} valid listings` : 
-                typeof batchState[stateKey]);
-            appDispatch({ type: actionType, payload: batchState[stateKey] });
-          }
-        });
-        
-        const categoryValue = safeStringConvert(batchState.category || currentBatch.category);
-        const subCategoryValue = safeStringConvert(batchState.subCategory || currentBatch.subCategory);
-        
-        if (categoryValue && categoryValue !== '--') {
-          appDispatch({ type: 'SET_CATEGORY', payload: categoryValue });
-        }
-        if (subCategoryValue && subCategoryValue !== '--') {
-          appDispatch({ type: 'SET_SUBCATEGORY', payload: subCategoryValue });
-        }
-        
-        const priceValue = safeStringConvert(batchState.price || currentBatch.salePrice, '');
-        const skuValue = safeStringConvert(batchState.sku || currentBatch.sku, '');
-        
-        if (priceValue && !batchState.price) {
-          appDispatch({ type: 'SET_PRICE', payload: priceValue });
-        }
-        if (skuValue && !batchState.sku) {
-          appDispatch({ type: 'SET_SKU', payload: skuValue });
-        }
-        
-        console.log('✅ BatchEditor: Finished loading batch state');
-      }, 100);
+ useEffect(() => {
+  if (currentBatch) {
+    const hasValidListings = state.responseData.some(item => item && !item.error);
+    
+    let newStatus = currentBatch.status;
+    if (hasValidListings && currentBatch.status === 'draft') {
+      newStatus = 'ready';
     }
-  }, [currentBatch?.id, appDispatch]);
+    
+    const safeStringConvert = (value, defaultValue = '') => {
+      if (value === null || value === undefined) return defaultValue;
+      if (typeof value === 'string') return value;
+      if (typeof value === 'object') {
+        console.warn('⚠️ BatchEditor: Converting object to string in update:', value);
+        return defaultValue;
+      }
+      return String(value);
+    };
+    
+    const updatedBatch = {
+      ...currentBatch,
+      appState: {
+        ...state, // Use entire state instead of cherry-picking
+        // Ensure strings are properly converted
+        category: safeStringConvert(state.category),
+        subCategory: safeStringConvert(state.subCategory),
+        price: safeStringConvert(state.price),
+        sku: safeStringConvert(state.sku)
+      },
+      totalItems: state.responseData.filter(item => item && !item.error).length,
+      status: newStatus,
+      salePrice: safeStringConvert(state.price || currentBatch.salePrice),
+      sku: safeStringConvert(state.sku || currentBatch.sku)
+    };
+    
+    const currentDataString = JSON.stringify({
+      appState: updatedBatch.appState,
+      totalItems: updatedBatch.totalItems,
+      status: updatedBatch.status,
+      salePrice: updatedBatch.salePrice,
+      sku: updatedBatch.sku
+    });
+    
+    const now = Date.now();
+    const timeSinceLastSave = now - lastSaveTimeRef.current;
+    
+    // FIXED: Always save when listings are generated or significant changes occur
+    const hasSignificantChange = (
+      updatedBatch.totalItems !== currentBatch.totalItems ||
+      updatedBatch.status !== currentBatch.status ||
+      (state.responseData.length > 0 && state.responseData.some(item => item && !item.error)) ||
+      state.imageGroups.some(group => group && group.length > 0) // Save when images are present
+    );
+    
+    if (lastUpdateRef.current !== currentDataString) {
+      lastUpdateRef.current = currentDataString;
+      
+      if (updateTimeoutRef.current) {
+        clearTimeout(updateTimeoutRef.current);
+      }
+      
+      // FIXED: Use shorter delay for significant changes, immediate save for new listings
+      const delay = hasSignificantChange ? 500 : 3000; // Reduced delay
+      
+      updateTimeoutRef.current = setTimeout(() => {
+        console.log('💾 BatchEditor: Saving batch update - significant change:', hasSignificantChange);
+        lastSaveTimeRef.current = Date.now();
+        updateBatch(updatedBatch);
+      }, delay);
+    }
+  }
+  
+  return () => {
+    if (updateTimeoutRef.current) {
+      clearTimeout(updateTimeoutRef.current);
+    }
+  };
+}, [state, currentBatch, updateBatch]); // Watch entire state, not just selected fields
 
   // Throttled batch update logic
   useEffect(() => {

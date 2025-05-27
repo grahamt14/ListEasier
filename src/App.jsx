@@ -9,7 +9,7 @@ import JSZip from 'jszip';
 import { saveAs } from 'file-saver';
 import { DynamoDBClient, QueryCommand, ScanCommand } from '@aws-sdk/client-dynamodb';
 import { unmarshall } from '@aws-sdk/util-dynamodb';
-import { DynamoDBDocumentClient, PutCommand, DeleteCommand } from '@aws-sdk/lib-dynamodb';
+import { DynamoDBDocumentClient, PutCommand, DeleteCommand, BatchWriteItemCommand } from '@aws-sdk/lib-dynamodb';
 import { fromCognitoIdentityPool } from "@aws-sdk/credential-provider-cognito-identity";
 import { AppStateProvider, useAppState } from './StateContext';
 import { EbayAuthProvider, useEbayAuth } from './EbayAuthContext';
@@ -332,7 +332,7 @@ const compressBatchForStorage = (batch) => {
 };
   
   const loadBatchesFromDynamoDB = async () => {
-    console.log('📥 BatchProvider: Starting to load batches from DynamoDB...');
+    console.log('📥 BatchProvider: Starting to load batches from DynamoDB (multi-item)...');
     setIsLoading(true);
     try {
       const userId = getUserId();
@@ -342,123 +342,93 @@ const compressBatchForStorage = (batch) => {
         return;
       }
       
-      console.log('🔍 BatchProvider: Using user ID for scan:', userId);
-      
-      const scanParams = {
+      // Query for all items belonging to this user
+      const queryParams = {
         TableName: 'ListEasierBatches',
-        FilterExpression: 'userId = :userId',
+        KeyConditionExpression: 'userId = :userId',
         ExpressionAttributeValues: {
-          ':userId': { S: userId }
-        },
-        Limit: 100
+          ':userId': userId
+        }
       };
-
-      console.log('🔍 BatchProvider: Scan parameters:', JSON.stringify(scanParams, null, 2));
       
-      const command = new ScanCommand(scanParams);
-      console.log('🚀 BatchProvider: Executing DynamoDB scan...');
+      console.log('🔍 BatchProvider: Querying all user items...');
+      const command = new QueryCommand(queryParams);
       const response = await dynamoClient.send(command);
-      console.log('✅ BatchProvider: DynamoDB scan successful');
-      
       const allItems = response.Items || [];
-      console.log('📦 BatchProvider: Raw items from DynamoDB:', allItems.length);
       
-      // Convert DynamoDB items to plain objects using unmarshall
-      const unmarshallItems = allItems.map(item => unmarshall(item));
-      console.log('📦 BatchProvider: Unmarshalled items:', unmarshallItems.length);
+      console.log('📦 BatchProvider: Found', allItems.length, 'items for user');
       
-      // Filter out templates on the client side
-      const batches = unmarshallItems.filter(item => 
-        !item.batchId || !item.batchId.startsWith('template_')
-      );
+      // Group items by batch
+      const itemsByBatch = {};
       
-      console.log('📦 BatchProvider: Filtered batches from DynamoDB:', batches.length);
-      
-      // Process batches with proper string conversion and validation
-      const expandedBatches = batches.map((batch, index) => {
-        console.log(`🔄 BatchProvider: Processing batch ${index + 1}:`, batch);
+      allItems.forEach(item => {
+        // Skip archive items
+        if (item.batchId.startsWith('archive#')) return;
         
-        const safeStringConvert = (value, defaultValue = '--') => {
-          if (value === null || value === undefined) return defaultValue;
-          if (typeof value === 'string') return value;
-          if (typeof value === 'object') {
-            console.warn('⚠️ BatchProvider: Converting object to string:', value);
-            return defaultValue;
-          }
-          return String(value);
-        };
+        // Extract the base batch ID (remove suffixes like #images#0, #settings, etc.)
+        const baseBatchId = item.batchId.split('#')[0];
         
-        const expanded = {
-          ...batch,
-          // Ensure all critical fields are properly converted to strings
-          category: safeStringConvert(batch.category),
-          subCategory: safeStringConvert(batch.subCategory),
-          name: safeStringConvert(batch.name, `Batch ${batch.id || Date.now()}`),
-          status: safeStringConvert(batch.status, 'draft'),
-          id: safeStringConvert(batch.id || batch.batchId || Date.now()),
-          salePrice: safeStringConvert(batch.salePrice, ''),
-          sku: safeStringConvert(batch.sku, ''),
+        if (!itemsByBatch[baseBatchId]) {
+          itemsByBatch[baseBatchId] = {
+            main: null,
+            images: [],
+            listings: [],
+            settings: null
+          };
+        }
+        
+        // Categorize items by type
+        if (item.itemType === 'batch_main') {
+          itemsByBatch[baseBatchId].main = item;
+        } else if (item.itemType === 'image_chunk') {
+          itemsByBatch[baseBatchId].images.push(item);
+        } else if (item.itemType === 'listing_chunk') {
+          itemsByBatch[baseBatchId].listings.push(item);
+        } else if (item.itemType === 'batch_settings') {
+          itemsByBatch[baseBatchId].settings = item;
+        }
+      });
+      
+      // Assemble complete batches
+      const batches = [];
+      
+      for (const [batchId, items] of Object.entries(itemsByBatch)) {
+        if (!items.main) {
+          console.warn('⚠️ BatchProvider: Missing main item for batch:', batchId);
+          continue;
+        }
+        
+        console.log(`🔄 BatchProvider: Assembling batch ${batchId}...`);
+        
+        // Start with main batch data
+        const batch = {
+          ...items.main,
+          id: batchId,
           appState: {
-            ...batch.appState,
-            category: safeStringConvert(batch.appState?.category || batch.category),
-            subCategory: safeStringConvert(batch.appState?.subCategory || batch.subCategory),
-            price: safeStringConvert(batch.appState?.price || batch.salePrice, ''),
-            sku: safeStringConvert(batch.appState?.sku || batch.sku, ''),
-            categoryID: batch.appState?.categoryID || '',
-            
-            // Properly handle arrays and objects with enhanced responseData restoration
-            // Restore imageGroups - if they contain '[S3]' placeholders, reconstruct from S3 URLs
-            imageGroups: Array.isArray(batch.appState?.imageGroups) ? 
-              batch.appState.imageGroups.map((group, index) => {
-                // Check if this group was compressed to placeholders
-                if (group && group.length > 0 && group[0] === '[S3]') {
-                  // Try to restore from S3 URLs
-                  const s3Group = batch.appState?.s3ImageGroups?.[index];
-                  if (s3Group && Array.isArray(s3Group)) {
-                    // Return the S3 URLs as the image data
-                    return s3Group;
-                  }
-                }
-                return group;
-              }) : [[]],
-            s3ImageGroups: Array.isArray(batch.appState?.s3ImageGroups) ? batch.appState.s3ImageGroups : [[]],
-            responseData: Array.isArray(batch.appState?.responseData) ? 
-              batch.appState.responseData.map(item => {
-                if (!item) return null;
-                
-                // Restore all listing fields properly
-                return {
-                  ...item,
-                  title: item.title || '',
-                  description: item.description || '',
-                  price: item.price || safeStringConvert(batch.appState?.price || batch.salePrice, ''),
-                  sku: item.sku || safeStringConvert(batch.appState?.sku || batch.sku, ''),
-                  // Restore stored field selections
-                  storedFieldSelections: item.storedFieldSelections || item.fieldSelections || {},
-                  fieldSelections: item.fieldSelections || item.storedFieldSelections || {},
-                  // Preserve AI resolved fields
-                  aiResolvedFields: item.aiResolvedFields || {},
-                  error: item.error || null
-                };
-              }) : [],
-            groupMetadata: Array.isArray(batch.appState?.groupMetadata) ? batch.appState.groupMetadata : [],
-            fieldSelections: (batch.appState?.fieldSelections && typeof batch.appState.fieldSelections === 'object') 
-              ? batch.appState.fieldSelections : {},
-            processedGroupIndices: Array.isArray(batch.appState?.processedGroupIndices) ? batch.appState.processedGroupIndices : [],
-            
-            // Always reset these to safe defaults
-            filesBase64: Array.isArray(batch.appState?.filesBase64) ? batch.appState.filesBase64 : [],
-            rawFiles: [], // Always empty on load
-            imageRotations: (batch.appState?.imageRotations && typeof batch.appState.imageRotations === 'object') 
-              ? batch.appState.imageRotations : {},
-            selectedImages: [],
+            // Initialize empty state
+            filesBase64: [],
+            rawFiles: [],
+            imageGroups: [],
+            s3ImageGroups: [],
+            responseData: [],
+            groupMetadata: [],
+            fieldSelections: {},
+            processedGroupIndices: [],
+            imageRotations: {},
+            // Copy basic fields
+            category: items.main.category,
+            subCategory: items.main.subCategory,
+            price: items.main.salePrice || '',
+            sku: items.main.sku || '',
+            categoryID: null,
+            // Reset status fields
             isLoading: false,
             isDirty: false,
-            totalChunks: Number(batch.appState?.totalChunks) || 0,
-            completedChunks: Number(batch.appState?.completedChunks) || 0,
-            processingGroups: batch.appState?.imageGroups ? 
-  batch.appState.imageGroups.map(() => false) : [],
+            totalChunks: 0,
+            completedChunks: 0,
+            processingGroups: [],
             errorMessages: [],
+            selectedImages: [],
             uploadStatus: {
               isUploading: false,
               uploadProgress: 0,
@@ -477,27 +447,68 @@ const compressBatchForStorage = (batch) => {
           }
         };
         
-        console.log(`✅ BatchProvider: Processed batch ${index + 1}:`, {
-          id: expanded.id,
-          name: expanded.name,
-          category: expanded.category,
-          subCategory: expanded.subCategory,
-          status: expanded.status
-        });
+        // Load image chunks
+        if (items.images.length > 0) {
+          // Sort by chunk index
+          items.images.sort((a, b) => a.chunkIndex - b.chunkIndex);
+          
+          items.images.forEach(chunk => {
+            // Add image groups
+            if (chunk.imageGroups) {
+              batch.appState.imageGroups.push(...chunk.imageGroups);
+            }
+            if (chunk.s3ImageGroups) {
+              batch.appState.s3ImageGroups.push(...chunk.s3ImageGroups);
+            }
+            // Add pool images
+            if (chunk.filesBase64) {
+              batch.appState.filesBase64.push(...chunk.filesBase64);
+            }
+          });
+        }
         
-        return expanded;
-      });
+        // Load listing chunks
+        if (items.listings.length > 0) {
+          // Sort by chunk index
+          items.listings.sort((a, b) => a.chunkIndex - b.chunkIndex);
+          
+          items.listings.forEach(chunk => {
+            if (chunk.responseData) {
+              batch.appState.responseData.push(...chunk.responseData);
+            }
+            if (chunk.groupMetadata) {
+              batch.appState.groupMetadata.push(...chunk.groupMetadata);
+            }
+          });
+        }
+        
+        // Load settings
+        if (items.settings) {
+          batch.appState.fieldSelections = items.settings.fieldSelections || {};
+          batch.appState.processedGroupIndices = items.settings.processedGroupIndices || [];
+          batch.appState.categoryID = items.settings.categoryID || null;
+          batch.appState.imageRotations = items.settings.imageRotations || {};
+        }
+        
+        // Ensure at least one empty image group
+        if (batch.appState.imageGroups.length === 0) {
+          batch.appState.imageGroups.push([]);
+          batch.appState.s3ImageGroups.push([]);
+        }
+        
+        batches.push(batch);
+      }
       
-      console.log('🎉 BatchProvider: All batches processed successfully:', expandedBatches.length);
-      dispatch({ type: 'LOAD_BATCHES', payload: expandedBatches });
-      console.log(`✅ BatchProvider: Loaded ${batches.length} batches from DynamoDB`);
+      console.log('✅ BatchProvider: Loaded', batches.length, 'batches from DynamoDB');
       
+      // Sort batches by creation date (newest first)
+      batches.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+      
+      dispatch({ type: 'LOAD_BATCHES', payload: batches });
     } catch (error) {
-      console.error('❌ BatchProvider: Error loading batches from DynamoDB:', error);
-      dispatch({ type: 'LOAD_BATCHES', payload: [] });
+      console.error('❌ BatchProvider: Failed to load batches:', error);
     } finally {
       setIsLoading(false);
-      console.log('🏁 BatchProvider: Finished loading batches');
     }
   };
 
@@ -686,38 +697,320 @@ const compressBatchForStorage = (batch) => {
       return false;
     }
     
-    const compressedBatch = compressBatchForStorage(batch);
+    // Calculate stats for the main record
+    const appState = batch.appState || {};
+    let totalImages = 0;
+    const imageGroups = appState.imageGroups || [];
+    imageGroups.forEach(group => {
+      if (Array.isArray(group)) totalImages += group.length;
+    });
+    if (appState.filesBase64?.length) totalImages += appState.filesBase64.length;
     
-    const item = {
+    const totalListings = imageGroups.filter(g => g && g.length > 0).length;
+    const totalProcessed = appState.responseData?.filter(item => item && !item.error).length || 0;
+    
+    // Prepare items to save
+    const itemsToSave = [];
+    
+    // 1. Main batch item
+    const mainItem = {
       userId,
       batchId: String(batch.id),
-      ...compressedBatch,
+      itemType: 'batch_main',
+      name: batch.name,
+      category: batch.category,
+      subCategory: batch.subCategory,
+      status: batch.status,
+      condition: batch.condition,
+      purchaseDate: batch.purchaseDate,
+      purchasePrice: batch.purchasePrice,
+      salePrice: batch.salePrice,
+      sku: batch.sku,
+      descriptionTemplate: batch.descriptionTemplate,
+      batchDescription: batch.batchDescription,
+      createdAt: batch.createdAt,
       updatedAt: new Date().toISOString(),
+      // Stats
+      totalImages,
+      totalListings,
+      totalProcessed,
+      csvDownloads: batch.csvDownloads || 0,
+      ebayListingsCreated: batch.ebayListingsCreated || 0,
+      lastCsvDownload: batch.lastCsvDownload || null,
+      lastEbayListingCreated: batch.lastEbayListingCreated || null,
+      // Reference counts
+      imageChunks: 0,
+      listingChunks: 0,
+      hasSettings: false,
       ttl: Math.floor(Date.now() / 1000) + (90 * 24 * 60 * 60), // 90 days
-      // Add version for tracking
-      version: compressedBatch.version ? compressedBatch.version + 1 : 1
+      version: (batch.version || 0) + 1
     };
-
-    console.log('🔍 BatchProvider: Item to save:', {
-      userId: item.userId,
-      batchId: item.batchId,
-      name: item.name,
-      category: item.category,
-      totalItems: item.totalItems,
-      version: item.version
+    
+    itemsToSave.push({
+      PutRequest: {
+        Item: mainItem
+      }
     });
-
-    const command = new PutCommand({
-      TableName: 'ListEasierBatches',
-      Item: item
-    });
-
-    await docClient.send(command);
-    console.log('✅ BatchProvider: Batch saved successfully to DynamoDB');
+    
+    // 2. Image chunk items - split images into chunks of ~300KB each
+    const CHUNK_SIZE_LIMIT = 300000; // 300KB per chunk
+    let imageChunkIndex = 0;
+    
+    // Process image groups
+    if (imageGroups.length > 0 || appState.filesBase64?.length > 0) {
+      let currentChunk = {
+        imageGroups: [],
+        s3ImageGroups: [],
+        filesBase64: []
+      };
+      let currentChunkSize = 0;
+      
+      // Add image groups
+      imageGroups.forEach((group, groupIndex) => {
+        if (group && group.length > 0) {
+          const groupData = {
+            images: group,
+            s3Urls: appState.s3ImageGroups?.[groupIndex] || []
+          };
+          const groupSize = JSON.stringify(groupData).length;
+          
+          if (currentChunkSize + groupSize > CHUNK_SIZE_LIMIT && currentChunk.imageGroups.length > 0) {
+            // Save current chunk
+            itemsToSave.push({
+              PutRequest: {
+                Item: {
+                  userId,
+                  batchId: `${batch.id}#images#${imageChunkIndex}`,
+                  itemType: 'image_chunk',
+                  chunkIndex: imageChunkIndex,
+                  ...currentChunk,
+                  ttl: mainItem.ttl
+                }
+              }
+            });
+            imageChunkIndex++;
+            currentChunk = { imageGroups: [], s3ImageGroups: [], filesBase64: [] };
+            currentChunkSize = 0;
+          }
+          
+          currentChunk.imageGroups.push(group);
+          currentChunk.s3ImageGroups.push(appState.s3ImageGroups?.[groupIndex] || []);
+          currentChunkSize += groupSize;
+        }
+      });
+      
+      // Add filesBase64 (pool images)
+      if (appState.filesBase64?.length > 0) {
+        appState.filesBase64.forEach(file => {
+          const fileSize = file.length;
+          if (currentChunkSize + fileSize > CHUNK_SIZE_LIMIT && 
+              (currentChunk.imageGroups.length > 0 || currentChunk.filesBase64.length > 0)) {
+            // Save current chunk
+            itemsToSave.push({
+              PutRequest: {
+                Item: {
+                  userId,
+                  batchId: `${batch.id}#images#${imageChunkIndex}`,
+                  itemType: 'image_chunk',
+                  chunkIndex: imageChunkIndex,
+                  ...currentChunk,
+                  ttl: mainItem.ttl
+                }
+              }
+            });
+            imageChunkIndex++;
+            currentChunk = { imageGroups: [], s3ImageGroups: [], filesBase64: [] };
+            currentChunkSize = 0;
+          }
+          
+          currentChunk.filesBase64.push(file);
+          currentChunkSize += fileSize;
+        });
+      }
+      
+      // Save last chunk if it has data
+      if (currentChunk.imageGroups.length > 0 || currentChunk.filesBase64.length > 0) {
+        itemsToSave.push({
+          PutRequest: {
+            Item: {
+              userId,
+              batchId: `${batch.id}#images#${imageChunkIndex}`,
+              itemType: 'image_chunk',
+              chunkIndex: imageChunkIndex,
+              ...currentChunk,
+              ttl: mainItem.ttl
+            }
+          }
+        });
+        imageChunkIndex++;
+      }
+    }
+    
+    mainItem.imageChunks = imageChunkIndex;
+    
+    // 3. Listing chunk items
+    let listingChunkIndex = 0;
+    if (appState.responseData?.length > 0) {
+      const LISTINGS_PER_CHUNK = 50; // Reasonable number of listings per chunk
+      
+      for (let i = 0; i < appState.responseData.length; i += LISTINGS_PER_CHUNK) {
+        const listings = appState.responseData.slice(i, i + LISTINGS_PER_CHUNK);
+        const metadata = appState.groupMetadata?.slice(i, i + LISTINGS_PER_CHUNK) || [];
+        
+        itemsToSave.push({
+          PutRequest: {
+            Item: {
+              userId,
+              batchId: `${batch.id}#listings#${listingChunkIndex}`,
+              itemType: 'listing_chunk',
+              chunkIndex: listingChunkIndex,
+              responseData: listings,
+              groupMetadata: metadata,
+              ttl: mainItem.ttl
+            }
+          }
+        });
+        listingChunkIndex++;
+      }
+    }
+    
+    mainItem.listingChunks = listingChunkIndex;
+    
+    // 4. Settings item (if we have settings data)
+    if (appState.fieldSelections && Object.keys(appState.fieldSelections).length > 0) {
+      itemsToSave.push({
+        PutRequest: {
+          Item: {
+            userId,
+            batchId: `${batch.id}#settings`,
+            itemType: 'batch_settings',
+            fieldSelections: appState.fieldSelections,
+            processedGroupIndices: appState.processedGroupIndices || [],
+            categoryID: appState.categoryID || null,
+            imageRotations: appState.imageRotations || {},
+            ttl: mainItem.ttl
+          }
+        }
+      });
+      mainItem.hasSettings = true;
+    }
+    
+    // Delete old items first (if updating)
+    await deleteOldBatchItems(userId, batch.id);
+    
+    // Use BatchWriteItem to save all items
+    const BATCH_WRITE_LIMIT = 25; // DynamoDB limit
+    for (let i = 0; i < itemsToSave.length; i += BATCH_WRITE_LIMIT) {
+      const batch = itemsToSave.slice(i, i + BATCH_WRITE_LIMIT);
+      const batchWriteParams = {
+        RequestItems: {
+          'ListEasierBatches': batch
+        }
+      };
+      
+      console.log(`💾 BatchProvider: Writing batch ${Math.floor(i/BATCH_WRITE_LIMIT) + 1}/${Math.ceil(itemsToSave.length/BATCH_WRITE_LIMIT)}`);
+      const command = new BatchWriteItemCommand(batchWriteParams);
+      await docClient.send(command);
+    }
+    
+    console.log('✅ BatchProvider: Batch saved successfully with', itemsToSave.length, 'items');
+    console.log('📊 BatchProvider: Stats - Images:', totalImages, 'Listings:', totalListings, 'Chunks:', imageChunkIndex + listingChunkIndex);
+    
+    // Archive completed batch if it has been used
+    if (batch.csvDownloads > 0 || batch.ebayListingsCreated > 0) {
+      await archiveCompletedBatch(batch, mainItem);
+    }
+    
     return true;
   } catch (error) {
     console.error('❌ BatchProvider: Error saving batch to DynamoDB:', error);
     return false;
+  }
+};
+
+// Delete old batch items when updating
+const deleteOldBatchItems = async (userId, batchId) => {
+  console.log('🗑️ BatchProvider: Deleting old batch items for:', batchId);
+  try {
+    // Query all items for this batch
+    const queryParams = {
+      TableName: 'ListEasierBatches',
+      KeyConditionExpression: 'userId = :userId AND begins_with(batchId, :batchId)',
+      ExpressionAttributeValues: {
+        ':userId': userId,
+        ':batchId': String(batchId)
+      }
+    };
+    
+    const queryCommand = new QueryCommand(queryParams);
+    const response = await dynamoClient.send(queryCommand);
+    
+    if (response.Items && response.Items.length > 0) {
+      // Delete all items in batches
+      const deleteRequests = response.Items.map(item => ({
+        DeleteRequest: {
+          Key: {
+            userId: item.userId,
+            batchId: item.batchId
+          }
+        }
+      }));
+      
+      // BatchWrite has a limit of 25 items
+      for (let i = 0; i < deleteRequests.length; i += 25) {
+        const batch = deleteRequests.slice(i, i + 25);
+        const batchWriteParams = {
+          RequestItems: {
+            'ListEasierBatches': batch
+          }
+        };
+        
+        const command = new BatchWriteItemCommand(batchWriteParams);
+        await docClient.send(command);
+      }
+      
+      console.log('✅ BatchProvider: Deleted', deleteRequests.length, 'old items');
+    }
+  } catch (error) {
+    console.error('❌ BatchProvider: Error deleting old batch items:', error);
+  }
+};
+
+// Archive completed batches for historical records
+const archiveCompletedBatch = async (batch, mainItem) => {
+  console.log('📦 BatchProvider: Archiving completed batch:', batch.id);
+  try {
+    const archiveItem = {
+      userId: mainItem.userId,
+      batchId: `archive#${batch.id}#${Date.now()}`,
+      itemType: 'batch_archive',
+      originalBatchId: batch.id,
+      name: batch.name,
+      category: batch.category,
+      subCategory: batch.subCategory,
+      createdAt: batch.createdAt,
+      completedAt: new Date().toISOString(),
+      totalImages: mainItem.totalImages,
+      totalListings: mainItem.totalListings,
+      totalProcessed: mainItem.totalProcessed,
+      csvDownloads: batch.csvDownloads,
+      ebayListingsCreated: batch.ebayListingsCreated,
+      lastCsvDownload: batch.lastCsvDownload,
+      lastEbayListingCreated: batch.lastEbayListingCreated,
+      // Don't set TTL on archives - keep them permanently
+    };
+    
+    const putParams = {
+      TableName: 'ListEasierBatches',
+      Item: archiveItem
+    };
+    
+    const command = new PutCommand(putParams);
+    await docClient.send(command);
+    
+    console.log('✅ BatchProvider: Batch archived successfully');
+  } catch (error) {
+    console.error('❌ BatchProvider: Error archiving batch:', error);
   }
 };
 
@@ -741,15 +1034,9 @@ const compressBatchForStorage = (batch) => {
         return false;
       }
       
-      const command = new DeleteCommand({
-        TableName: 'ListEasierBatches',
-        Key: {
-          userId, // Use userId instead of sessionId
-          batchId: String(batchId)
-        }
-      });
-
-      await docClient.send(command);
+      // Use the deleteOldBatchItems function which handles multi-item deletion
+      await deleteOldBatchItems(userId, batchId);
+      
       console.log('✅ BatchProvider: Batch deleted successfully from DynamoDB');
       return true;
     } catch (error) {

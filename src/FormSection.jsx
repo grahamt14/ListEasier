@@ -1019,7 +1019,6 @@ function FormSection({ onGenerateListing, onCategoryFieldsChange, batchMode = fa
   
   const uploadToS3 = async (file) => {
   try {
-	  const userId = user?.sub || 'anonymous';
     const arrayBuffer = await new Promise((resolve, reject) => {
       const reader = new FileReader();
       reader.onload = () => resolve(reader.result);

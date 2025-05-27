@@ -7,9 +7,9 @@ import './LoadingSpinner.css';
 import FormSection, { getSelectedCategoryOptionsJSON } from './FormSection';
 import JSZip from 'jszip';
 import { saveAs } from 'file-saver';
-import { DynamoDBClient, QueryCommand, ScanCommand } from '@aws-sdk/client-dynamodb';
+import { DynamoDBClient, QueryCommand, ScanCommand, BatchWriteItemCommand } from '@aws-sdk/client-dynamodb';
 import { unmarshall } from '@aws-sdk/util-dynamodb';
-import { DynamoDBDocumentClient, PutCommand, DeleteCommand, BatchWriteItemCommand } from '@aws-sdk/lib-dynamodb';
+import { DynamoDBDocumentClient, PutCommand, DeleteCommand } from '@aws-sdk/lib-dynamodb';
 import { fromCognitoIdentityPool } from "@aws-sdk/credential-provider-cognito-identity";
 import { AppStateProvider, useAppState } from './StateContext';
 import { EbayAuthProvider, useEbayAuth } from './EbayAuthContext';
@@ -910,7 +910,7 @@ const compressBatchForStorage = (batch) => {
       
       console.log(`💾 BatchProvider: Writing batch ${Math.floor(i/BATCH_WRITE_LIMIT) + 1}/${Math.ceil(itemsToSave.length/BATCH_WRITE_LIMIT)}`);
       const command = new BatchWriteItemCommand(batchWriteParams);
-      await docClient.send(command);
+      await dynamoClient.send(command);
     }
     
     console.log('✅ BatchProvider: Batch saved successfully with', itemsToSave.length, 'items');
@@ -966,7 +966,7 @@ const deleteOldBatchItems = async (userId, batchId) => {
         };
         
         const command = new BatchWriteItemCommand(batchWriteParams);
-        await docClient.send(command);
+        await dynamoClient.send(command);
       }
       
       console.log('✅ BatchProvider: Deleted', deleteRequests.length, 'old items');

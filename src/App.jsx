@@ -403,10 +403,14 @@ const compressBatchForStorage = (batch) => {
         
         console.log(`🔄 BatchProvider: Assembling batch ${batchId}...`);
         
-        // Start with main batch data
+        // Start with main batch data - ensure string fields
         const batch = {
           ...items.main,
           id: batchId,
+          category: typeof items.main.category === 'string' ? items.main.category : String(items.main.category || '--'),
+          subCategory: typeof items.main.subCategory === 'string' ? items.main.subCategory : String(items.main.subCategory || '--'),
+          name: typeof items.main.name === 'string' ? items.main.name : String(items.main.name || 'Unnamed Batch'),
+          status: typeof items.main.status === 'string' ? items.main.status : String(items.main.status || 'draft'),
           appState: {
             // Initialize empty state
             filesBase64: [],
@@ -418,11 +422,11 @@ const compressBatchForStorage = (batch) => {
             fieldSelections: {},
             processedGroupIndices: [],
             imageRotations: {},
-            // Copy basic fields
-            category: items.main.category,
-            subCategory: items.main.subCategory,
-            price: items.main.salePrice || '',
-            sku: items.main.sku || '',
+            // Copy basic fields - ensure they're strings
+            category: typeof items.main.category === 'string' ? items.main.category : String(items.main.category || '--'),
+            subCategory: typeof items.main.subCategory === 'string' ? items.main.subCategory : String(items.main.subCategory || '--'),
+            price: typeof items.main.salePrice === 'string' ? items.main.salePrice : String(items.main.salePrice || ''),
+            sku: typeof items.main.sku === 'string' ? items.main.sku : String(items.main.sku || ''),
             categoryID: null,
             // Reset status fields
             isLoading: false,
@@ -2096,12 +2100,22 @@ function BatchWizard() {
         const items = response.Items?.map(item => unmarshall(item)) || [];
         
         items.forEach(item => {
-          const category = item.Category;
-          const subcategory = item.SubCategory;
+          // Ensure category and subcategory are strings
+          const category = typeof item.Category === 'string' ? item.Category : String(item.Category || '');
+          const subcategory = typeof item.SubCategory === 'string' ? item.SubCategory : String(item.SubCategory || '');
+          
+          // Skip invalid entries
+          if (!category || category === '[object Object]') {
+            console.warn('⚠️ BatchWizard: Skipping invalid category:', item);
+            return;
+          }
+          
           if (!categoryData[category]) {
             categoryData[category] = [];
           }
-          categoryData[category].push(subcategory);
+          if (subcategory && subcategory !== '[object Object]') {
+            categoryData[category].push(subcategory);
+          }
         });
         categoryData['--'] = ['--'];
         

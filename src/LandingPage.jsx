@@ -369,40 +369,15 @@ const LandingPage = () => {
             </div>
             <div className="pricing-plans">
               <div className="pricing-plan">
-                <h4>Starter</h4>
-                <div className="price">$9<span>/month</span></div>
+                <h4>ListEasier</h4>
+                <div className="price">$299<span>/month</span></div>
                 <ul>
-                  <li>100 listings/month</li>
-                  <li>Basic AI descriptions</li>
+                  <li>10,000 listings/month</li>
+                  <li>AI descriptions</li>
                   <li>CSV export</li>
-                  <li>Email support</li>
+                  <li>Ebay Integration</li>
                 </ul>
-                <button onClick={handleSignUp} className="btn-outline">Start Free Trial</button>
-              </div>
-              <div className="pricing-plan featured">
-                <div className="plan-badge">Most Popular</div>
-                <h4>Professional</h4>
-                <div className="price">$29<span>/month</span></div>
-                <ul>
-                  <li>Unlimited listings</li>
-                  <li>Advanced AI descriptions</li>
-                  <li>Direct eBay integration</li>
-                  <li>Priority support</li>
-                  <li>Batch processing</li>
-                </ul>
-                <button onClick={handleSignUp} className="btn-primary">Start Free Trial</button>
-              </div>
-              <div className="pricing-plan">
-                <h4>Enterprise</h4>
-                <div className="price">$99<span>/month</span></div>
-                <ul>
-                  <li>Everything in Professional</li>
-                  <li>Multiple eBay accounts</li>
-                  <li>API access</li>
-                  <li>Custom integrations</li>
-                  <li>Dedicated support</li>
-                </ul>
-                <button onClick={handleSignUp} className="btn-outline">Contact Sales</button>
+                <button onClick={handleSignUp} className="btn-outline">Sign up Today!</button>
               </div>
             </div>
           </div>

@@ -21,8 +21,8 @@ import LandingPage from './LandingPage';
 import LoadingSpinner from './LoadingSpinner';
 
 // Auth0 Configuration
-const AUTH0_DOMAIN = process.env.REACT_APP_AUTH0_DOMAIN || 'your-auth0-domain.auth0.com';
-const AUTH0_CLIENT_ID = process.env.REACT_APP_AUTH0_CLIENT_ID || 'your-auth0-client-id';
+const AUTH0_DOMAIN = process.env.REACT_APP_AUTH0_DOMAIN || 'listeasier.us.auth0.com';
+const AUTH0_CLIENT_ID = process.env.REACT_APP_AUTH0_CLIENT_ID || '0atdS2Je85AOVcuc9rqkidq0ga2GGVYD';
 const AUTH0_AUDIENCE = process.env.REACT_APP_AUTH0_AUDIENCE; // Optional API identifier
 
 const BatchContext = createContext();

@@ -2182,6 +2182,16 @@ function BatchEditor() {
     }
   }, [currentBatch, currentSku]);
 
+  // Load batch state into app state when component mounts or batch changes
+  useEffect(() => {
+    if (currentBatch && currentBatch.appState) {
+      console.log('🔄 BatchEditor: Loading batch state from:', currentBatch.name);
+      
+      // Load the entire appState from the saved batch
+      appDispatch({ type: 'LOAD_BATCH_STATE', payload: currentBatch.appState });
+    }
+  }, [currentBatch?.id]); // Only run when batch ID changes
+
   // Load batch state into app state
  useEffect(() => {
   if (currentBatch) {

@@ -21,8 +21,8 @@ import LandingPage from './LandingPage';
 import LoadingSpinner from './LoadingSpinner';
 
 // Auth0 Configuration
-const AUTH0_DOMAIN = process.env.REACT_APP_AUTH0_DOMAIN || 'listeasier.us.auth0.com';
-const AUTH0_CLIENT_ID = process.env.REACT_APP_AUTH0_CLIENT_ID || '0atdS2Je85AOVcuc9rqkidq0ga2GGVYD';
+const AUTH0_DOMAIN = process.env.REACT_APP_AUTH0_DOMAIN || 'your-auth0-domain.auth0.com';
+const AUTH0_CLIENT_ID = process.env.REACT_APP_AUTH0_CLIENT_ID || 'your-auth0-client-id';
 const AUTH0_AUDIENCE = process.env.REACT_APP_AUTH0_AUDIENCE; // Optional API identifier
 
 const BatchContext = createContext();
@@ -152,39 +152,51 @@ function BatchProvider({ children }) {
   }, [isAuthenticated, user?.sub]);
 
   // Get user ID from Auth0
-const getUserId = () => {
-  console.log('🔍 BatchProvider: Getting user ID...');
-  console.log('🔍 BatchProvider: isAuthenticated:', isAuthenticated);
-  console.log('🔍 BatchProvider: user object:', user);
-  
-  if (!user) {
-    console.warn('⚠️ BatchProvider: No user object available');
-    return null;
-  }
-  
-  if (!user.sub) {
-    console.warn('⚠️ BatchProvider: No user.sub available');
-    console.log('🔍 BatchProvider: Available user properties:', Object.keys(user));
-    console.log('🔍 BatchProvider: Full user object:', JSON.stringify(user, null, 2));
-    return null;
-  }
-  
-  console.log('✅ BatchProvider: Using userId:', user.sub);
-  return user.sub; // This returns the Auth0 user ID like "auth0|abc123"
-};
+  const getUserId = () => {
+    if (!user?.sub) {
+      console.warn('⚠️ BatchProvider: No user ID available');
+      return null;
+    }
+    return user.sub;
+  };
 
   const compressBatchForStorage = (batch) => {
     console.log('🗜️ BatchProvider: Compressing batch for storage:', batch.id);
+    
+    // Ensure responseData is properly preserved with all listing details
+    const responseData = batch.appState.responseData || [];
+    const preservedResponseData = responseData.map(item => {
+      if (!item) return null;
+      
+      // Preserve all the important listing data
+      return {
+        ...item,
+        // Ensure these critical fields are preserved
+        title: item.title || '',
+        description: item.description || '',
+        price: item.price || batch.appState.price || '',
+        sku: item.sku || batch.appState.sku || '',
+        // Preserve category fields and stored selections
+        storedFieldSelections: item.storedFieldSelections || {},
+        fieldSelections: item.fieldSelections || item.storedFieldSelections || {},
+        // Preserve any AI resolved fields
+        aiResolvedFields: item.aiResolvedFields || {},
+        // Keep error info if present
+        error: item.error || null,
+        raw_content: item.raw_content || null
+      };
+    });
+    
     const compressed = {
       ...batch,
       appState: {
         ...batch.appState,
-        // Keep all data but remove heavy raw files
+        // Keep all critical data for proper restoration
         filesBase64: batch.appState.filesBase64 || [],
-        rawFiles: [], // Remove heavy raw files
+        rawFiles: [], // Remove heavy raw files but keep everything else
         imageGroups: batch.appState.imageGroups || [[]],
         s3ImageGroups: batch.appState.s3ImageGroups || [[]],
-        responseData: batch.appState.responseData || [],
+        responseData: preservedResponseData, // Use preserved data
         groupMetadata: batch.appState.groupMetadata || [],
         fieldSelections: batch.appState.fieldSelections || {},
         processedGroupIndices: batch.appState.processedGroupIndices || [],
@@ -219,7 +231,9 @@ const getUserId = () => {
         }
       }
     };
-    console.log('✅ BatchProvider: Batch compressed successfully');
+    
+    console.log('✅ BatchProvider: Batch compressed successfully with preserved listing data');
+    console.log('📊 BatchProvider: Preserved', preservedResponseData.filter(item => item && !item.error).length, 'valid listings');
     return compressed;
   };
   
@@ -298,10 +312,28 @@ const getUserId = () => {
             sku: safeStringConvert(batch.appState?.sku || batch.sku, ''),
             categoryID: batch.appState?.categoryID || '',
             
-            // Properly handle arrays and objects
+            // Properly handle arrays and objects with enhanced responseData restoration
             imageGroups: Array.isArray(batch.appState?.imageGroups) ? batch.appState.imageGroups : [[]],
             s3ImageGroups: Array.isArray(batch.appState?.s3ImageGroups) ? batch.appState.s3ImageGroups : [[]],
-            responseData: Array.isArray(batch.appState?.responseData) ? batch.appState.responseData : [],
+            responseData: Array.isArray(batch.appState?.responseData) ? 
+              batch.appState.responseData.map(item => {
+                if (!item) return null;
+                
+                // Restore all listing fields properly
+                return {
+                  ...item,
+                  title: item.title || '',
+                  description: item.description || '',
+                  price: item.price || safeStringConvert(batch.appState?.price || batch.salePrice, ''),
+                  sku: item.sku || safeStringConvert(batch.appState?.sku || batch.sku, ''),
+                  // Restore stored field selections
+                  storedFieldSelections: item.storedFieldSelections || item.fieldSelections || {},
+                  fieldSelections: item.fieldSelections || item.storedFieldSelections || {},
+                  // Preserve AI resolved fields
+                  aiResolvedFields: item.aiResolvedFields || {},
+                  error: item.error || null
+                };
+              }) : [],
             groupMetadata: Array.isArray(batch.appState?.groupMetadata) ? batch.appState.groupMetadata : [],
             fieldSelections: (batch.appState?.fieldSelections && typeof batch.appState.fieldSelections === 'object') 
               ? batch.appState.fieldSelections : {},
@@ -2112,8 +2144,13 @@ function BatchEditor() {
           sku: 'SET_SKU'
         };
         
+        // Load all state including preserved responseData with listings
         Object.entries(actionMappings).forEach(([stateKey, actionType]) => {
           if (batchState.hasOwnProperty(stateKey)) {
+            console.log(`🔄 BatchEditor: Loading ${stateKey} with`, 
+              stateKey === 'responseData' ? 
+                `${(batchState[stateKey] || []).filter(item => item && !item.error).length} valid listings` : 
+                typeof batchState[stateKey]);
             appDispatch({ type: actionType, payload: batchState[stateKey] });
           }
         });
@@ -2178,7 +2215,14 @@ function BatchEditor() {
           subCategory: safeStringConvert(state.subCategory),
           price: safeStringConvert(state.price),
           sku: safeStringConvert(state.sku),
-          categoryID: state.categoryID
+          categoryID: state.categoryID,
+          // Also preserve state-level data
+          imageRotations: state.imageRotations || {},
+          selectedImages: state.selectedImages || [],
+          totalChunks: state.totalChunks || 0,
+          completedChunks: state.completedChunks || 0,
+          processingGroups: state.processingGroups || [],
+          errorMessages: state.errorMessages || []
         },
         totalItems: state.responseData.filter(item => item && !item.error).length,
         status: newStatus,

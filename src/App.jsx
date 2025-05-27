@@ -152,13 +152,26 @@ function BatchProvider({ children }) {
   }, [isAuthenticated, user?.sub]);
 
   // Get user ID from Auth0
-  const getUserId = () => {
-    if (!user?.sub) {
-      console.warn('⚠️ BatchProvider: No user ID available');
-      return null;
-    }
-    return user.sub;
-  };
+const getUserId = () => {
+  console.log('🔍 BatchProvider: Getting user ID...');
+  console.log('🔍 BatchProvider: isAuthenticated:', isAuthenticated);
+  console.log('🔍 BatchProvider: user object:', user);
+  
+  if (!user) {
+    console.warn('⚠️ BatchProvider: No user object available');
+    return null;
+  }
+  
+  if (!user.sub) {
+    console.warn('⚠️ BatchProvider: No user.sub available');
+    console.log('🔍 BatchProvider: Available user properties:', Object.keys(user));
+    console.log('🔍 BatchProvider: Full user object:', JSON.stringify(user, null, 2));
+    return null;
+  }
+  
+  console.log('✅ BatchProvider: Using userId:', user.sub);
+  return user.sub; // This returns the Auth0 user ID like "auth0|abc123"
+};
 
   const compressBatchForStorage = (batch) => {
     console.log('🗜️ BatchProvider: Compressing batch for storage:', batch.id);

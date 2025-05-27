@@ -8,7 +8,7 @@ import FormSection, { getSelectedCategoryOptionsJSON } from './FormSection';
 import JSZip from 'jszip';
 import { saveAs } from 'file-saver';
 import { DynamoDBClient, QueryCommand, ScanCommand, BatchWriteItemCommand } from '@aws-sdk/client-dynamodb';
-import { unmarshall } from '@aws-sdk/util-dynamodb';
+import { unmarshall, marshall } from '@aws-sdk/util-dynamodb';
 import { DynamoDBDocumentClient, PutCommand, DeleteCommand } from '@aws-sdk/lib-dynamodb';
 import { fromCognitoIdentityPool } from "@aws-sdk/credential-provider-cognito-identity";
 import { AppStateProvider, useAppState } from './StateContext';
@@ -748,7 +748,7 @@ const compressBatchForStorage = (batch) => {
     
     itemsToSave.push({
       PutRequest: {
-        Item: mainItem
+        Item: marshall(mainItem)
       }
     });
     
@@ -778,14 +778,14 @@ const compressBatchForStorage = (batch) => {
             // Save current chunk
             itemsToSave.push({
               PutRequest: {
-                Item: {
+                Item: marshall({
                   userId,
                   batchId: `${batch.id}#images#${imageChunkIndex}`,
                   itemType: 'image_chunk',
                   chunkIndex: imageChunkIndex,
                   ...currentChunk,
                   ttl: mainItem.ttl
-                }
+                })
               }
             });
             imageChunkIndex++;
@@ -808,14 +808,14 @@ const compressBatchForStorage = (batch) => {
             // Save current chunk
             itemsToSave.push({
               PutRequest: {
-                Item: {
+                Item: marshall({
                   userId,
                   batchId: `${batch.id}#images#${imageChunkIndex}`,
                   itemType: 'image_chunk',
                   chunkIndex: imageChunkIndex,
                   ...currentChunk,
                   ttl: mainItem.ttl
-                }
+                })
               }
             });
             imageChunkIndex++;
@@ -832,14 +832,14 @@ const compressBatchForStorage = (batch) => {
       if (currentChunk.imageGroups.length > 0 || currentChunk.filesBase64.length > 0) {
         itemsToSave.push({
           PutRequest: {
-            Item: {
+            Item: marshall({
               userId,
               batchId: `${batch.id}#images#${imageChunkIndex}`,
               itemType: 'image_chunk',
               chunkIndex: imageChunkIndex,
               ...currentChunk,
               ttl: mainItem.ttl
-            }
+            })
           }
         });
         imageChunkIndex++;
@@ -859,7 +859,7 @@ const compressBatchForStorage = (batch) => {
         
         itemsToSave.push({
           PutRequest: {
-            Item: {
+            Item: marshall({
               userId,
               batchId: `${batch.id}#listings#${listingChunkIndex}`,
               itemType: 'listing_chunk',
@@ -867,7 +867,7 @@ const compressBatchForStorage = (batch) => {
               responseData: listings,
               groupMetadata: metadata,
               ttl: mainItem.ttl
-            }
+            })
           }
         });
         listingChunkIndex++;
@@ -880,7 +880,7 @@ const compressBatchForStorage = (batch) => {
     if (appState.fieldSelections && Object.keys(appState.fieldSelections).length > 0) {
       itemsToSave.push({
         PutRequest: {
-          Item: {
+          Item: marshall({
             userId,
             batchId: `${batch.id}#settings`,
             itemType: 'batch_settings',
@@ -889,7 +889,7 @@ const compressBatchForStorage = (batch) => {
             categoryID: appState.categoryID || null,
             imageRotations: appState.imageRotations || {},
             ttl: mainItem.ttl
-          }
+          })
         }
       });
       mainItem.hasSettings = true;
@@ -947,14 +947,17 @@ const deleteOldBatchItems = async (userId, batchId) => {
     
     if (response.Items && response.Items.length > 0) {
       // Delete all items in batches
-      const deleteRequests = response.Items.map(item => ({
-        DeleteRequest: {
-          Key: {
-            userId: item.userId,
-            batchId: item.batchId
+      const deleteRequests = response.Items.map(item => {
+        // Items from query are already marshalled, so we just need the key fields
+        return {
+          DeleteRequest: {
+            Key: {
+              userId: item.userId,
+              batchId: item.batchId
+            }
           }
-        }
-      }));
+        };
+      });
       
       // BatchWrite has a limit of 25 items
       for (let i = 0; i < deleteRequests.length; i += 25) {

@@ -7,6 +7,7 @@ import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
 import { fromCognitoIdentityPool } from "@aws-sdk/credential-provider-cognito-identity";
 import { useAppState } from './StateContext';
 import { useEbayAuth } from './EbayAuthContext';
+import { useAuth0 } from '@auth0/auth0-react';
 
 // Import caching service
 import { cacheService } from './CacheService';
@@ -36,7 +37,7 @@ export const getSelectedCategoryOptionsJSON = (fieldSelections, price, sku, ebay
   
   return output;
 };
-
+const { user } = useAuth0();
 const buildEnhancedCategoryFieldsPrompt = (categoryFields, fieldSelections) => {
   const emptyFields = categoryFields.filter(field => {
     const currentValue = fieldSelections[field.FieldLabel];
@@ -1018,6 +1019,7 @@ function FormSection({ onGenerateListing, onCategoryFieldsChange, batchMode = fa
   
   const uploadToS3 = async (file) => {
   try {
+	  const userId = user?.sub || 'anonymous';
     const arrayBuffer = await new Promise((resolve, reject) => {
       const reader = new FileReader();
       reader.onload = () => resolve(reader.result);

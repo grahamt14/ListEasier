@@ -64,6 +64,7 @@ function appReducer(state, action) {
   switch (action.type) {
 	  // In the appReducer function in StateContext.jsx
 	  
+	  
 	    case 'CLEAR_ALL_FOR_NEW_BATCH':
       return {
         ...initialState,

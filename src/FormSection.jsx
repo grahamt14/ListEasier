@@ -959,24 +959,6 @@ if (batchSize > 0 && filesBase64.length > 0) {
 // Clear the base64 pool since images are now in groups
 dispatch({ type: 'SET_FILES_BASE64', payload: [] });
 
-      const updatedMetadata = [...(state.groupMetadata || [])];
-      
-      while (updatedMetadata.length < newImageGroups.length) {
-        updatedMetadata.push(null);
-      }
-      
-      newImageGroups.forEach((group, index) => {
-        if (group && group.length > 0 && (!updatedMetadata[index] || updatedMetadata[index] === null)) {
-          updatedMetadata[index] = { 
-            price: price || '', 
-            sku: sku || '',
-            fieldSelections: { ...fieldSelections }
-          };
-        }
-      });
-
-      dispatch({ type: 'UPDATE_GROUP_METADATA', payload: updatedMetadata });
-
       try {
         const ebayCategoryID = await fetchEbayCategoryID(selectedCategory, subCategory);
         dispatch({ type: 'SET_CATEGORY_ID', payload: ebayCategoryID });

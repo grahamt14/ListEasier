@@ -206,6 +206,27 @@ function FormSection({ onGenerateListing, onCategoryFieldsChange, batchMode = fa
     console.log(`Selected ${policyType}:`, policy);
   };
 
+  // Helper function to clean category data
+  const cleanCategoryData = (categoryData) => {
+    const cleaned = {};
+    Object.entries(categoryData).forEach(([category, subcategories]) => {
+      // Skip invalid categories
+      if (!category || category === '[object Object]') {
+        return;
+      }
+      // Filter out invalid subcategories
+      const validSubcategories = (subcategories || []).filter(sub => 
+        sub && sub !== '[object Object]'
+      );
+      if (validSubcategories.length > 0) {
+        cleaned[category] = validSubcategories;
+      }
+    });
+    // Always ensure -- option exists
+    cleaned['--'] = ['--'];
+    return cleaned;
+  };
+
   // Enhanced categories fetching with caching
   useEffect(() => {
     const fetchCategories = async () => {
@@ -216,7 +237,7 @@ function FormSection({ onGenerateListing, onCategoryFieldsChange, batchMode = fa
         const cachedCategories = cacheService.get(cacheKey);
         
         if (cachedCategories) {
-          setCategories(cachedCategories);
+          setCategories(cleanCategoryData(cachedCategories));
           setCategoriesLoading(false);
           return;
         }
@@ -228,8 +249,16 @@ function FormSection({ onGenerateListing, onCategoryFieldsChange, batchMode = fa
         const response = await docClient.send(scanCommand);
         const categoryData = {};
         response.Items.forEach(item => {
-          const category = item.Category;
-          const subcategory = item.SubCategory;
+          // Ensure category and subcategory are strings
+          const category = typeof item.Category === 'string' ? item.Category : String(item.Category || '');
+          const subcategory = typeof item.SubCategory === 'string' ? item.SubCategory : String(item.SubCategory || '');
+          
+          // Skip invalid entries
+          if (!category || category === '[object Object]' || !subcategory || subcategory === '[object Object]') {
+            console.warn('⚠️ FormSection: Skipping invalid category entry:', item);
+            return;
+          }
+          
           if (!categoryData[category]) {
             categoryData[category] = [];
           }
@@ -239,12 +268,12 @@ function FormSection({ onGenerateListing, onCategoryFieldsChange, batchMode = fa
         
         cacheService.set(cacheKey, categoryData, null, 'categories');
         
-        setCategories(categoryData);
+        setCategories(cleanCategoryData(categoryData));
       } catch (err) {
         console.error('Error fetching categories:', err);
         const fallbackData = cacheService.get('categories_all');
         if (fallbackData) {
-          setCategories(fallbackData);
+          setCategories(cleanCategoryData(fallbackData));
         }
       } finally {
         setCategoriesLoading(false);

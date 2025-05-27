@@ -284,13 +284,48 @@ const compressBatchForStorage = (batch) => {
   console.log('📊 BatchProvider: Preserved', validListingsCount, 'valid listings');
   console.log('💾 BatchProvider: Estimated size:', Math.round(sizeEstimate / 1024), 'KB');
   
-  // If still too large, try removing filesBase64 as last resort
-  if (sizeEstimate > 380000) { // 380KB threshold - leave some buffer
-    console.warn('⚠️ BatchProvider: Batch still too large, removing base64 images');
+  // DynamoDB has a 400KB limit, so we need to be more aggressive with compression
+  if (sizeEstimate > 350000) { // 350KB threshold - leave buffer for DynamoDB overhead
+    console.warn('⚠️ BatchProvider: Batch too large, applying aggressive compression');
+    
+    // Remove base64 images from the pool - these are typically not organized yet
     compressed.appState.filesBase64 = [];
     
-    const newSizeEstimate = JSON.stringify(compressed).length;
-    console.log('💾 BatchProvider: Size after removing images:', Math.round(newSizeEstimate / 1024), 'KB');
+    // Compress image groups - only keep S3 URLs if available
+    if (compressed.appState.s3ImageGroups && compressed.appState.s3ImageGroups.length > 0) {
+      // If we have S3 URLs, we can safely remove base64 data from imageGroups
+      compressed.appState.imageGroups = compressed.appState.imageGroups.map((group, index) => {
+        const s3Group = compressed.appState.s3ImageGroups[index];
+        if (s3Group && s3Group.length > 0) {
+          // Return placeholder array of same length - we'll restore from S3
+          return new Array(group.length).fill('[S3]');
+        }
+        return group;
+      });
+    }
+    
+    // Further compress response data if needed
+    let newSizeEstimate = JSON.stringify(compressed).length;
+    if (newSizeEstimate > 380000) {
+      console.warn('⚠️ BatchProvider: Still too large, truncating descriptions');
+      compressed.appState.responseData = compressed.appState.responseData.map(item => {
+        if (!item) return null;
+        return {
+          ...item,
+          description: item.description ? item.description.substring(0, 500) : ''
+        };
+      });
+    }
+    
+    newSizeEstimate = JSON.stringify(compressed).length;
+    console.log('💾 BatchProvider: Size after aggressive compression:', Math.round(newSizeEstimate / 1024), 'KB');
+    
+    // If STILL too large, we need to remove some data
+    if (newSizeEstimate > 390000) {
+      console.error('❌ BatchProvider: Batch still too large after compression');
+      // Remove imageGroups entirely - rely on S3 URLs
+      compressed.appState.imageGroups = [[]];
+    }
   }
   
   return compressed;
@@ -372,7 +407,20 @@ const compressBatchForStorage = (batch) => {
             categoryID: batch.appState?.categoryID || '',
             
             // Properly handle arrays and objects with enhanced responseData restoration
-            imageGroups: Array.isArray(batch.appState?.imageGroups) ? batch.appState.imageGroups : [[]],
+            // Restore imageGroups - if they contain '[S3]' placeholders, reconstruct from S3 URLs
+            imageGroups: Array.isArray(batch.appState?.imageGroups) ? 
+              batch.appState.imageGroups.map((group, index) => {
+                // Check if this group was compressed to placeholders
+                if (group && group.length > 0 && group[0] === '[S3]') {
+                  // Try to restore from S3 URLs
+                  const s3Group = batch.appState?.s3ImageGroups?.[index];
+                  if (s3Group && Array.isArray(s3Group)) {
+                    // Return the S3 URLs as the image data
+                    return s3Group;
+                  }
+                }
+                return group;
+              }) : [[]],
             s3ImageGroups: Array.isArray(batch.appState?.s3ImageGroups) ? batch.appState.s3ImageGroups : [[]],
             responseData: Array.isArray(batch.appState?.responseData) ? 
               batch.appState.responseData.map(item => {

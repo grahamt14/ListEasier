@@ -1341,7 +1341,22 @@ function MainHeader() {
         <h1 className="page-title">{getPageTitle()}</h1>
       </div>
       <div className="header-right">
-        {/* Add any header actions here */}
+        {viewMode === 'overview' && (
+          <button 
+            onClick={() => dispatch({ type: 'SET_VIEW_MODE', payload: 'create' })}
+            className="btn btn-primary"
+            style={{
+              padding: '0.5rem 1rem',
+              fontSize: '0.9rem',
+              fontWeight: '500',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.5rem'
+            }}
+          >
+            <span>+</span> Create Batch
+          </button>
+        )}
       </div>
     </header>
   );
@@ -1424,10 +1439,26 @@ function BatchOverview() {
 
   const getBatchStats = (batch) => {
     const appState = batch?.appState || {};
+    
+    // Calculate total images across all groups
+    let totalImages = 0;
+    if (appState.imageGroups) {
+      appState.imageGroups.forEach(group => {
+        if (Array.isArray(group)) {
+          totalImages += group.length;
+        }
+      });
+    }
+    
+    // Add images from the pool (filesBase64)
+    if (appState.filesBase64 && Array.isArray(appState.filesBase64)) {
+      totalImages += appState.filesBase64.length;
+    }
+    
     return {
-      totalListings: appState.responseData?.filter(item => item && !item.error).length || 0,
-      totalImageGroups: appState.imageGroups?.filter(g => g && g.length > 0).length || 0,
-      processedGroups: appState.processedGroupIndices?.length || 0
+      totalListings: appState.imageGroups?.filter(g => g && g.length > 0).length || 0,
+      totalImages: totalImages,
+      generatedListings: appState.responseData?.filter(item => item && !item.error).length || 0
     };
   };
 
@@ -1489,20 +1520,16 @@ function BatchOverview() {
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '20px' }}>
           <div>
             <h4 style={{ margin: '0 0 10px 0', color: '#333', fontSize: '1rem' }}>
-              Batch Preview Icons:
+              Batch Preview:
             </h4>
             <div style={{ display: 'flex', gap: '20px', flexWrap: 'wrap' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <span style={{ fontSize: '1.2rem' }}>📝</span>
-                <span style={{ color: '#333' }}>Generated Listings</span>
+                <span style={{ fontSize: '1.2rem' }}>🖼️</span>
+                <span style={{ color: '#333' }}>Total Images</span>
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <span style={{ fontSize: '1.2rem' }}>📷</span>
-                <span style={{ color: '#333' }}>Image Groups</span>
-              </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <span style={{ fontSize: '1.2rem' }}>✅</span>
-                <span style={{ color: '#333' }}>Processed Groups</span>
+                <span style={{ fontSize: '1.2rem' }}>📋</span>
+                <span style={{ color: '#333' }}>Total Listings (Image Groups)</span>
               </div>
             </div>
           </div>
@@ -1609,16 +1636,12 @@ function BatchOverview() {
                 <div className="td">
                   <div className="batch-preview">
                     <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                      <span className="preview-icon" title="Generated Listings">📝</span> 
+                      <span className="preview-icon" title="Total Images">🖼️</span> 
+                      <span>{stats.totalImages}</span>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                      <span className="preview-icon" title="Total Listings">📋</span> 
                       <span>{stats.totalListings}</span>
-                    </div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                      <span className="preview-icon" title="Image Groups">📷</span> 
-                      <span>{stats.totalImageGroups}</span>
-                    </div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                      <span className="preview-icon" title="Processed Groups">✅</span> 
-                      <span>{stats.processedGroups}</span>
                     </div>
                   </div>
                 </div>

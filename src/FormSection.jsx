@@ -822,13 +822,7 @@ function FormSection({ onGenerateListing, onCategoryFieldsChange, batchMode = fa
         });
       }
       
-      // In FormSection.jsx, replace the S3 URL handling section in handleGenerateListingWithUpload
-// Around line 800-900, find the section that starts with "const totalExistingGroupImages"
-// and replace it with this simplified version:
-
-// After S3 upload is complete and you have s3UrlsList...
-
-uploadStatusObject.uploadProgress = 100;
+   uploadStatusObject.uploadProgress = 100;
 uploadStatusObject.uploadCompleted = convertedFiles.length;
 uploadStatusObject.uploadStage = 'Upload complete! Organizing images...';
 
@@ -849,6 +843,10 @@ let updatedS3Groups = [...(state.s3ImageGroups || [])];
 while (updatedS3Groups.length < currentImageGroups.length) {
   updatedS3Groups.push([]);
 }
+
+// Initialize these variables outside the if/else block
+let finalImageGroups = [...currentImageGroups];
+let finalS3Groups = [...updatedS3Groups];
 
 // If we have batchSize > 0, organize into batches
 if (batchSize > 0 && filesBase64.length > 0) {
@@ -882,42 +880,35 @@ if (batchSize > 0 && filesBase64.length > 0) {
   }
   
   // Add batches to image groups and S3 groups
-  const newImageGroups = [...currentImageGroups];
-  const newS3Groups = [...updatedS3Groups];
-  
   poolGroups.forEach((groupImages, batchIndex) => {
     const insertIndex = targetGroupIndex + batchIndex;
     
     // Insert or replace in image groups
-    if (insertIndex < newImageGroups.length) {
-      newImageGroups[insertIndex] = groupImages;
+    if (insertIndex < finalImageGroups.length) {
+      finalImageGroups[insertIndex] = groupImages;
     } else {
-      newImageGroups.push(groupImages);
+      finalImageGroups.push(groupImages);
     }
     
     // Insert or replace in S3 groups
-    while (newS3Groups.length <= insertIndex) {
-      newS3Groups.push([]);
+    while (finalS3Groups.length <= insertIndex) {
+      finalS3Groups.push([]);
     }
-    newS3Groups[insertIndex] = poolS3Groups[batchIndex];
+    finalS3Groups[insertIndex] = poolS3Groups[batchIndex];
     
     console.log(`✅ Placed batch ${batchIndex + 1} at index ${insertIndex}`);
   });
   
   // Ensure there's an empty group at the end
-  if (newImageGroups[newImageGroups.length - 1]?.length > 0) {
-    newImageGroups.push([]);
-    newS3Groups.push([]);
+  if (finalImageGroups[finalImageGroups.length - 1]?.length > 0) {
+    finalImageGroups.push([]);
+    finalS3Groups.push([]);
   }
   
-  // Update state
-  dispatch({ type: 'SET_IMAGE_GROUPS', payload: newImageGroups });
-  dispatch({ type: 'SET_S3_IMAGE_GROUPS', payload: newS3Groups });
-  
   console.log('📊 Final state update:');
-  console.log('Image groups:', newImageGroups.length);
-  console.log('S3 groups:', newS3Groups.length);
-  console.log('S3 URLs in groups:', newS3Groups.map(g => g.length));
+  console.log('Image groups:', finalImageGroups.length);
+  console.log('S3 groups:', finalS3Groups.length);
+  console.log('S3 URLs in groups:', finalS3Groups.map(g => g.length));
   
 } else {
   // No batching - just store all URLs in the first group
@@ -925,14 +916,44 @@ if (batchSize > 0 && filesBase64.length > 0) {
   
   const allS3Urls = s3UrlsList.map(item => item.url).filter(url => url);
   
-  if (updatedS3Groups.length === 0) {
-    updatedS3Groups.push(allS3Urls);
+  if (finalS3Groups.length === 0) {
+    finalS3Groups.push(allS3Urls);
   } else {
-    updatedS3Groups[0] = allS3Urls;
+    finalS3Groups[0] = allS3Urls;
   }
   
-  dispatch({ type: 'SET_S3_IMAGE_GROUPS', payload: updatedS3Groups });
   console.log('✅ Stored', allS3Urls.length, 'S3 URLs in first group');
+}
+
+// Update state with final arrays
+dispatch({ type: 'SET_IMAGE_GROUPS', payload: finalImageGroups });
+dispatch({ type: 'SET_S3_IMAGE_GROUPS', payload: finalS3Groups });
+
+// Update group metadata if needed
+const updatedMetadata = [...(state.groupMetadata || [])];
+
+// For batching mode, ensure metadata exists for each new group
+if (batchSize > 0 && filesBase64.length > 0) {
+  const numNewGroups = Math.ceil(filesBase64.length / batchSize);
+  const startIndex = updatedMetadata.findIndex(meta => !meta);
+  
+  for (let i = 0; i < numNewGroups; i++) {
+    const metadataIndex = startIndex >= 0 ? startIndex + i : updatedMetadata.length;
+    
+    while (updatedMetadata.length <= metadataIndex) {
+      updatedMetadata.push(null);
+    }
+    
+    if (!updatedMetadata[metadataIndex]) {
+      updatedMetadata[metadataIndex] = { 
+        price: state.price || '', 
+        sku: state.sku || '',
+        fieldSelections: { ...state.fieldSelections }
+      };
+    }
+  }
+  
+  dispatch({ type: 'UPDATE_GROUP_METADATA', payload: updatedMetadata });
 }
 
 // Clear the base64 pool since images are now in groups

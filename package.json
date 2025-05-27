@@ -10,6 +10,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@auth0/auth0-react": "^2.3.0",
     "@aws-sdk/client-dynamodb": "^3.808.0",
     "@aws-sdk/client-s3": "^3.812.0",
     "@aws-sdk/lib-dynamodb": "^3.812.0",

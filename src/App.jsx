@@ -1,5 +1,9 @@
+// App.jsx - Complete Auth0 Integration with All Components
 import React, { useState, useEffect, useRef, useMemo, createContext, useContext, useReducer } from 'react';
+import { Auth0Provider, useAuth0 } from '@auth0/auth0-react';
 import './App.css';
+import './LandingPage.css';
+import './LoadingSpinner.css';
 import FormSection, { getSelectedCategoryOptionsJSON } from './FormSection';
 import JSZip from 'jszip';
 import { saveAs } from 'file-saver';
@@ -12,6 +16,14 @@ import { EbayAuthProvider, useEbayAuth } from './EbayAuthContext';
 import EbayListingManager from './EbayListingManager';
 import BatchPreviewSection from './BatchPreviewSection';
 import { cacheService } from './CacheService';
+import AuthenticationWrapper from './AuthenticationWrapper';
+import LandingPage from './LandingPage';
+import LoadingSpinner from './LoadingSpinner';
+
+// Auth0 Configuration
+const AUTH0_DOMAIN = process.env.REACT_APP_AUTH0_DOMAIN || 'your-auth0-domain.auth0.com';
+const AUTH0_CLIENT_ID = process.env.REACT_APP_AUTH0_CLIENT_ID || 'your-auth0-client-id';
+const AUTH0_AUDIENCE = process.env.REACT_APP_AUTH0_AUDIENCE; // Optional API identifier
 
 const BatchContext = createContext();
 
@@ -22,7 +34,7 @@ const initialBatchState = {
   currentStep: 0,
   viewMode: 'overview', // 'overview', 'create', 'edit'
   statusFilter: 'all', // 'all', 'open', 'closed'
-  sidebarCollapsed: false // New state for sidebar
+  sidebarCollapsed: false
 };
 
 function batchReducer(state, action) {
@@ -86,19 +98,20 @@ function batchReducer(state, action) {
   }
 }
 
-// Enhanced BatchProvider with DynamoDB storage - WITH DETAILED LOGGING
+// Enhanced BatchProvider with user-scoped DynamoDB storage
 function BatchProvider({ children }) {
   const [state, dispatch] = useReducer(batchReducer, initialBatchState);
   const [isLoading, setIsLoading] = useState(false);
   const updateTimeouts = new Map();
+  const { user, isAuthenticated } = useAuth0();
   
-  console.log('🔧 BatchProvider: Initializing...');
+  console.log('🔧 BatchProvider: Initializing with user:', user?.sub);
   
-  // AWS Configuration - FIXED CLIENT INITIALIZATION
+  // AWS Configuration
   const REGION = "us-east-2";
   const IDENTITY_POOL_ID = "us-east-2:f81d1240-32a8-4aff-87e8-940effdf5908";
 
-  // Initialize DynamoDB clients properly
+  // Initialize DynamoDB clients
   const dynamoClient = useMemo(() => {
     console.log('🔧 BatchProvider: Creating DynamoDB client...');
     try {
@@ -122,7 +135,6 @@ function BatchProvider({ children }) {
     try {
       const client = DynamoDBDocumentClient.from(dynamoClient);
       console.log('✅ BatchProvider: DynamoDB Document client created successfully');
-      console.log('🔍 BatchProvider: Document client methods:', Object.getOwnPropertyNames(client));
       return client;
     } catch (error) {
       console.error('❌ BatchProvider: Error creating DynamoDB Document client:', error);
@@ -130,24 +142,22 @@ function BatchProvider({ children }) {
     }
   }, [dynamoClient]);
 
-  // Load batches and templates from DynamoDB on mount
+  // Load batches and templates when user is authenticated
   useEffect(() => {
-    console.log('🚀 BatchProvider: useEffect triggered - loading data...');
-    loadBatchesFromDynamoDBWithScan();
-    loadTemplatesFromDynamoDB();
-  }, []);
-
-  // Get or create session ID
-  const getSessionId = () => {
-    let sessionId = sessionStorage.getItem('listeasier_session_id');
-    if (!sessionId) {
-      sessionId = `session_${Date.now()}_${Math.random().toString(36).substring(2)}`;
-      sessionStorage.setItem('listeasier_session_id', sessionId);
-      console.log('🆔 BatchProvider: Created new session ID:', sessionId);
-    } else {
-      console.log('🆔 BatchProvider: Using existing session ID:', sessionId);
+    if (isAuthenticated && user?.sub) {
+      console.log('🚀 BatchProvider: User authenticated, loading data for:', user.sub);
+      loadBatchesFromDynamoDB();
+      loadTemplatesFromDynamoDB();
     }
-    return sessionId;
+  }, [isAuthenticated, user?.sub]);
+
+  // Get user ID from Auth0
+  const getUserId = () => {
+    if (!user?.sub) {
+      console.warn('⚠️ BatchProvider: No user ID available');
+      return null;
+    }
+    return user.sub;
   };
 
   const compressBatchForStorage = (batch) => {
@@ -156,9 +166,9 @@ function BatchProvider({ children }) {
       ...batch,
       appState: {
         ...batch.appState,
-        // DON'T remove the actual data - keep everything for proper restoration
+        // Keep all data but remove heavy raw files
         filesBase64: batch.appState.filesBase64 || [],
-        rawFiles: [], // Remove heavy raw files but keep the rest
+        rawFiles: [], // Remove heavy raw files
         imageGroups: batch.appState.imageGroups || [[]],
         s3ImageGroups: batch.appState.s3ImageGroups || [[]],
         responseData: batch.appState.responseData || [],
@@ -170,7 +180,7 @@ function BatchProvider({ children }) {
         price: batch.appState.price,
         sku: batch.appState.sku,
         categoryID: batch.appState.categoryID,
-        // Preserve status information
+        // Reset transient state
         isLoading: false,
         isDirty: false,
         totalChunks: batch.appState.totalChunks || 0,
@@ -200,18 +210,24 @@ function BatchProvider({ children }) {
     return compressed;
   };
   
-  const loadBatchesFromDynamoDBWithScan = async () => {
-    console.log('📥 BatchProvider: Starting to load batches from DynamoDB using Scan...');
+  const loadBatchesFromDynamoDB = async () => {
+    console.log('📥 BatchProvider: Starting to load batches from DynamoDB...');
     setIsLoading(true);
     try {
-      const sessionId = getSessionId();
-      console.log('🔍 BatchProvider: Using session ID for scan:', sessionId);
+      const userId = getUserId();
+      if (!userId) {
+        console.warn('⚠️ BatchProvider: No user ID, skipping batch load');
+        setIsLoading(false);
+        return;
+      }
+      
+      console.log('🔍 BatchProvider: Using user ID for scan:', userId);
       
       const scanParams = {
         TableName: 'ListEasierBatches',
-        FilterExpression: 'sessionId = :sessionId',
+        FilterExpression: 'userId = :userId',
         ExpressionAttributeValues: {
-          ':sessionId': { S: sessionId }
+          ':userId': { S: userId }
         },
         Limit: 100
       };
@@ -219,49 +235,41 @@ function BatchProvider({ children }) {
       console.log('🔍 BatchProvider: Scan parameters:', JSON.stringify(scanParams, null, 2));
       
       const command = new ScanCommand(scanParams);
-      console.log('🔍 BatchProvider: Created ScanCommand:', command);
-      
       console.log('🚀 BatchProvider: Executing DynamoDB scan...');
       const response = await dynamoClient.send(command);
       console.log('✅ BatchProvider: DynamoDB scan successful');
-      console.log('📊 BatchProvider: Scan response:', {
-        itemCount: response.Items?.length || 0,
-        hasItems: !!response.Items,
-        responseKeys: Object.keys(response)
-      });
       
       const allItems = response.Items || [];
-      console.log('📦 BatchProvider: Raw items from DynamoDB:', allItems);
+      console.log('📦 BatchProvider: Raw items from DynamoDB:', allItems.length);
       
       // Convert DynamoDB items to plain objects using unmarshall
       const unmarshallItems = allItems.map(item => unmarshall(item));
-      console.log('📦 BatchProvider: Unmarshalled items:', unmarshallItems);
+      console.log('📦 BatchProvider: Unmarshalled items:', unmarshallItems.length);
       
       // Filter out templates on the client side
       const batches = unmarshallItems.filter(item => 
         !item.batchId || !item.batchId.startsWith('template_')
       );
       
-      console.log('📦 BatchProvider: Filtered batches from DynamoDB:', batches);
+      console.log('📦 BatchProvider: Filtered batches from DynamoDB:', batches.length);
       
-      // FIXED: Process batches with proper string conversion and validation
+      // Process batches with proper string conversion and validation
       const expandedBatches = batches.map((batch, index) => {
         console.log(`🔄 BatchProvider: Processing batch ${index + 1}:`, batch);
         
-        // Helper function to safely convert to string
         const safeStringConvert = (value, defaultValue = '--') => {
           if (value === null || value === undefined) return defaultValue;
           if (typeof value === 'string') return value;
           if (typeof value === 'object') {
             console.warn('⚠️ BatchProvider: Converting object to string:', value);
-            return defaultValue; // Don't try to stringify objects, use default
+            return defaultValue;
           }
           return String(value);
         };
         
         const expanded = {
           ...batch,
-          // FIXED: Ensure all critical fields are properly converted to strings
+          // Ensure all critical fields are properly converted to strings
           category: safeStringConvert(batch.category),
           subCategory: safeStringConvert(batch.subCategory),
           name: safeStringConvert(batch.name, `Batch ${batch.id || Date.now()}`),
@@ -271,7 +279,6 @@ function BatchProvider({ children }) {
           sku: safeStringConvert(batch.sku, ''),
           appState: {
             ...batch.appState,
-            // FIXED: Ensure appState fields are also properly converted
             category: safeStringConvert(batch.appState?.category || batch.category),
             subCategory: safeStringConvert(batch.appState?.subCategory || batch.subCategory),
             price: safeStringConvert(batch.appState?.price || batch.salePrice, ''),
@@ -322,174 +329,6 @@ function BatchProvider({ children }) {
           name: expanded.name,
           category: expanded.category,
           subCategory: expanded.subCategory,
-          status: expanded.status,
-          categoryType: typeof expanded.category,
-          subCategoryType: typeof expanded.subCategory,
-          imageGroupsCount: expanded.appState?.imageGroups?.length || 0,
-          s3ImageGroupsCount: expanded.appState?.s3ImageGroups?.length || 0,
-          responseDataCount: expanded.appState?.responseData?.length || 0
-        });
-        
-        return expanded;
-      });
-      
-      console.log('🎉 BatchProvider: All batches processed successfully:', expandedBatches.length);
-      dispatch({ type: 'LOAD_BATCHES', payload: expandedBatches });
-      console.log(`✅ BatchProvider: Loaded ${batches.length} batches from DynamoDB`);
-      
-    } catch (error) {
-      console.error('❌ BatchProvider: Error loading batches from DynamoDB:', error);
-      console.error('❌ BatchProvider: Error stack:', error.stack);
-      console.error('❌ BatchProvider: Error details:', {
-        name: error.name,
-        message: error.message,
-        code: error.code
-      });
-      dispatch({ type: 'LOAD_BATCHES', payload: [] });
-    } finally {
-      setIsLoading(false);
-      console.log('🏁 BatchProvider: Finished loading batches');
-    }
-  };
-  
-  const updateBatch = (batchData) => {
-    console.log('🔄 BatchProvider: Updating batch:', batchData.id);
-    
-    // Helper function to safely convert to string
-    const safeStringConvert = (value, defaultValue = '--') => {
-      if (value === null || value === undefined) return defaultValue;
-      if (typeof value === 'string') return value;
-      if (typeof value === 'object') {
-        console.warn('⚠️ BatchProvider: Converting object to string:', value);
-        return defaultValue; // Don't try to stringify objects, use default
-      }
-      return String(value);
-    };
-    
-    const updatedBatch = {
-      ...batchData,
-      // FIXED: Ensure critical fields are strings
-      category: safeStringConvert(batchData.category, '--'),
-      subCategory: safeStringConvert(batchData.subCategory, '--'),
-      name: safeStringConvert(batchData.name, `Batch ${batchData.id}`),
-      id: safeStringConvert(batchData.id),
-      salePrice: safeStringConvert(batchData.salePrice, ''),
-      sku: safeStringConvert(batchData.sku, ''),
-      updatedAt: new Date().toISOString(),
-      // FIXED: Ensure appState category fields are also strings
-      appState: {
-        ...batchData.appState,
-        category: safeStringConvert(batchData.appState?.category || batchData.category, '--'),
-        subCategory: safeStringConvert(batchData.appState?.subCategory || batchData.subCategory, '--'),
-        price: safeStringConvert(batchData.appState?.price || batchData.salePrice, ''),
-        sku: safeStringConvert(batchData.appState?.sku || batchData.sku, '')
-      }
-    };
-    
-    console.log('✅ BatchProvider: Updated batch object created with proper string conversion');
-    dispatch({ type: 'UPDATE_BATCH', payload: updatedBatch });
-    
-    // FIXED: Add throttling to prevent excessive writes - only save at most once per 5 seconds
-    const batchId = updatedBatch.id;
-    const now = Date.now();
-    
-    // Clear any existing timeout for this batch
-    if (updateTimeouts.has(batchId)) {
-      clearTimeout(updateTimeouts.get(batchId));
-    }
-    
-    // Set a new timeout to save after 5 seconds of no updates
-    const timeoutId = setTimeout(() => {
-      updateTimeouts.delete(batchId);
-      saveBatchToDynamoDB(updatedBatch).catch(error => {
-        console.error('❌ BatchProvider: Failed to update batch in DynamoDB:', error);
-      });
-    }, 5000); // 5 second delay
-    
-    updateTimeouts.set(batchId, timeoutId);
-  };
-
-  const loadBatchesFromDynamoDB = async () => {
-    console.log('📥 BatchProvider: Starting to load batches from DynamoDB...');
-    setIsLoading(true);
-    try {
-      const sessionId = getSessionId();
-      console.log('🔍 BatchProvider: Using session ID for query:', sessionId);
-      
-      // Fixed: Use a simpler query approach to avoid the NOT begins_with issue
-      const queryParams = {
-        TableName: 'ListEasierBatches',
-        KeyConditionExpression: 'sessionId = :sessionId',
-        ExpressionAttributeValues: {
-          ':sessionId': sessionId
-        },
-        ScanIndexForward: false, // Most recent first
-        Limit: 100
-      };
-
-      console.log('🔍 BatchProvider: Query parameters:', JSON.stringify(queryParams, null, 2));
-      console.log('🔍 BatchProvider: Document client type:', typeof docClient);
-      console.log('🔍 BatchProvider: Document client send method:', typeof docClient.send);
-      
-      if (!docClient.send) {
-        console.error('❌ BatchProvider: Document client does not have send method!');
-        console.log('🔍 BatchProvider: Available methods:', Object.getOwnPropertyNames(docClient));
-        throw new Error('Document client not properly initialized');
-      }
-
-      const command = new QueryCommand(queryParams);
-      console.log('🔍 BatchProvider: Created QueryCommand:', command);
-      
-      console.log('🚀 BatchProvider: Executing DynamoDB query...');
-      const response = await docClient.send(command);
-      console.log('✅ BatchProvider: DynamoDB query successful');
-      console.log('📊 BatchProvider: Query response:', {
-        itemCount: response.Items?.length || 0,
-        hasItems: !!response.Items,
-        responseKeys: Object.keys(response)
-      });
-      
-      const allItems = response.Items || [];
-      console.log('📦 BatchProvider: Raw items from DynamoDB:', allItems);
-      
-      // Filter out templates on the client side
-      const batches = allItems.filter(item => 
-        !item.batchId || !item.batchId.startsWith('template_')
-      );
-      
-      console.log('📦 BatchProvider: Filtered batches from DynamoDB:', batches);
-      
-      // Expand compressed image groups and ensure proper string types
-      const expandedBatches = batches.map((batch, index) => {
-        console.log(`🔄 BatchProvider: Processing batch ${index + 1}:`, batch);
-        
-        const expanded = {
-          ...batch,
-          // Ensure category and subCategory are always strings
-          category: String(batch.category || '--'),
-          subCategory: String(batch.subCategory || '--'),
-          name: String(batch.name || `Batch ${batch.id || Date.now()}`),
-          status: String(batch.status || 'draft'),
-          id: String(batch.id || batch.batchId || Date.now()),
-          appState: {
-            ...batch.appState,
-            category: String(batch.appState?.category || '--'),
-            subCategory: String(batch.appState?.subCategory || '--'),
-            imageGroups: batch.appState?.imageGroups?.map(group => 
-              group && typeof group === 'object' && group.count !== undefined 
-                ? new Array(group.count).fill('') 
-                : (group || [])
-            ) || [[]],
-            price: String(batch.appState?.price || ''),
-            sku: String(batch.appState?.sku || '')
-          }
-        };
-        
-        console.log(`✅ BatchProvider: Processed batch ${index + 1}:`, {
-          id: expanded.id,
-          name: expanded.name,
-          category: expanded.category,
-          subCategory: expanded.subCategory,
           status: expanded.status
         });
         
@@ -502,12 +341,6 @@ function BatchProvider({ children }) {
       
     } catch (error) {
       console.error('❌ BatchProvider: Error loading batches from DynamoDB:', error);
-      console.error('❌ BatchProvider: Error stack:', error.stack);
-      console.error('❌ BatchProvider: Error details:', {
-        name: error.name,
-        message: error.message,
-        code: error.code
-      });
       dispatch({ type: 'LOAD_BATCHES', payload: [] });
     } finally {
       setIsLoading(false);
@@ -518,22 +351,24 @@ function BatchProvider({ children }) {
   const loadTemplatesFromDynamoDB = async () => {
     console.log('📥 BatchProvider: Starting to load templates from DynamoDB...');
     try {
-      const sessionId = getSessionId();
+      const userId = getUserId();
+      if (!userId) {
+        console.warn('⚠️ BatchProvider: No user ID, skipping template load');
+        return;
+      }
       
-      // FIXED: Use proper DynamoDB attribute value format
       const scanParams = {
         TableName: 'ListEasierBatches',
-        FilterExpression: 'sessionId = :sessionId',
+        FilterExpression: 'userId = :userId',
         ExpressionAttributeValues: {
-          ':sessionId': { S: sessionId } // Use proper DynamoDB format
+          ':userId': { S: userId }
         }
       };
 
       console.log('🔍 BatchProvider: Template scan parameters:', scanParams);
       const command = new ScanCommand(scanParams);
-      const response = await dynamoClient.send(command); // FIXED: Use dynamoClient, not client
+      const response = await dynamoClient.send(command);
       
-      // Convert DynamoDB items to plain objects using unmarshall
       const allItems = (response.Items || []).map(item => unmarshall(item));
       
       // Filter templates on the client side
@@ -550,13 +385,63 @@ function BatchProvider({ children }) {
     }
   };
 
+  const updateBatch = (batchData) => {
+    console.log('🔄 BatchProvider: Updating batch:', batchData.id);
+    
+    const safeStringConvert = (value, defaultValue = '--') => {
+      if (value === null || value === undefined) return defaultValue;
+      if (typeof value === 'string') return value;
+      if (typeof value === 'object') {
+        console.warn('⚠️ BatchProvider: Converting object to string:', value);
+        return defaultValue;
+      }
+      return String(value);
+    };
+    
+    const updatedBatch = {
+      ...batchData,
+      category: safeStringConvert(batchData.category, '--'),
+      subCategory: safeStringConvert(batchData.subCategory, '--'),
+      name: safeStringConvert(batchData.name, `Batch ${batchData.id}`),
+      id: safeStringConvert(batchData.id),
+      salePrice: safeStringConvert(batchData.salePrice, ''),
+      sku: safeStringConvert(batchData.sku, ''),
+      updatedAt: new Date().toISOString(),
+      appState: {
+        ...batchData.appState,
+        category: safeStringConvert(batchData.appState?.category || batchData.category, '--'),
+        subCategory: safeStringConvert(batchData.appState?.subCategory || batchData.subCategory, '--'),
+        price: safeStringConvert(batchData.appState?.price || batchData.salePrice, ''),
+        sku: safeStringConvert(batchData.appState?.sku || batchData.sku, '')
+      }
+    };
+    
+    console.log('✅ BatchProvider: Updated batch object created with proper string conversion');
+    dispatch({ type: 'UPDATE_BATCH', payload: updatedBatch });
+    
+    // Throttling to prevent excessive writes - only save at most once per 5 seconds
+    const batchId = updatedBatch.id;
+    
+    if (updateTimeouts.has(batchId)) {
+      clearTimeout(updateTimeouts.get(batchId));
+    }
+    
+    const timeoutId = setTimeout(() => {
+      updateTimeouts.delete(batchId);
+      saveBatchToDynamoDB(updatedBatch).catch(error => {
+        console.error('❌ BatchProvider: Failed to update batch in DynamoDB:', error);
+      });
+    }, 5000);
+    
+    updateTimeouts.set(batchId, timeoutId);
+  };
+
   const createBatch = (batchData) => {
     console.log('🆕 BatchProvider: Creating new batch with data:', batchData);
     
     const newBatch = {
       id: String(Date.now()),
       ...batchData,
-      // Ensure category and subCategory are strings
       category: String(batchData.category || '--'),
       subCategory: String(batchData.subCategory || '--'),
       name: String(batchData.name || `Batch ${Date.now()}`),
@@ -585,7 +470,6 @@ function BatchProvider({ children }) {
         price: String(batchData.salePrice || ''),
         sku: String(batchData.sku || ''),
         categoryID: null,
-        // Reset all status
         isLoading: false,
         isDirty: false,
         totalChunks: 0,
@@ -619,7 +503,6 @@ function BatchProvider({ children }) {
     });
     
     dispatch({ type: 'CREATE_BATCH', payload: newBatch });
-    console.log('📤 BatchProvider: Dispatched CREATE_BATCH action');
     
     // Save to DynamoDB (async, don't block UI)
     saveBatchToDynamoDB(newBatch).catch(error => {
@@ -632,11 +515,16 @@ function BatchProvider({ children }) {
   const saveBatchToDynamoDB = async (batch) => {
     console.log('💾 BatchProvider: Saving batch to DynamoDB:', batch.id);
     try {
-      const sessionId = getSessionId();
+      const userId = getUserId();
+      if (!userId) {
+        console.warn('⚠️ BatchProvider: No user ID, cannot save batch');
+        return false;
+      }
+      
       const compressedBatch = compressBatchForStorage(batch);
       
       const item = {
-        sessionId,
+        userId, // Use userId instead of sessionId
         batchId: String(batch.id),
         ...compressedBatch,
         updatedAt: new Date().toISOString(),
@@ -644,7 +532,7 @@ function BatchProvider({ children }) {
       };
 
       console.log('🔍 BatchProvider: Item to save:', {
-        sessionId: item.sessionId,
+        userId: item.userId,
         batchId: item.batchId,
         name: item.name,
         category: item.category
@@ -668,7 +556,6 @@ function BatchProvider({ children }) {
     console.log('🗑️ BatchProvider: Deleting batch:', batchId);
     dispatch({ type: 'DELETE_BATCH', payload: String(batchId) });
     
-    // Delete from DynamoDB (async)
     deleteBatchFromDynamoDB(String(batchId)).catch(error => {
       console.error('❌ BatchProvider: Failed to delete batch from DynamoDB:', error);
     });
@@ -677,12 +564,16 @@ function BatchProvider({ children }) {
   const deleteBatchFromDynamoDB = async (batchId) => {
     console.log('💾 BatchProvider: Deleting batch from DynamoDB:', batchId);
     try {
-      const sessionId = getSessionId();
+      const userId = getUserId();
+      if (!userId) {
+        console.warn('⚠️ BatchProvider: No user ID, cannot delete batch');
+        return false;
+      }
       
       const command = new DeleteCommand({
         TableName: 'ListEasierBatches',
         Key: {
-          sessionId,
+          userId, // Use userId instead of sessionId
           batchId: String(batchId)
         }
       });
@@ -708,8 +599,6 @@ function BatchProvider({ children }) {
         updatedAt: new Date().toISOString()
       };
       updateBatch(updatedBatch);
-    } else {
-      console.warn('⚠️ BatchProvider: Batch not found for CSV download:', batchId);
     }
   };
 
@@ -725,8 +614,6 @@ function BatchProvider({ children }) {
         updatedAt: new Date().toISOString()
       };
       updateBatch(updatedBatch);
-    } else {
-      console.warn('⚠️ BatchProvider: Batch not found for eBay listings:', batchId);
     }
   };
 
@@ -748,6 +635,7 @@ function BatchProvider({ children }) {
     return 'ready';
   };
 
+  // Template management functions
   const createTemplate = (templateData) => {
     console.log('📝 BatchProvider: Creating template:', templateData.name);
     const newTemplate = {
@@ -759,7 +647,6 @@ function BatchProvider({ children }) {
     
     dispatch({ type: 'ADD_TEMPLATE', payload: newTemplate });
     
-    // Save to DynamoDB (async)
     saveTemplateToDynamoDB(newTemplate).catch(error => {
       console.error('❌ BatchProvider: Failed to save template to DynamoDB:', error);
     });
@@ -770,10 +657,14 @@ function BatchProvider({ children }) {
   const saveTemplateToDynamoDB = async (template) => {
     console.log('💾 BatchProvider: Saving template to DynamoDB:', template.id);
     try {
-      const sessionId = getSessionId();
+      const userId = getUserId();
+      if (!userId) {
+        console.warn('⚠️ BatchProvider: No user ID, cannot save template');
+        return false;
+      }
       
       const item = {
-        sessionId,
+        userId, // Use userId instead of sessionId
         batchId: `template_${template.id}`,
         ...template,
         updatedAt: new Date().toISOString(),
@@ -827,7 +718,8 @@ function BatchProvider({ children }) {
     createTemplate,
     updateTemplate,
     deleteTemplate,
-    isLoading
+    isLoading,
+    user // Provide user context to components
   };
 
   console.log('🎯 BatchProvider: Context value prepared with batch count:', state.batches.length);
@@ -1093,9 +985,10 @@ function DeleteBatchModal({ isOpen, onClose, onConfirm, batchName }) {
   );
 }
 
-// Updated Sidebar Component with Logo Image
+// Updated Sidebar Component with user info
 function Sidebar() {
-  const { batches, dispatch, statusFilter, sidebarCollapsed, viewMode } = useBatch();
+  const { batches, dispatch, statusFilter, sidebarCollapsed, viewMode, user } = useBatch();
+  const { logout } = useAuth0();
   
   const getFilterCounts = () => {
     const open = batches.filter(batch => 
@@ -1119,9 +1012,17 @@ function Sidebar() {
     dispatch({ type: 'SET_VIEW_MODE', payload: 'create' });
   };
 
+  const handleLogout = () => {
+    logout({
+      logoutParams: {
+        returnTo: window.location.origin
+      }
+    });
+  };
+
   return (
     <div className={`sidebar ${sidebarCollapsed ? 'collapsed' : ''}`}>
-      {/* Logo-Only Sidebar Brand */}
+      {/* Logo */}
       <div className="sidebar-brand">
         <img 
           src="/ListEasier.png" 
@@ -1129,6 +1030,28 @@ function Sidebar() {
           className="brand-logo-only"
         />
       </div>
+
+      {/* User Info */}
+      {!sidebarCollapsed && user && (
+        <div className="user-info">
+          <div className="user-avatar">
+            {user.picture ? (
+              <img src={user.picture} alt={user.name} />
+            ) : (
+              <div className="avatar-placeholder">
+                {(user.name || user.email || 'U').charAt(0).toUpperCase()}
+              </div>
+            )}
+          </div>
+          <div className="user-details">
+            <div className="user-name">{user.name || 'User'}</div>
+            <div className="user-email">{user.email}</div>
+          </div>
+          <button onClick={handleLogout} className="logout-button" title="Logout">
+            🚪
+          </button>
+        </div>
+      )}
 
       {/* Navigation */}
       <nav className="sidebar-nav">
@@ -1242,6 +1165,25 @@ function Sidebar() {
             </ul>
           </div>
         )}
+
+        {/* Logout button for collapsed sidebar */}
+        {sidebarCollapsed && user && (
+          <div className="nav-section">
+            <ul className="nav-list">
+              <li className="nav-item">
+                <button 
+                  onClick={handleLogout}
+                  className="nav-link"
+                  title="Logout"
+                >
+                  <svg className="nav-icon" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M17 7l-1.41 1.41L18.17 11H8v2h10.17l-2.58 2.59L17 17l5-5zM4 5h8V3H4c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h8v-2H4V5z"/>
+                  </svg>
+                </button>
+              </li>
+            </ul>
+          </div>
+        )}
       </nav>
     </div>
   );
@@ -1282,6 +1224,7 @@ function MainHeader() {
   );
 }
 
+// Batch Overview Component
 function BatchOverview() {
   const { batches, dispatch, deleteBatch, statusFilter, isLoading } = useBatch();
   const [deleteModal, setDeleteModal] = useState({ isOpen: false, batch: null });
@@ -1294,20 +1237,6 @@ function BatchOverview() {
     batchesIsArray: Array.isArray(batches)
   });
 
-  // Log each batch for debugging
-  useEffect(() => {
-    console.log('🔍 BatchOverview: Current batches detailed:', batches?.map((batch, index) => ({
-      index,
-      id: batch?.id,
-      name: batch?.name,
-      category: batch?.category,
-      subCategory: batch?.subCategory,
-      status: batch?.status,
-      type: typeof batch,
-      keys: Object.keys(batch || {})
-    })));
-  }, [batches]);
-
   const getStatusColor = (status) => {
     const colors = {
       'draft': '#6c757d',
@@ -1315,9 +1244,7 @@ function BatchOverview() {
       'completed': '#28a745',
       'error': '#dc3545'
     };
-    const color = colors[status] || '#6c757d';
-    console.log('🎨 BatchOverview: Status color for', status, ':', color);
-    return color;
+    return colors[status] || '#6c757d';
   };
 
   const getStatusLabel = (status) => {
@@ -1327,26 +1254,19 @@ function BatchOverview() {
       'completed': 'Completed',
       'error': 'Error'
     };
-    const label = labels[status] || String(status || 'Unknown');
-    console.log('🏷️ BatchOverview: Status label for', status, ':', label);
-    return label;
+    return labels[status] || String(status || 'Unknown');
   };
 
   const formatDate = (dateString) => {
-    if (!dateString) {
-      console.warn('⚠️ BatchOverview: No date string provided');
-      return 'Unknown';
-    }
+    if (!dateString) return 'Unknown';
     try {
-      const formatted = new Date(dateString).toLocaleDateString('en-US', {
+      return new Date(dateString).toLocaleDateString('en-US', {
         year: 'numeric',
         month: 'short',
         day: 'numeric',
         hour: '2-digit',
         minute: '2-digit'
       });
-      console.log('📅 BatchOverview: Formatted date', dateString, 'to', formatted);
-      return formatted;
     } catch (error) {
       console.error('❌ BatchOverview: Error formatting date:', error);
       return 'Invalid Date';
@@ -1359,8 +1279,6 @@ function BatchOverview() {
       console.error('❌ BatchOverview: Invalid batch for editing:', batch);
       return;
     }
-    
-    // The state clearing will happen in BatchEditor's useEffect
     dispatch({ type: 'SET_CURRENT_BATCH', payload: batch });
   };
 
@@ -1374,30 +1292,23 @@ function BatchOverview() {
     if (deleteModal.batch && deleteModal.batch.id) {
       deleteBatch(deleteModal.batch.id);
       setDeleteModal({ isOpen: false, batch: null });
-    } else {
-      console.error('❌ BatchOverview: No valid batch to delete');
     }
   };
 
   const closeDeleteModal = () => {
-    console.log('❌ BatchOverview: Closing delete modal');
     setDeleteModal({ isOpen: false, batch: null });
   };
 
   const getBatchStats = (batch) => {
-    console.log('📊 BatchOverview: Getting stats for batch:', batch?.id);
     const appState = batch?.appState || {};
-    const stats = {
+    return {
       totalListings: appState.responseData?.filter(item => item && !item.error).length || 0,
       totalImageGroups: appState.imageGroups?.filter(g => g && g.length > 0).length || 0,
       processedGroups: appState.processedGroupIndices?.length || 0
     };
-    console.log('📊 BatchOverview: Batch stats:', stats);
-    return stats;
   };
 
   const getFilteredBatches = () => {
-    console.log('🔍 BatchOverview: Filtering batches with filter:', statusFilter);
     if (!Array.isArray(batches)) {
       console.warn('⚠️ BatchOverview: Batches is not an array:', typeof batches, batches);
       return [];
@@ -1416,14 +1327,12 @@ function BatchOverview() {
       filtered = batches;
     }
     
-    console.log('✅ BatchOverview: Filtered result:', filtered.length, 'batches');
     return filtered;
   };
 
   const filteredBatches = getFilteredBatches();
 
   if (isLoading) {
-    console.log('⏳ BatchOverview: Showing loading state');
     return (
       <div className="batch-overview-content">
         <div style={{ 
@@ -1520,7 +1429,6 @@ function BatchOverview() {
             {statusFilter === 'all' && (
               <button 
                 onClick={() => {
-                  console.log('🆕 BatchOverview: Creating new batch');
                   dispatch({ type: 'SET_VIEW_MODE', payload: 'create' });
                 }}
                 className="btn btn-primary"
@@ -1531,25 +1439,17 @@ function BatchOverview() {
           </div>
         ) : (
           filteredBatches.map((batch, index) => {
-            console.log(`🎨 BatchOverview: Rendering batch ${index + 1}:`, batch);
-            
             if (!batch) {
               console.error('❌ BatchOverview: Null batch at index', index);
               return null;
             }
 
             const stats = getBatchStats(batch);
-            
-            // Ensure we have valid string values for display - FIXED
             const batchName = String(batch.name || `Batch ${batch.id || 'Unknown'}`);
             const batchCategory = String(batch.category || 'No Category');
             const batchSubCategory = String(batch.subCategory || 'No SubCategory');
             const batchStatus = String(batch.status || 'draft');
             const batchId = String(batch.id || Date.now());
-            
-            console.log(`✅ BatchOverview: Rendering batch with values:`, { 
-              batchName, batchCategory, batchSubCategory, batchStatus, batchId 
-            });
             
             return (
               <div key={batchId} className="table-row">
@@ -1645,9 +1545,10 @@ function BatchOverview() {
   );
 }
 
+// Batch Wizard Component
 function BatchWizard() {
   const { createBatch, templates, dispatch } = useBatch();
-  const { dispatch: appDispatch } = useAppState(); // Add this line
+  const { dispatch: appDispatch } = useAppState();
   const [currentStep, setCurrentStep] = useState(0);
   const [batchData, setBatchData] = useState({
     name: '',
@@ -1701,10 +1602,10 @@ function BatchWizard() {
           TableName: 'ListCategory',
         });
 
-        const response = await dynamoClient.send(scanCommand); // Use dynamoClient, not docClient
+        const response = await dynamoClient.send(scanCommand);
         const categoryData = {};
         
-        // FIXED: Properly unmarshall DynamoDB items
+        // Properly unmarshall DynamoDB items
         const items = response.Items?.map(item => unmarshall(item)) || [];
         
         items.forEach(item => {
@@ -1740,7 +1641,7 @@ function BatchWizard() {
     };
 
     fetchCategories();
-  }, [dynamoClient]); // Add dynamoClient as dependency
+  }, [dynamoClient]);
 
   const subcategories = categories[batchData.category] || ['--'];
 
@@ -1749,13 +1650,11 @@ function BatchWizard() {
     if (batchData.category !== '--' && categories[batchData.category]) {
       const availableSubcategories = categories[batchData.category];
       if (availableSubcategories.length > 0 && availableSubcategories[0] !== '--') {
-        // Auto-select the first valid subcategory
         setBatchData(prev => ({
           ...prev,
           subCategory: availableSubcategories[0]
         }));
       } else if (availableSubcategories.length > 1) {
-        // If first is '--', select the second one
         setBatchData(prev => ({
           ...prev,
           subCategory: availableSubcategories[1]
@@ -1883,7 +1782,7 @@ function BatchWizard() {
                           setBatchData({
                             ...batchData, 
                             category: newCategory,
-                            subCategory: '--' // Reset subcategory when category changes
+                            subCategory: '--'
                           });
                         }}
                         className="form-control"
@@ -1955,7 +1854,7 @@ function BatchWizard() {
                 </button>
               </div>
 
-              {/* Validation Summary with fixed text color */}
+              {/* Validation Summary */}
               <div style={{ 
                 marginTop: '1.5rem',
                 padding: '1rem',
@@ -2041,7 +1940,6 @@ function BatchWizard() {
                 </div>
               </div>
 
-              {/* Updated form row for price and SKU inputs */}
               <div className="form-row price-row">
                 <div className="form-group">
                   <label>Purchase Price</label>
@@ -2075,7 +1973,6 @@ function BatchWizard() {
                 </div>
               </div>
 
-              {/* New SKU field */}
               <div className="form-group">
                 <label>Default SKU</label>
                 <input
@@ -2132,8 +2029,7 @@ function BatchWizard() {
   );
 }
 
-// Replace the existing BatchEditor function in App.jsx with this enhanced version
-
+// Batch Editor Component
 function BatchEditor() {
   const { currentBatch, updateBatch, dispatch, markCsvDownloaded, markEbayListingsCreated } = useBatch();
   const [showListingManager, setShowListingManager] = useState(false);
@@ -2163,7 +2059,7 @@ function BatchEditor() {
     }
   }, [currentBatch, currentSku]);
 
-  // Existing BatchEditor useEffect for loading batch state
+  // Load batch state into app state
   useEffect(() => {
     if (currentBatch && currentBatch.appState) {
       console.log('🔄 BatchEditor: Loading batch state into app state:', currentBatch.id);
@@ -2234,7 +2130,7 @@ function BatchEditor() {
     }
   }, [currentBatch?.id, appDispatch]);
 
-  // Existing throttled batch update logic
+  // Throttled batch update logic
   useEffect(() => {
     if (currentBatch) {
       const hasValidListings = state.responseData.some(item => item && !item.error);
@@ -2507,7 +2403,7 @@ function BatchEditor() {
     }
   };
 
-  // Existing handleGenerateListing method (unchanged from your original)
+  // Generate listing method (same as original)
   const handleGenerateListing = async (aiResolveCategoryFields = false, categoryFields = []) => {
     try {
       const { imageGroups, filesBase64, batchSize, processedGroupIndices, fieldSelections } = state;
@@ -3354,7 +3250,7 @@ function AppContent() {
   return <AppLayout />;
 }
 
-// Updated EbayCallback component
+// Enhanced EbayCallback component
 const EbayCallback = () => {
   const { handleAuthCallback } = useEbayAuth();
   const [error, setError] = useState(null);
@@ -3446,38 +3342,59 @@ const EbayCallback = () => {
           <p style={{ color: '#666' }}>Redirecting...</p>
         </>
       ) : (
-        <>
-          <div className="spinner">
-            <div className="spinner-circle"></div>
-          </div>
-          <p>Processing eBay authentication...</p>
-          <p style={{ fontSize: '0.8rem', color: '#666', marginTop: '1rem' }}>
-            This may take a few seconds...
-          </p>
-        </>
+        <LoadingSpinner message="Processing eBay authentication..." />
       )}
     </div>
   );
 };
 
+// Main App Component with Auth0 Integration
 function App() {
   const pathname = window.location.pathname;
+  
+  // Handle eBay callback route
   if (pathname === '/ebay/callback' || pathname === '/ebay/callback/') {
     return (
-      <EbayAuthProvider>
-        <EbayCallback />
-      </EbayAuthProvider>
+      <Auth0Provider
+        domain={AUTH0_DOMAIN}
+        clientId={AUTH0_CLIENT_ID}
+        authorizationParams={{
+          redirect_uri: window.location.origin,
+          audience: AUTH0_AUDIENCE,
+          scope: "openid profile email"
+        }}
+        cacheLocation="localstorage"
+        useRefreshTokens={true}
+      >
+        <EbayAuthProvider>
+          <EbayCallback />
+        </EbayAuthProvider>
+      </Auth0Provider>
     );
   }
 
   return (
-    <EbayAuthProvider>
-      <AppStateProvider>
-        <BatchProvider>
-          <AppContent />
-        </BatchProvider>
-      </AppStateProvider>
-    </EbayAuthProvider>
+    <Auth0Provider
+      domain={AUTH0_DOMAIN}
+      clientId={AUTH0_CLIENT_ID}
+      authorizationParams={{
+        redirect_uri: window.location.origin,
+        audience: AUTH0_AUDIENCE,
+        scope: "openid profile email"
+      }}
+      cacheLocation="localstorage"
+      useRefreshTokens={true}
+    >
+      <AuthenticationWrapper>
+        <EbayAuthProvider>
+          <AppStateProvider>
+            <BatchProvider>
+              <AppContent />
+            </BatchProvider>
+          </AppStateProvider>
+        </EbayAuthProvider>
+      </AuthenticationWrapper>
+    </Auth0Provider>
   );
 }
 

@@ -210,7 +210,7 @@ function BatchProvider({ children }) {
         isDirty: false,
         totalChunks: batch.appState.totalChunks || 0,
         completedChunks: batch.appState.completedChunks || 0,
-        processingGroups: batch.appState.processingGroups || [],
+        processingGroups: [],
         errorMessages: batch.appState.errorMessages || [],
         imageRotations: batch.appState.imageRotations || {},
         selectedImages: batch.appState.selectedImages || [],
@@ -349,7 +349,8 @@ function BatchProvider({ children }) {
             isDirty: false,
             totalChunks: Number(batch.appState?.totalChunks) || 0,
             completedChunks: Number(batch.appState?.completedChunks) || 0,
-            processingGroups: Array.isArray(batch.appState?.processingGroups) ? batch.appState.processingGroups : [],
+            processingGroups: batch.appState?.imageGroups ? 
+  batch.appState.imageGroups.map(() => false) : [],
             errorMessages: [],
             uploadStatus: {
               isUploading: false,

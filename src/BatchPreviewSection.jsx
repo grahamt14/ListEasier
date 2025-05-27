@@ -951,14 +951,14 @@ Action(SiteID=US|Country=US|Currency=USD|Version=1193|CC=UTF-8),Custom label (SK
           {imageGroups.map((group, gi) => {
             if (group.length === 0) return null;
             
-            let groupClass = "";
-            if (processingGroups[gi]) {
-              groupClass = "processing";
-            } else if (processedGroupIndices && processedGroupIndices.includes(gi)) {
-              groupClass = "processed";
-            } else if (group.length > 0 && !responseData[gi]) {
-              groupClass = "new";
-            }
+    let groupClass = "";
+if (processingGroups[gi]) {
+  groupClass = "processing";
+} else if (processedGroupIndices && processedGroupIndices.includes(gi)) {
+  groupClass = "processed";  
+} else if (group.length > 0 && !responseData[gi]) {
+  groupClass = "new";
+}
             
             return (
               <div
@@ -1045,14 +1045,14 @@ Action(SiteID=US|Country=US|Currency=USD|Version=1193|CC=UTF-8),Custom label (SK
                 const groupSku = metadata.sku || sku || '';
                 const listingFieldSelections = response?.storedFieldSelections || fieldSelections;
                 
-                let groupClass = "";
-                if (processingGroups[gi]) {
-                  groupClass = "processing";
-                } else if (processedGroupIndices && processedGroupIndices.includes(gi)) {
-                  groupClass = "processed";
-                } else if (group.length > 0 && !responseData[gi]) {
-                  groupClass = "new";
-                }
+let groupClass = "";
+if (processingGroups[gi]) {
+  groupClass = "processing";
+} else if (processedGroupIndices && processedGroupIndices.includes(gi)) {
+  groupClass = "processed";
+} else if (group.length > 0 && !responseData[gi]) {
+  groupClass = "new";
+}
                 
                 const nonEmptyGroupsBefore = imageGroups.slice(0, gi).filter(g => g.length > 0).length;
                 const isEvenRow = nonEmptyGroupsBefore % 2 === 0;

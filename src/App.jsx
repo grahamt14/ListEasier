@@ -160,82 +160,141 @@ function BatchProvider({ children }) {
     return user.sub;
   };
 
-  const compressBatchForStorage = (batch) => {
-    console.log('🗜️ BatchProvider: Compressing batch for storage:', batch.id);
+ // In App.jsx, replace the compressBatchForStorage function with this optimized version:
+
+// Helper function to compress base64 images for storage
+const compressBase64Images = (imageGroups) => {
+  if (!imageGroups || imageGroups.length === 0) return [];
+  
+  return imageGroups.map(group => {
+    if (!Array.isArray(group) || group.length === 0) return group;
     
-    // Ensure responseData is properly preserved with all listing details
-    const responseData = batch.appState.responseData || [];
-    const preservedResponseData = responseData.map(item => {
-      if (!item) return null;
+    return group.map(base64 => {
+      if (!base64 || typeof base64 !== 'string') return base64;
       
-      // Preserve all the important listing data
-      return {
-        ...item,
-        // Ensure these critical fields are preserved
-        title: item.title || '',
-        description: item.description || '',
-        price: item.price || batch.appState.price || '',
-        sku: item.sku || batch.appState.sku || '',
-        // Preserve category fields and stored selections
-        storedFieldSelections: item.storedFieldSelections || {},
-        fieldSelections: item.fieldSelections || item.storedFieldSelections || {},
-        // Preserve any AI resolved fields
-        aiResolvedFields: item.aiResolvedFields || {},
-        // Keep error info if present
-        error: item.error || null,
-        raw_content: item.raw_content || null
-      };
-    });
-    
-    const compressed = {
-      ...batch,
-      appState: {
-        ...batch.appState,
-        // Keep all critical data for proper restoration
-        filesBase64: batch.appState.filesBase64 || [],
-        rawFiles: [], // Remove heavy raw files but keep everything else
-        imageGroups: batch.appState.imageGroups || [[]],
-        s3ImageGroups: batch.appState.s3ImageGroups || [[]],
-        responseData: preservedResponseData, // Use preserved data
-        groupMetadata: batch.appState.groupMetadata || [],
-        fieldSelections: batch.appState.fieldSelections || {},
-        processedGroupIndices: batch.appState.processedGroupIndices || [],
-        category: batch.appState.category,
-        subCategory: batch.appState.subCategory,
-        price: batch.appState.price,
-        sku: batch.appState.sku,
-        categoryID: batch.appState.categoryID,
-        // Reset transient state
-        isLoading: false,
-        isDirty: false,
-        totalChunks: batch.appState.totalChunks || 0,
-        completedChunks: batch.appState.completedChunks || 0,
-        processingGroups: [],
-        errorMessages: batch.appState.errorMessages || [],
-        imageRotations: batch.appState.imageRotations || {},
-        selectedImages: batch.appState.selectedImages || [],
-        uploadStatus: {
-          isUploading: false,
-          uploadProgress: 0,
-          uploadTotal: 0,
-          uploadCompleted: 0,
-          uploadStage: '',
-          currentFileIndex: 0
-        },
-        processingStatus: {
-          isProcessing: false,
-          processTotal: 0,
-          processCompleted: 0,
-          processStage: '',
-          currentGroup: 0
-        }
+      try {
+        // Create a compressed version of the image
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        const img = new Image();
+        
+        return new Promise((resolve) => {
+          img.onload = () => {
+            // Reduce dimensions for storage (max 400px width)
+            const maxWidth = 400;
+            const ratio = Math.min(maxWidth / img.width, maxWidth / img.height);
+            canvas.width = img.width * ratio;
+            canvas.height = img.height * ratio;
+            
+            ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+            // Use lower quality for storage
+            const compressedBase64 = canvas.toDataURL('image/jpeg', 0.6);
+            resolve(compressedBase64);
+          };
+          img.onerror = () => resolve(base64); // Fallback to original
+          img.src = base64;
+        });
+      } catch (error) {
+        console.warn('Error compressing image for storage:', error);
+        return base64; // Fallback to original
       }
-    };
+    });
+  });
+};
+
+const compressBatchForStorage = (batch) => {
+  console.log('🗜️ BatchProvider: Compressing batch for storage:', batch.id);
+  
+  // Ensure responseData is properly preserved with all listing details
+  const responseData = batch.appState.responseData || [];
+  const preservedResponseData = responseData.map(item => {
+    if (!item) return null;
     
-    console.log('✅ BatchProvider: Batch compressed successfully with preserved listing data');
-    console.log('📊 BatchProvider: Preserved', preservedResponseData.filter(item => item && !item.error).length, 'valid listings');
-    return compressed;
+    // Preserve essential listing data, compress descriptions
+    const compressedDescription = item.description ? 
+      item.description.substring(0, 2000) : ''; // Limit description length
+    
+    return {
+      title: item.title || '',
+      description: compressedDescription,
+      price: item.price || batch.appState.price || '',
+      sku: item.sku || batch.appState.sku || '',
+      // Preserve category fields and stored selections
+      storedFieldSelections: item.storedFieldSelections || {},
+      fieldSelections: item.fieldSelections || item.storedFieldSelections || {},
+      // Preserve any AI resolved fields
+      aiResolvedFields: item.aiResolvedFields || {},
+      // Keep error info if present but compress it
+      error: item.error || null
+      // Remove raw_content - not needed for restoration
+    };
+  });
+  
+  // Count valid listings for logging
+  const validListingsCount = preservedResponseData.filter(item => item && !item.error).length;
+  
+  const compressed = {
+    ...batch,
+    appState: {
+      ...batch.appState,
+      // Keep compressed images for display - users need to see their uploaded images
+      filesBase64: batch.appState.filesBase64 || [],
+      rawFiles: [], // Remove heavy raw files
+      imageGroups: batch.appState.imageGroups || [[]],
+      s3ImageGroups: batch.appState.s3ImageGroups || [[]],
+      responseData: preservedResponseData,
+      groupMetadata: batch.appState.groupMetadata || [],
+      fieldSelections: batch.appState.fieldSelections || {},
+      processedGroupIndices: batch.appState.processedGroupIndices || [],
+      category: batch.appState.category,
+      subCategory: batch.appState.subCategory,
+      price: batch.appState.price,
+      sku: batch.appState.sku,
+      categoryID: batch.appState.categoryID,
+      // Reset transient state
+      isLoading: false,
+      isDirty: false,
+      totalChunks: batch.appState.totalChunks || 0,
+      completedChunks: batch.appState.completedChunks || 0,
+      processingGroups: [], // Always reset to empty array
+      errorMessages: [], // Don't save error messages
+      imageRotations: batch.appState.imageRotations || {}, // Keep rotations
+      selectedImages: [], // Reset selection state
+      uploadStatus: {
+        isUploading: false,
+        uploadProgress: 0,
+        uploadTotal: 0,
+        uploadCompleted: 0,
+        uploadStage: '',
+        currentFileIndex: 0
+      },
+      processingStatus: {
+        isProcessing: false,
+        processTotal: 0,
+        processCompleted: 0,
+        processStage: '',
+        currentGroup: 0
+      }
+    }
   };
+  
+  // Calculate approximate size for logging
+  const sizeEstimate = JSON.stringify(compressed).length;
+  console.log('✅ BatchProvider: Batch compressed successfully');
+  console.log('📊 BatchProvider: Preserved', validListingsCount, 'valid listings');
+  console.log('💾 BatchProvider: Estimated size:', Math.round(sizeEstimate / 1024), 'KB');
+  
+  // If still too large, try removing filesBase64 as last resort
+  if (sizeEstimate > 380000) { // 380KB threshold - leave some buffer
+    console.warn('⚠️ BatchProvider: Batch still too large, removing base64 images');
+    compressed.appState.filesBase64 = [];
+    
+    const newSizeEstimate = JSON.stringify(compressed).length;
+    console.log('💾 BatchProvider: Size after removing images:', Math.round(newSizeEstimate / 1024), 'KB');
+  }
+  
+  return compressed;
+};
   
   const loadBatchesFromDynamoDB = async () => {
     console.log('📥 BatchProvider: Starting to load batches from DynamoDB...');

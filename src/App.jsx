@@ -346,17 +346,20 @@ const compressBatchForStorage = (batch) => {
       const queryParams = {
         TableName: 'ListEasierBatches',
         KeyConditionExpression: 'userId = :userId',
-        ExpressionAttributeValues: {
+        ExpressionAttributeValues: marshall({
           ':userId': userId
-        }
+        })
       };
       
       console.log('🔍 BatchProvider: Querying all user items...');
       const command = new QueryCommand(queryParams);
       const response = await dynamoClient.send(command);
-      const allItems = response.Items || [];
+      const marshalledItems = response.Items || [];
       
-      console.log('📦 BatchProvider: Found', allItems.length, 'items for user');
+      console.log('📦 BatchProvider: Found', marshalledItems.length, 'items for user');
+      
+      // Unmarshall all items
+      const allItems = marshalledItems.map(item => unmarshall(item));
       
       // Group items by batch
       const itemsByBatch = {};
@@ -936,10 +939,10 @@ const deleteOldBatchItems = async (userId, batchId) => {
     const queryParams = {
       TableName: 'ListEasierBatches',
       KeyConditionExpression: 'userId = :userId AND begins_with(batchId, :batchId)',
-      ExpressionAttributeValues: {
+      ExpressionAttributeValues: marshall({
         ':userId': userId,
         ':batchId': String(batchId)
-      }
+      })
     };
     
     const queryCommand = new QueryCommand(queryParams);

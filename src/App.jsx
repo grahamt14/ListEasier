@@ -2132,36 +2132,47 @@ function BatchWizard() {
   );
 }
 
+// Replace the existing BatchEditor function in App.jsx with this enhanced version
+
 function BatchEditor() {
   const { currentBatch, updateBatch, dispatch, markCsvDownloaded, markEbayListingsCreated } = useBatch();
   const [showListingManager, setShowListingManager] = useState(false);
   const { state, dispatch: appDispatch } = useAppState();
   
-  // FIXED: Add debouncing and change detection to prevent excessive saves
+  // Photo assignment interface states
+  const [uploadedPhotos, setUploadedPhotos] = useState([]);
+  const [photoListings, setPhotoListings] = useState([]);
+  const [autoAssignCount, setAutoAssignCount] = useState(4);
+  const [draggedPhoto, setDraggedPhoto] = useState(null);
+  const [draggedFromListing, setDraggedFromListing] = useState(null);
+  const [currentSku, setCurrentSku] = useState('');
+  const [showSkuDialog, setShowSkuDialog] = useState(false);
+  const [viewMode, setViewMode] = useState('traditional'); // 'traditional' or 'assignment'
+  const fileInputRef = useRef(null);
+  
+  // Existing BatchEditor states and refs
   const updateTimeoutRef = useRef(null);
   const lastUpdateRef = useRef(null);
   const lastSaveTimeRef = useRef(0);
-  const SAVE_THROTTLE_MS = 10000; // Only save at most once per 10 seconds
-  
+  const SAVE_THROTTLE_MS = 10000;
+
+  // Initialize current SKU from batch data
+  useEffect(() => {
+    if (currentBatch && !currentSku) {
+      setCurrentSku(currentBatch.sku || currentBatch.appState?.sku || '');
+    }
+  }, [currentBatch, currentSku]);
+
+  // Existing BatchEditor useEffect for loading batch state
   useEffect(() => {
     if (currentBatch && currentBatch.appState) {
       console.log('🔄 BatchEditor: Loading batch state into app state:', currentBatch.id);
-      console.log('🔍 BatchEditor: Batch appState keys:', Object.keys(currentBatch.appState));
-      console.log('🔍 BatchEditor: Category values:', {
-        batchCategory: currentBatch.category,
-        batchSubCategory: currentBatch.subCategory,
-        appStateCategory: currentBatch.appState.category,
-        appStateSubCategory: currentBatch.appState.subCategory
-      });
       
-      // Clear current app state first
       appDispatch({ type: 'CLEAR_ALL_FOR_NEW_BATCH' });
       
-      // Then load the batch-specific state with CORRECT action types
       setTimeout(() => {
         const batchState = currentBatch.appState;
         
-        // FIXED: Helper function to safely convert strings and handle object issues
         const safeStringConvert = (value, defaultValue = '--') => {
           if (value === null || value === undefined) return defaultValue;
           if (typeof value === 'string') return value;
@@ -2172,7 +2183,6 @@ function BatchEditor() {
           return String(value);
         };
         
-        // Map appState properties to correct action types
         const actionMappings = {
           filesBase64: 'SET_FILES_BASE64',
           rawFiles: 'SET_RAW_FILES', 
@@ -2193,46 +2203,38 @@ function BatchEditor() {
           sku: 'SET_SKU'
         };
         
-        // Dispatch each state property with the correct action type
         Object.entries(actionMappings).forEach(([stateKey, actionType]) => {
           if (batchState.hasOwnProperty(stateKey)) {
-            console.log(`🔄 BatchEditor: Dispatching ${actionType} with:`, batchState[stateKey]);
             appDispatch({ type: actionType, payload: batchState[stateKey] });
           }
         });
         
-        // FIXED: Handle category and subcategory with proper string conversion
         const categoryValue = safeStringConvert(batchState.category || currentBatch.category);
         const subCategoryValue = safeStringConvert(batchState.subCategory || currentBatch.subCategory);
         
         if (categoryValue && categoryValue !== '--') {
-          console.log('🔄 BatchEditor: Setting category to:', categoryValue, typeof categoryValue);
           appDispatch({ type: 'SET_CATEGORY', payload: categoryValue });
         }
         if (subCategoryValue && subCategoryValue !== '--') {
-          console.log('🔄 BatchEditor: Setting subcategory to:', subCategoryValue, typeof subCategoryValue);
           appDispatch({ type: 'SET_SUBCATEGORY', payload: subCategoryValue });
         }
         
-        // Set batch-level price and SKU if not already set in appState
         const priceValue = safeStringConvert(batchState.price || currentBatch.salePrice, '');
         const skuValue = safeStringConvert(batchState.sku || currentBatch.sku, '');
         
         if (priceValue && !batchState.price) {
-          console.log('🔄 BatchEditor: Setting price from batch to:', priceValue);
           appDispatch({ type: 'SET_PRICE', payload: priceValue });
         }
         if (skuValue && !batchState.sku) {
-          console.log('🔄 BatchEditor: Setting SKU from batch to:', skuValue);
           appDispatch({ type: 'SET_SKU', payload: skuValue });
         }
         
         console.log('✅ BatchEditor: Finished loading batch state');
-      }, 100); // Small delay to ensure clear happens first
+      }, 100);
     }
-  }, [currentBatch?.id, appDispatch]); // Only trigger when batch ID changes
+  }, [currentBatch?.id, appDispatch]);
 
-  // FIXED: Throttled batch update with change detection
+  // Existing throttled batch update logic
   useEffect(() => {
     if (currentBatch) {
       const hasValidListings = state.responseData.some(item => item && !item.error);
@@ -2242,7 +2244,6 @@ function BatchEditor() {
         newStatus = 'ready';
       }
       
-      // FIXED: Helper function for safe string conversion
       const safeStringConvert = (value, defaultValue = '') => {
         if (value === null || value === undefined) return defaultValue;
         if (typeof value === 'string') return value;
@@ -2264,7 +2265,6 @@ function BatchEditor() {
           groupMetadata: state.groupMetadata,
           fieldSelections: state.fieldSelections,
           processedGroupIndices: state.processedGroupIndices,
-          // FIXED: Ensure category fields are strings
           category: safeStringConvert(state.category),
           subCategory: safeStringConvert(state.subCategory),
           price: safeStringConvert(state.price),
@@ -2273,12 +2273,10 @@ function BatchEditor() {
         },
         totalItems: state.responseData.filter(item => item && !item.error).length,
         status: newStatus,
-        // FIXED: Update the batch's default price and SKU with current values using safe conversion
         salePrice: safeStringConvert(state.price || currentBatch.salePrice),
         sku: safeStringConvert(state.sku || currentBatch.sku)
       };
       
-      // FIXED: Only update if there are significant changes and enough time has passed
       const currentDataString = JSON.stringify({
         appState: updatedBatch.appState,
         totalItems: updatedBatch.totalItems,
@@ -2290,7 +2288,6 @@ function BatchEditor() {
       const now = Date.now();
       const timeSinceLastSave = now - lastSaveTimeRef.current;
       
-      // Only proceed if data has changed AND enough time has passed
       if (lastUpdateRef.current !== currentDataString && timeSinceLastSave >= SAVE_THROTTLE_MS) {
         lastUpdateRef.current = currentDataString;
         
@@ -2298,14 +2295,13 @@ function BatchEditor() {
           clearTimeout(updateTimeoutRef.current);
         }
         
-        // FIXED: Longer delay and immediate save for significant changes
         const hasSignificantChange = (
           updatedBatch.totalItems !== currentBatch.totalItems ||
           updatedBatch.status !== currentBatch.status ||
           (state.responseData.length > 0 && state.responseData.some(item => item && !item.error))
         );
         
-        const delay = hasSignificantChange ? 1000 : 5000; // 1 second for significant changes, 5 seconds for minor
+        const delay = hasSignificantChange ? 1000 : 5000;
         
         updateTimeoutRef.current = setTimeout(() => {
           console.log('💾 BatchEditor: Saving batch update after throttle delay');
@@ -2313,7 +2309,6 @@ function BatchEditor() {
           updateBatch(updatedBatch);
         }, delay);
       } else if (lastUpdateRef.current !== currentDataString) {
-        // Data changed but we're still in throttle period - set up delayed save
         lastUpdateRef.current = currentDataString;
         
         if (updateTimeoutRef.current) {
@@ -2336,6 +2331,183 @@ function BatchEditor() {
     };
   }, [state, currentBatch, updateBatch]);
 
+  // Photo assignment interface methods
+  const handleFileUpload = (files) => {
+    const newPhotos = Array.from(files).map((file, index) => ({
+      id: `photo-${Date.now()}-${index}`,
+      file,
+      url: URL.createObjectURL(file),
+      name: file.name
+    }));
+    setUploadedPhotos(prev => [...prev, ...newPhotos]);
+  };
+
+  const handleFileDrop = (e) => {
+    e.preventDefault();
+    const files = e.dataTransfer.files;
+    if (files.length > 0) {
+      handleFileUpload(files);
+    }
+  };
+
+  const handleFileSelect = (e) => {
+    if (e.target.files.length > 0) {
+      handleFileUpload(e.target.files);
+    }
+  };
+
+  const autoAssignPhotos = () => {
+    if (uploadedPhotos.length === 0) return;
+
+    const newListings = [];
+    for (let i = 0; i < uploadedPhotos.length; i += autoAssignCount) {
+      const photos = uploadedPhotos.slice(i, i + autoAssignCount);
+      newListings.push({
+        id: `listing-${Date.now()}-${i}`,
+        photos: photos,
+        sku: currentSku || `${currentBatch?.sku || 'ITEM'}-${photoListings.length + newListings.length + 1}`,
+        title: `Auto-generated Listing ${photoListings.length + newListings.length + 1}`,
+        isGenerated: false
+      });
+    }
+
+    setPhotoListings(prev => [...prev, ...newListings]);
+    setUploadedPhotos([]);
+  };
+
+  const createEmptyListing = () => {
+    const newListing = {
+      id: `listing-${Date.now()}`,
+      photos: [],
+      sku: currentSku || `${currentBatch?.sku || 'ITEM'}-${photoListings.length + 1}`,
+      title: `Listing ${photoListings.length + 1}`,
+      isGenerated: false
+    };
+    setPhotoListings(prev => [...prev, newListing]);
+  };
+
+  const handlePhotoDragStart = (photo, fromListingId = null) => {
+    setDraggedPhoto(photo);
+    setDraggedFromListing(fromListingId);
+  };
+
+  const handleListingDrop = (e, listingId) => {
+    e.preventDefault();
+    if (!draggedPhoto) return;
+
+    if (draggedFromListing) {
+      setPhotoListings(prev => prev.map(listing => 
+        listing.id === draggedFromListing 
+          ? { ...listing, photos: listing.photos.filter(p => p.id !== draggedPhoto.id) }
+          : listing
+      ));
+    } else {
+      setUploadedPhotos(prev => prev.filter(p => p.id !== draggedPhoto.id));
+    }
+
+    setPhotoListings(prev => prev.map(listing => 
+      listing.id === listingId 
+        ? { ...listing, photos: [...listing.photos, draggedPhoto] }
+        : listing
+    ));
+
+    setDraggedPhoto(null);
+    setDraggedFromListing(null);
+  };
+
+  const deleteListing = (listingId) => {
+    const listing = photoListings.find(l => l.id === listingId);
+    if (listing) {
+      setUploadedPhotos(prev => [...prev, ...listing.photos]);
+      setPhotoListings(prev => prev.filter(l => l.id !== listingId));
+    }
+  };
+
+  // Convert photo listings to traditional format and integrate with existing system
+  const convertPhotoListingsToTraditional = async () => {
+    if (photoListings.length === 0) {
+      alert("No photo listings to convert");
+      return;
+    }
+
+    try {
+      // Convert photos to base64 and add to existing image groups
+      const newImageGroups = [];
+      const newFilesBase64 = [];
+
+      for (const listing of photoListings) {
+        if (listing.photos.length > 0) {
+          const base64Group = [];
+          
+          for (const photo of listing.photos) {
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d');
+            const img = new Image();
+            
+            await new Promise((resolve) => {
+              img.onload = () => {
+                canvas.width = img.width;
+                canvas.height = img.height;
+                ctx.drawImage(img, 0, 0);
+                const base64 = canvas.toDataURL('image/jpeg', 0.8);
+                base64Group.push(base64);
+                newFilesBase64.push(base64);
+                resolve();
+              };
+              img.src = photo.url;
+            });
+          }
+          
+          newImageGroups.push(base64Group);
+        }
+      }
+
+      // Update app state with new image groups
+      const currentImageGroups = [...state.imageGroups];
+      
+      // Remove empty groups and add new ones
+      const filteredGroups = currentImageGroups.filter(group => group && group.length > 0);
+      const updatedGroups = [...filteredGroups, ...newImageGroups];
+      
+      // Add empty group at the end
+      updatedGroups.push([]);
+
+      appDispatch({ type: 'SET_IMAGE_GROUPS', payload: updatedGroups });
+      appDispatch({ type: 'SET_FILES_BASE64', payload: [...state.filesBase64, ...newFilesBase64] });
+
+      // Update group metadata with SKUs and prices
+      const updatedMetadata = [...(state.groupMetadata || [])];
+      
+      photoListings.forEach((listing, index) => {
+        const groupIndex = filteredGroups.length + index;
+        while (updatedMetadata.length <= groupIndex) {
+          updatedMetadata.push(null);
+        }
+        updatedMetadata[groupIndex] = {
+          price: state.price || currentBatch?.salePrice || '',
+          sku: listing.sku,
+          fieldSelections: { ...state.fieldSelections }
+        };
+      });
+
+      appDispatch({ type: 'UPDATE_GROUP_METADATA', payload: updatedMetadata });
+
+      // Clear photo assignment interface
+      setUploadedPhotos([]);
+      setPhotoListings([]);
+      
+      // Switch back to traditional view
+      setViewMode('traditional');
+
+      alert(`Successfully converted ${photoListings.length} photo listings to traditional format`);
+      
+    } catch (error) {
+      console.error('Error converting photo listings:', error);
+      alert('Error converting photo listings. Please try again.');
+    }
+  };
+
+  // Existing handleGenerateListing method (unchanged from your original)
   const handleGenerateListing = async (aiResolveCategoryFields = false, categoryFields = []) => {
     try {
       const { imageGroups, filesBase64, batchSize, processedGroupIndices, fieldSelections } = state;
@@ -2382,7 +2554,6 @@ function BatchEditor() {
           while (updatedMetadata.length <= insertIndex) {
             updatedMetadata.push(null);
           }
-          // Use current SKU and price values, fallback to batch defaults, then global defaults
           updatedMetadata[insertIndex] = { 
             price: state.price || currentBatch?.salePrice || '', 
             sku: state.sku || currentBatch?.sku || '',
@@ -2650,12 +2821,10 @@ function BatchEditor() {
   };
 
   const handleBackToOverview = () => {
-    // Clear any pending saves
     if (updateTimeoutRef.current) {
       clearTimeout(updateTimeoutRef.current);
     }
     
-    // Clear app state when going back to overview
     console.log('🧹 BatchEditor: Clearing app state on back to overview');
     appDispatch({ type: 'CLEAR_ALL_FOR_NEW_BATCH' });
     
@@ -2690,6 +2859,65 @@ function BatchEditor() {
     return null;
   }
 
+  // Render view mode selector
+  const ViewModeSelector = () => (
+    <div style={{
+      display: 'flex',
+      gap: '10px',
+      marginBottom: '20px',
+      padding: '15px',
+      backgroundColor: 'white',
+      borderRadius: '8px',
+      boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
+    }}>
+      <button
+        onClick={() => setViewMode('traditional')}
+        style={{
+          padding: '10px 20px',
+          backgroundColor: viewMode === 'traditional' ? '#007bff' : '#f8f9fa',
+          color: viewMode === 'traditional' ? 'white' : '#333',
+          border: '1px solid #ddd',
+          borderRadius: '6px',
+          cursor: 'pointer',
+          fontWeight: '500'
+        }}
+      >
+        📋 Traditional View
+      </button>
+      <button
+        onClick={() => setViewMode('assignment')}
+        style={{
+          padding: '10px 20px',
+          backgroundColor: viewMode === 'assignment' ? '#007bff' : '#f8f9fa',
+          color: viewMode === 'assignment' ? 'white' : '#333',
+          border: '1px solid #ddd',
+          borderRadius: '6px',
+          cursor: 'pointer',
+          fontWeight: '500'
+        }}
+      >
+        🎯 Photo Assignment
+      </button>
+      {photoListings.length > 0 && viewMode === 'assignment' && (
+        <button
+          onClick={convertPhotoListingsToTraditional}
+          style={{
+            padding: '10px 20px',
+            backgroundColor: '#28a745',
+            color: 'white',
+            border: 'none',
+            borderRadius: '6px',
+            cursor: 'pointer',
+            fontWeight: '500',
+            marginLeft: 'auto'
+          }}
+        >
+          ➡️ Convert to Traditional ({photoListings.length} listings)
+        </button>
+      )}
+    </div>
+  );
+
   return (
     <div className="batch-editor-content">
       <div className="batch-editor-header">
@@ -2707,19 +2935,376 @@ function BatchEditor() {
         </div>
       </div>
 
-      <main className="main-card">
-        <FormSection 
-          onGenerateListing={handleGenerateListing}
-          batchMode={true}
-          currentBatch={currentBatch}
-        />
-        <BatchPreviewSection 
-          onShowListingManager={handleShowEbayListingManager}
-          currentBatch={currentBatch}
-          onCsvDownload={handleCsvDownload}
-          onEbayListingsCreated={handleEbayListingsCreated}
-        />
-      </main>
+      <ViewModeSelector />
+
+      {viewMode === 'traditional' ? (
+        <main className="main-card">
+          <FormSection 
+            onGenerateListing={handleGenerateListing}
+            batchMode={true}
+            currentBatch={currentBatch}
+          />
+          <BatchPreviewSection 
+            onShowListingManager={handleShowEbayListingManager}
+            currentBatch={currentBatch}
+            onCsvDownload={handleCsvDownload}
+            onEbayListingsCreated={handleEbayListingsCreated}
+          />
+        </main>
+      ) : (
+        // Photo Assignment Interface
+        <div style={{ 
+          padding: '0',
+          backgroundColor: 'transparent',
+          minHeight: '600px'
+        }}>
+          {/* Batch Header */}
+          <div style={{
+            backgroundColor: 'white',
+            padding: '20px',
+            borderRadius: '12px',
+            marginBottom: '20px',
+            boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
+            border: '2px solid #2196f3'
+          }}>
+            <h2 style={{ margin: '0 0 10px 0', color: '#1565c0', display: 'flex', alignItems: 'center', gap: '8px' }}>
+              📦 {currentBatch.name} - Photo Assignment
+            </h2>
+            <div style={{ display: 'flex', gap: '20px', fontSize: '14px', color: '#1976d2', flexWrap: 'wrap' }}>
+              <span style={{ background: 'white', padding: '4px 12px', borderRadius: '6px', border: '1px solid #e3f2fd' }}>
+                Category: {currentBatch.category} / {currentBatch.subCategory}
+              </span>
+              <span style={{ background: 'white', padding: '4px 12px', borderRadius: '6px', border: '1px solid #e3f2fd' }}>
+                Default SKU: {currentBatch.sku || 'ITEM'}
+              </span>
+            </div>
+          </div>
+
+          {/* Main Photo Assignment Interface */}
+          <div style={{ 
+            display: 'grid', 
+            gridTemplateColumns: window.innerWidth > 768 ? '1fr 1fr' : '1fr',
+            gap: '20px',
+            minHeight: '600px'
+          }}>
+            {/* Left Side - Photo Upload Area */}
+            <div style={{
+              backgroundColor: 'white',
+              borderRadius: '12px',
+              padding: '20px',
+              boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
+              display: 'flex',
+              flexDirection: 'column'
+            }}>
+              <h3 style={{ margin: '0 0 15px 0', color: '#333' }}>📸 Photo Upload Area</h3>
+              
+              {/* Upload Drop Zone */}
+              <div
+                onDrop={handleFileDrop}
+                onDragOver={(e) => e.preventDefault()}
+                onClick={() => fileInputRef.current?.click()}
+                style={{
+                  border: '2px dashed #bbb',
+                  borderRadius: '8px',
+                  padding: '30px',
+                  textAlign: 'center',
+                  marginBottom: '20px',
+                  backgroundColor: '#fafafa',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s ease'
+                }}
+              >
+                <div style={{ fontSize: '48px', marginBottom: '10px' }}>📁</div>
+                <p style={{ margin: '0', color: '#666' }}>Drop photos here or click to browse</p>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  multiple
+                  accept="image/*"
+                  onChange={handleFileSelect}
+                  style={{ display: 'none' }}
+                />
+              </div>
+
+              {/* Auto-assign Controls */}
+              {uploadedPhotos.length > 0 && (
+                <div style={{
+                  display: 'flex',
+                  gap: '10px',
+                  alignItems: 'center',
+                  marginBottom: '15px',
+                  padding: '12px',
+                  backgroundColor: '#f8f9fa',
+                  borderRadius: '8px',
+                  flexWrap: 'wrap'
+                }}>
+                  <label style={{ fontSize: '14px', fontWeight: '500' }}>
+                    Auto-assign every
+                  </label>
+                  <select 
+                    value={autoAssignCount} 
+                    onChange={(e) => setAutoAssignCount(Number(e.target.value))}
+                    style={{
+                      padding: '6px 10px',
+                      borderRadius: '4px',
+                      border: '1px solid #ccc'
+                    }}
+                  >
+                    {[1,2,3,4,5,6,8,10,12].map(n => (
+                      <option key={n} value={n}>{n}</option>
+                    ))}
+                  </select>
+                  <label style={{ fontSize: '14px', fontWeight: '500' }}>photos to listings</label>
+                  <button
+                    onClick={autoAssignPhotos}
+                    style={{
+                      padding: '8px 16px',
+                      backgroundColor: '#007bff',
+                      color: 'white',
+                      border: 'none',
+                      borderRadius: '6px',
+                      cursor: 'pointer',
+                      fontSize: '14px',
+                      fontWeight: '500'
+                    }}
+                  >
+                    Auto-assign
+                  </button>
+                </div>
+              )}
+
+              {/* Current SKU Display */}
+              <div style={{
+                padding: '10px',
+                backgroundColor: '#e8f4f8',
+                borderRadius: '6px',
+                marginBottom: '15px',
+                fontSize: '14px'
+              }}>
+                <strong>Current SKU Base:</strong> {currentSku || currentBatch?.sku || 'ITEM'}
+                <button
+                  onClick={() => {
+                    const newSku = prompt('Enter new SKU base:', currentSku || currentBatch?.sku || '');
+                    if (newSku !== null) setCurrentSku(newSku);
+                  }}
+                  style={{
+                    marginLeft: '10px',
+                    padding: '4px 8px',
+                    fontSize: '12px',
+                    backgroundColor: '#fff',
+                    border: '1px solid #ccc',
+                    borderRadius: '4px',
+                    cursor: 'pointer'
+                  }}
+                >
+                  Change
+                </button>
+              </div>
+
+              {/* Uploaded Photos Grid */}
+              <div style={{ flex: 1, overflowY: 'auto' }}>
+                {uploadedPhotos.length === 0 ? (
+                  <div style={{ 
+                    textAlign: 'center', 
+                    color: '#999', 
+                    padding: '40px 20px',
+                    fontSize: '16px'
+                  }}>
+                    No photos uploaded yet
+                  </div>
+                ) : (
+                  <div style={{
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(auto-fill, minmax(80px, 1fr))',
+                    gap: '10px'
+                  }}>
+                    {uploadedPhotos.map(photo => (
+                      <div
+                        key={photo.id}
+                        draggable
+                        onDragStart={() => handlePhotoDragStart(photo)}
+                        style={{
+                          position: 'relative',
+                          aspectRatio: '1',
+                          borderRadius: '6px',
+                          overflow: 'hidden',
+                          cursor: 'move',
+                          border: '2px solid #ddd',
+                          transition: 'transform 0.2s ease'
+                        }}
+                        onMouseEnter={(e) => e.currentTarget.style.transform = 'scale(1.05)'}
+                        onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}
+                      >
+                        <img
+                          src={photo.url}
+                          alt={photo.name}
+                          style={{
+                            width: '100%',
+                            height: '100%',
+                            objectFit: 'cover'
+                          }}
+                        />
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Right Side - Listings Area */}
+            <div style={{
+              backgroundColor: 'white',
+              borderRadius: '12px',
+              padding: '20px',
+              boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
+              display: 'flex',
+              flexDirection: 'column'
+            }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
+                <h3 style={{ margin: '0', color: '#333' }}>📝 Listings ({photoListings.length})</h3>
+                <button
+                  onClick={createEmptyListing}
+                  style={{
+                    padding: '8px 16px',
+                    backgroundColor: '#28a745',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '6px',
+                    cursor: 'pointer',
+                    fontSize: '14px',
+                    fontWeight: '500'
+                  }}
+                >
+                  + New Listing
+                </button>
+              </div>
+
+              {/* Listings Container */}
+              <div style={{ flex: 1, overflowY: 'auto' }}>
+                {photoListings.length === 0 ? (
+                  <div style={{
+                    border: '2px dashed #ccc',
+                    borderRadius: '8px',
+                    padding: '40px 20px',
+                    textAlign: 'center',
+                    color: '#999',
+                    backgroundColor: '#fafafa'
+                  }}>
+                    <div style={{ fontSize: '36px', marginBottom: '10px' }}>🎯</div>
+                    <p style={{ margin: '0 0 10px 0', fontSize: '16px' }}>Drop photos here to create listings</p>
+                    <p style={{ margin: '0', fontSize: '14px' }}>
+                      Or use the auto-assign feature to quickly create multiple listings
+                    </p>
+                  </div>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
+                    {photoListings.map(listing => (
+                      <div
+                        key={listing.id}
+                        onDrop={(e) => handleListingDrop(e, listing.id)}
+                        onDragOver={(e) => e.preventDefault()}
+                        style={{
+                          border: `2px solid ${listing.isGenerated ? '#28a745' : '#007bff'}`,
+                          borderRadius: '8px',
+                          padding: '15px',
+                          backgroundColor: listing.isGenerated ? '#f8fff8' : '#f8f9ff',
+                          position: 'relative'
+                        }}
+                      >
+                        {/* Listing Header */}
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+                          <div>
+                            <h4 style={{ margin: '0 0 4px 0', fontSize: '16px', color: '#333' }}>
+                              {listing.title}
+                            </h4>
+                            <div style={{ fontSize: '12px', color: '#666' }}>
+                              SKU: {listing.sku} • {listing.photos.length} photos
+                            </div>
+                          </div>
+                          <div style={{ display: 'flex', gap: '5px' }}>
+                            {listing.isGenerated && (
+                              <span style={{
+                                backgroundColor: '#28a745',
+                                color: 'white',
+                                padding: '4px 8px',
+                                borderRadius: '4px',
+                                fontSize: '12px',
+                                fontWeight: '500'
+                              }}>
+                                ✓ Generated
+                              </span>
+                            )}
+                            <button
+                              onClick={() => deleteListing(listing.id)}
+                              style={{
+                                padding: '4px 8px',
+                                backgroundColor: '#dc3545',
+                                color: 'white',
+                                border: 'none',
+                                borderRadius: '4px',
+                                cursor: 'pointer',
+                                fontSize: '12px'
+                              }}
+                            >
+                              ✕
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* Photos Grid */}
+                        {listing.photos.length === 0 ? (
+                          <div style={{
+                            border: '1px dashed #ccc',
+                            borderRadius: '6px',
+                            padding: '20px',
+                            textAlign: 'center',
+                            color: '#999',
+                            backgroundColor: 'rgba(255,255,255,0.5)'
+                          }}>
+                            Drop photos here
+                          </div>
+                        ) : (
+                          <div style={{
+                            display: 'grid',
+                            gridTemplateColumns: 'repeat(auto-fill, minmax(60px, 1fr))',
+                            gap: '8px'
+                          }}>
+                            {listing.photos.map(photo => (
+                              <div
+                                key={photo.id}
+                                draggable
+                                onDragStart={() => handlePhotoDragStart(photo, listing.id)}
+                                style={{
+                                  position: 'relative',
+                                  aspectRatio: '1',
+                                  borderRadius: '4px',
+                                  overflow: 'hidden',
+                                  cursor: 'move',
+                                  border: '1px solid #ddd'
+                                }}
+                              >
+                                <img
+                                  src={photo.url}
+                                  alt={photo.name}
+                                  style={{
+                                    width: '100%',
+                                    height: '100%',
+                                    objectFit: 'cover'
+                                  }}
+                                />
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {showListingManager && (
         <div className="listing-modal-overlay">

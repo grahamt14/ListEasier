@@ -100,6 +100,11 @@ function PhotoAssignmentReview({
       if (aiResolveCategoryFields) {
         selectedCategoryOptions._aiResolveCategoryFields = true;
         selectedCategoryOptions._categoryFields = categoryFields;
+        console.log('🤖 AI Category Fields enabled for new listings:', {
+          aiResolveCategoryFields,
+          categoryFieldsCount: categoryFields.length,
+          selectedCategoryOptions
+        });
       }
       
       // Process each new photo listing
@@ -146,27 +151,59 @@ function PhotoAssignmentReview({
               method: "POST",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({
-                images: base64Images,
-                categoryOptions: selectedCategoryOptions
-              }),
+                category: state.category || currentBatch?.category,
+                subCategory: state.subCategory || currentBatch?.subCategory,
+                Base64Key: [base64Images],
+                SelectedCategoryOptions: {
+                  ...selectedCategoryOptions,
+                  sku: listing.sku
+                }
+              })
             }
           );
           
           if (!response.ok) {
-            throw new Error(`API request failed: ${response.status}`);
+            throw new Error(`API error: ${response.status}`);
           }
           
-          const result = await response.json();
+          const data = await response.json();
+          let parsed = data.body;
+          if (typeof parsed === "string") parsed = JSON.parse(parsed);
+          
+          const result = Array.isArray(parsed) ? parsed[0] : parsed;
+          
+          console.log('🔍 API Response for new listing:', {
+            sku: listing.sku,
+            title: result.title,
+            description: result.description,
+            fieldSelections: result.fieldSelections,
+            aiResolvedFields: result.aiResolvedFields,
+            fullResult: result
+          });
+          
+          // Merge AI resolved fields if available
+          let finalFieldSelections = { ...fieldSelections };
+          if (result.aiResolvedFields) {
+            Object.entries(result.aiResolvedFields).forEach(([fieldName, aiValue]) => {
+              const currentValue = fieldSelections[fieldName];
+              if (!currentValue || currentValue === "-- Select --" || currentValue.trim() === "") {
+                if (aiValue && aiValue !== "Unknown" && aiValue !== "Not Specified") {
+                  finalFieldSelections[fieldName] = aiValue.trim();
+                }
+              }
+            });
+          }
           
           // Create the listing object
           const generatedListing = {
             id: listing.id,
-            title: result.title || 'Generated Title',
-            description: result.description || 'Generated description',
-            price: result.price || currentBatch?.salePrice || '0.00',
+            title: result.title || `Listing for ${listing.sku}`,
+            description: result.description || '',
+            price: result.price || state.price || currentBatch?.salePrice || '',
             sku: listing.sku,
             photos: listing.photos,
-            fieldSelections: result.fieldSelections || {},
+            base64Images: base64Images,
+            fieldSelections: finalFieldSelections,
             aiResolvedFields: result.aiResolvedFields || {},
             error: null
           };
@@ -240,6 +277,11 @@ function PhotoAssignmentReview({
       if (aiResolveCategoryFields) {
         selectedCategoryOptions._aiResolveCategoryFields = true;
         selectedCategoryOptions._categoryFields = categoryFields;
+        console.log('🤖 AI Category Fields enabled for main generation:', {
+          aiResolveCategoryFields,
+          categoryFieldsCount: categoryFields.length,
+          selectedCategoryOptions
+        });
       }
       
       // Process each photo listing
@@ -306,6 +348,15 @@ function PhotoAssignmentReview({
           if (typeof parsed === "string") parsed = JSON.parse(parsed);
           
           const result = Array.isArray(parsed) ? parsed[0] : parsed;
+          
+          console.log('🔍 API Response for main listing:', {
+            sku: listing.sku,
+            title: result.title,
+            description: result.description,
+            fieldSelections: result.fieldSelections,
+            aiResolvedFields: result.aiResolvedFields,
+            fullResult: result
+          });
           
           // Merge AI resolved fields if available
           let finalFieldSelections = { ...fieldSelections };

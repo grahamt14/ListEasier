@@ -16,6 +16,7 @@ import { EbayAuthProvider, useEbayAuth } from './EbayAuthContext';
 import { CategoryProvider, useCategories } from './CategoryContext';
 import EbayListingManager from './EbayListingManager';
 import BatchPreviewSection from './BatchPreviewSection';
+import EbayAuth from './EbayAuth';
 import { cacheService } from './CacheService';
 import AuthenticationWrapper from './AuthenticationWrapper';
 import LandingPage from './LandingPage';
@@ -1482,6 +1483,8 @@ function DeleteBatchModal({ isOpen, onClose, onConfirm, batchName }) {
 function Sidebar() {
   const { batches, dispatch, statusFilter, sidebarCollapsed, viewMode, user } = useBatch();
   const { logout } = useAuth0();
+  const { isAuthenticated: ebayAuthenticated, logout: ebayLogout, userProfile } = useEbayAuth();
+  const [showEbayAuth, setShowEbayAuth] = useState(false);
   
   const getFilterCounts = () => {
     const open = batches.filter(batch => 
@@ -1503,6 +1506,16 @@ function Sidebar() {
 
   const handleCreateBatch = () => {
     dispatch({ type: 'SET_VIEW_MODE', payload: 'create' });
+  };
+
+  const handleEbayConnect = () => {
+    setShowEbayAuth(true);
+  };
+
+  const handleEbayDisconnect = () => {
+    if (confirm('Are you sure you want to disconnect your eBay account?')) {
+      ebayLogout();
+    }
   };
 
   const handleLogout = () => {
@@ -1629,6 +1642,78 @@ function Sidebar() {
           </ul>
         </div>
 
+        {/* eBay Account Section */}
+        <div className="nav-section">
+          <div className="nav-section-header">
+            {!sidebarCollapsed && <span>eBay Account</span>}
+          </div>
+          <ul className="nav-list">
+            {ebayAuthenticated ? (
+              <li className="nav-item">
+                <div className="ebay-account-info">
+                  {!sidebarCollapsed && (
+                    <div style={{
+                      padding: '8px 12px',
+                      backgroundColor: '#e8f5e8',
+                      borderRadius: '6px',
+                      marginBottom: '8px',
+                      border: '1px solid #4caf50'
+                    }}>
+                      <div style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '8px',
+                        marginBottom: '4px'
+                      }}>
+                        <span style={{ color: '#4caf50', fontSize: '16px' }}>✅</span>
+                        <span style={{ color: '#2e7d32', fontWeight: '500' }}>Connected</span>
+                      </div>
+                      {userProfile && (
+                        <div style={{ color: '#666', fontSize: '12px' }}>
+                          {userProfile.username || userProfile.email || 'eBay User'}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                  <button
+                    className="nav-link"
+                    onClick={handleEbayDisconnect}
+                    title="Disconnect eBay Account"
+                    style={{
+                      color: '#dc3545',
+                      border: '1px solid #dc3545',
+                      backgroundColor: 'transparent'
+                    }}
+                  >
+                    <svg className="nav-icon" viewBox="0 0 24 24" fill="currentColor">
+                      <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm5 11H7v-2h10v2z"/>
+                    </svg>
+                    {!sidebarCollapsed && <span>Disconnect</span>}
+                  </button>
+                </div>
+              </li>
+            ) : (
+              <li className="nav-item">
+                <button
+                  className="nav-link"
+                  onClick={handleEbayConnect}
+                  title="Connect eBay Account"
+                  style={{
+                    color: '#007bff',
+                    border: '1px solid #007bff',
+                    backgroundColor: 'transparent'
+                  }}
+                >
+                  <svg className="nav-icon" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/>
+                  </svg>
+                  {!sidebarCollapsed && <span>Connect eBay</span>}
+                </button>
+              </li>
+            )}
+          </ul>
+        </div>
+
         {/* Recent Batches */}
         {!sidebarCollapsed && batches.length > 0 && (
           <div className="nav-section">
@@ -1678,6 +1763,62 @@ function Sidebar() {
           </div>
         )}
       </nav>
+      
+      {/* eBay Auth Modal */}
+      {showEbayAuth && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: 'rgba(0, 0, 0, 0.5)',
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center',
+          zIndex: 1001
+        }}>
+          <div style={{
+            backgroundColor: 'white',
+            borderRadius: '12px',
+            padding: '20px',
+            width: '90%',
+            maxWidth: '600px',
+            maxHeight: '90vh',
+            overflow: 'auto',
+            position: 'relative'
+          }}>
+            <button
+              onClick={() => setShowEbayAuth(false)}
+              style={{
+                position: 'absolute',
+                top: '15px',
+                right: '15px',
+                background: 'none',
+                border: 'none',
+                fontSize: '24px',
+                cursor: 'pointer',
+                color: '#666'
+              }}
+            >
+              ×
+            </button>
+            <h2 style={{ margin: '0 0 20px 0', color: '#333' }}>
+              Connect Your eBay Account
+            </h2>
+            <EbayAuth 
+              onAuthSuccess={() => {
+                console.log('eBay authentication successful from sidebar');
+                setShowEbayAuth(false);
+              }}
+              onAuthError={(error) => {
+                console.error('eBay authentication error from sidebar:', error);
+              }}
+              redirectAfterAuth={window.location.pathname + window.location.search}
+            />
+          </div>
+        </div>
+      )}
     </div>
   );
 }

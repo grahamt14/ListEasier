@@ -3800,6 +3800,9 @@ function BatchEditor() {
           }}
           currentBatch={currentBatch}
           categoryFields={categoryFields}
+          category={state.category}
+          subCategory={state.subCategory}
+          categoryID={state.categoryID}
           aiResolveCategoryFields={aiResolveCategoryFields}
         />
       ) : null}

@@ -13,7 +13,10 @@ function PhotoAssignmentReview({
   categoryFields = [],
   aiResolveCategoryFields = false,
   generatedListings: initialGeneratedListings = [],
-  onGeneratedListingsChange
+  onGeneratedListingsChange,
+  category,
+  subCategory,
+  categoryID
 }) {
   const [selectedListing, setSelectedListing] = useState(null);
   const [selectedListingIndex, setSelectedListingIndex] = useState(null);
@@ -21,13 +24,18 @@ function PhotoAssignmentReview({
   const [isGenerating, setIsGenerating] = useState(false);
   const [generationProgress, setGenerationProgress] = useState(0);
   const [error, setError] = useState(null);
-  const [editMode, setEditMode] = useState(false);
-  const [editedListing, setEditedListing] = useState(null);
   const [showEbayListingManager, setShowEbayListingManager] = useState(false);
   const [showEbayAuth, setShowEbayAuth] = useState(false);
   
   const { state, dispatch } = useAppState();
   const { isAuthenticated: ebayAuthenticated, selectedPolicies } = useEbayAuth();
+  
+  // Ensure categoryID is set in the state when component mounts
+  useEffect(() => {
+    if (categoryID && state.categoryID !== categoryID) {
+      dispatch({ type: 'SET_CATEGORY_ID', payload: categoryID });
+    }
+  }, [categoryID, state.categoryID, dispatch]);
   
   // Generate listings when component mounts (only if we don't have saved listings)
   useEffect(() => {
@@ -195,6 +203,11 @@ function PhotoAssignmentReview({
       
       dispatch({ type: 'SET_RESPONSE_DATA', payload: responseData });
       
+      // Also update the parent component
+      if (onGeneratedListingsChange) {
+        onGeneratedListingsChange(results);
+      }
+      
     } catch (error) {
       console.error('Error generating listings:', error);
       setError(error.message);
@@ -205,22 +218,20 @@ function PhotoAssignmentReview({
   const handleListingSelect = (listing, index) => {
     setSelectedListing(listing);
     setSelectedListingIndex(index);
-    setEditMode(false);
-    setEditedListing(null);
   };
   
-  const handleEdit = () => {
-    setEditMode(true);
-    setEditedListing({ ...selectedListing });
-  };
-  
-  const handleSave = () => {
-    // Update the listing in the array
+  const updateListing = (field, value) => {
+    if (!selectedListing) return;
+    
+    const updatedListing = {
+      ...selectedListing,
+      [field]: value
+    };
+    
     const updatedListings = [...generatedListings];
-    updatedListings[selectedListingIndex] = editedListing;
+    updatedListings[selectedListingIndex] = updatedListing;
     setGeneratedListings(updatedListings);
-    setSelectedListing(editedListing);
-    setEditMode(false);
+    setSelectedListing(updatedListing);
     
     // Update app state
     const responseData = updatedListings.map(listing => ({
@@ -234,21 +245,46 @@ function PhotoAssignmentReview({
     }));
     
     dispatch({ type: 'SET_RESPONSE_DATA', payload: responseData });
+    
+    // Also update the parent component
+    if (onGeneratedListingsChange) {
+      onGeneratedListingsChange(updatedListings);
+    }
   };
   
-  const handleCancel = () => {
-    setEditMode(false);
-    setEditedListing(null);
-  };
-  
-  const handleFieldChange = (field, value) => {
-    setEditedListing({
-      ...editedListing,
+  const updateFieldSelection = (field, value) => {
+    if (!selectedListing) return;
+    
+    const updatedListing = {
+      ...selectedListing,
       fieldSelections: {
-        ...editedListing.fieldSelections,
+        ...selectedListing.fieldSelections,
         [field]: value
       }
-    });
+    };
+    
+    const updatedListings = [...generatedListings];
+    updatedListings[selectedListingIndex] = updatedListing;
+    setGeneratedListings(updatedListings);
+    setSelectedListing(updatedListing);
+    
+    // Update app state
+    const responseData = updatedListings.map(listing => ({
+      title: listing.title,
+      description: listing.description,
+      price: listing.price,
+      sku: listing.sku,
+      storedFieldSelections: listing.fieldSelections,
+      aiResolvedFields: listing.aiResolvedFields,
+      error: listing.error
+    }));
+    
+    dispatch({ type: 'SET_RESPONSE_DATA', payload: responseData });
+    
+    // Also update the parent component
+    if (onGeneratedListingsChange) {
+      onGeneratedListingsChange(updatedListings);
+    }
   };
   
   const downloadCSV = () => {
@@ -529,58 +565,9 @@ function PhotoAssignmentReview({
           }}>
             {selectedListing ? (
               <div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-                  <h3 style={{ margin: 0, fontSize: '24px', color: '#333' }}>
-                    {editMode ? 'Edit Listing' : 'Listing Details'}
-                  </h3>
-                  {!editMode ? (
-                    <button
-                      onClick={handleEdit}
-                      style={{
-                        padding: '8px 16px',
-                        backgroundColor: '#007bff',
-                        color: 'white',
-                        border: 'none',
-                        borderRadius: '6px',
-                        cursor: 'pointer',
-                        fontWeight: '500'
-                      }}
-                    >
-                      ✏️ Edit
-                    </button>
-                  ) : (
-                    <div style={{ display: 'flex', gap: '10px' }}>
-                      <button
-                        onClick={handleCancel}
-                        style={{
-                          padding: '8px 16px',
-                          backgroundColor: '#6c757d',
-                          color: 'white',
-                          border: 'none',
-                          borderRadius: '6px',
-                          cursor: 'pointer',
-                          fontWeight: '500'
-                        }}
-                      >
-                        Cancel
-                      </button>
-                      <button
-                        onClick={handleSave}
-                        style={{
-                          padding: '8px 16px',
-                          backgroundColor: '#28a745',
-                          color: 'white',
-                          border: 'none',
-                          borderRadius: '6px',
-                          cursor: 'pointer',
-                          fontWeight: '500'
-                        }}
-                      >
-                        Save
-                      </button>
-                    </div>
-                  )}
-                </div>
+                <h3 style={{ margin: '0 0 20px 0', fontSize: '24px', color: '#333' }}>
+                  Listing Details
+                </h3>
                 
                 {/* Images */}
                 <div style={{ marginBottom: '20px' }}>
@@ -592,7 +579,7 @@ function PhotoAssignmentReview({
                     gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))',
                     gap: '10px'
                   }}>
-                    {(editMode ? editedListing : selectedListing).photos.map((photo, index) => (
+                    {selectedListing.photos.map((photo, index) => (
                       <img
                         key={photo.id}
                         src={photo.url}
@@ -612,68 +599,52 @@ function PhotoAssignmentReview({
                 {/* Title */}
                 <div style={{ marginBottom: '20px' }}>
                   <h4 style={{ margin: '0 0 5px 0', fontSize: '14px', color: '#666' }}>Title</h4>
-                  {editMode ? (
-                    <input
-                      type="text"
-                      value={editedListing.title}
-                      onChange={(e) => setEditedListing({ ...editedListing, title: e.target.value })}
-                      style={{
-                        width: '100%',
-                        padding: '10px',
-                        fontSize: '16px',
-                        border: '1px solid #ddd',
-                        borderRadius: '6px'
-                      }}
-                    />
-                  ) : (
-                    <p style={{ margin: 0, fontSize: '20px', color: '#333', fontWeight: '500' }}>
-                      {selectedListing.title}
-                    </p>
-                  )}
+                  <input
+                    type="text"
+                    value={selectedListing.title}
+                    onChange={(e) => updateListing('title', e.target.value)}
+                    style={{
+                      width: '100%',
+                      padding: '10px',
+                      fontSize: '16px',
+                      border: '1px solid #ddd',
+                      borderRadius: '6px'
+                    }}
+                  />
                 </div>
                 
                 {/* Details */}
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', marginBottom: '20px' }}>
                   <div>
                     <h4 style={{ margin: '0 0 5px 0', fontSize: '14px', color: '#666' }}>SKU</h4>
-                    {editMode ? (
-                      <input
-                        type="text"
-                        value={editedListing.sku}
-                        onChange={(e) => setEditedListing({ ...editedListing, sku: e.target.value })}
-                        style={{
-                          width: '100%',
-                          padding: '8px',
-                          fontSize: '14px',
-                          border: '1px solid #ddd',
-                          borderRadius: '4px'
-                        }}
-                      />
-                    ) : (
-                      <p style={{ margin: 0, fontSize: '16px', color: '#333' }}>{selectedListing.sku}</p>
-                    )}
+                    <input
+                      type="text"
+                      value={selectedListing.sku}
+                      onChange={(e) => updateListing('sku', e.target.value)}
+                      style={{
+                        width: '100%',
+                        padding: '8px',
+                        fontSize: '14px',
+                        border: '1px solid #ddd',
+                        borderRadius: '4px'
+                      }}
+                    />
                   </div>
                   <div>
                     <h4 style={{ margin: '0 0 5px 0', fontSize: '14px', color: '#666' }}>Price</h4>
-                    {editMode ? (
-                      <input
-                        type="text"
-                        value={editedListing.price}
-                        onChange={(e) => setEditedListing({ ...editedListing, price: e.target.value })}
-                        placeholder="0.00"
-                        style={{
-                          width: '100%',
-                          padding: '8px',
-                          fontSize: '14px',
-                          border: '1px solid #ddd',
-                          borderRadius: '4px'
-                        }}
-                      />
-                    ) : (
-                      <p style={{ margin: 0, fontSize: '16px', color: '#333' }}>
-                        ${selectedListing.price || 'Not set'}
-                      </p>
-                    )}
+                    <input
+                      type="text"
+                      value={selectedListing.price}
+                      onChange={(e) => updateListing('price', e.target.value)}
+                      placeholder="0.00"
+                      style={{
+                        width: '100%',
+                        padding: '8px',
+                        fontSize: '14px',
+                        border: '1px solid #ddd',
+                        borderRadius: '4px'
+                      }}
+                    />
                   </div>
                 </div>
                 
@@ -682,61 +653,55 @@ function PhotoAssignmentReview({
                   <h4 style={{ margin: '0 0 10px 0', fontSize: '16px', color: '#555' }}>
                     Description
                   </h4>
-                  {editMode ? (
-                    <textarea
-                      value={editedListing.description}
-                      onChange={(e) => setEditedListing({ ...editedListing, description: e.target.value })}
-                      rows={10}
-                      style={{
-                        width: '100%',
-                        padding: '12px',
-                        fontSize: '14px',
-                        border: '1px solid #ddd',
-                        borderRadius: '6px',
-                        resize: 'vertical'
-                      }}
-                    />
-                  ) : (
-                    <div style={{
-                      padding: '15px',
-                      backgroundColor: '#f8f9fa',
-                      borderRadius: '6px',
+                  <textarea
+                    value={selectedListing.description}
+                    onChange={(e) => updateListing('description', e.target.value)}
+                    rows={10}
+                    style={{
+                      width: '100%',
+                      padding: '12px',
                       fontSize: '14px',
-                      lineHeight: '1.6',
-                      whiteSpace: 'pre-wrap'
-                    }}>
-                      {selectedListing.description}
-                    </div>
-                  )}
+                      border: '1px solid #ddd',
+                      borderRadius: '6px',
+                      resize: 'vertical'
+                    }}
+                  />
                 </div>
                 
                 {/* Category Fields */}
-                {categoryFields && categoryFields.length > 0 && (editMode ? editedListing : selectedListing).fieldSelections && (
+                {categoryFields && categoryFields.length > 0 && (
                   <div>
                     <h4 style={{ margin: '0 0 10px 0', fontSize: '16px', color: '#555' }}>
                       Category Fields
                     </h4>
                     <div style={{
                       display: 'grid',
-                      gridTemplateColumns: editMode ? '1fr' : '1fr 1fr',
-                      gap: editMode ? '15px' : '10px',
+                      gridTemplateColumns: '1fr',
+                      gap: '15px',
                       padding: '15px',
                       backgroundColor: '#f8f9fa',
                       borderRadius: '6px'
                     }}>
                       {categoryFields.map((field) => {
-                        const value = (editMode ? editedListing : selectedListing).fieldSelections[field.FieldLabel] || '';
+                        const value = (selectedListing.fieldSelections && selectedListing.fieldSelections[field.FieldLabel]) || '';
                         const options = field.CategoryOptions ? field.CategoryOptions.split(';').map(opt => opt.trim()) : [];
                         
-                        return editMode ? (
+                        return (
                           <div key={field.FieldLabel}>
                             <label style={{ display: 'block', marginBottom: '5px', fontSize: '14px', fontWeight: '500' }}>
                               {field.FieldLabel}
+                              {selectedListing.aiResolvedFields && 
+                               selectedListing.aiResolvedFields[field.FieldLabel] && 
+                               selectedListing.aiResolvedFields[field.FieldLabel] === value && (
+                                <span style={{ marginLeft: '5px', color: '#007bff', fontSize: '12px' }}>
+                                  (AI)
+                                </span>
+                              )}
                             </label>
                             {options.length > 0 ? (
                               <select
                                 value={value}
-                                onChange={(e) => handleFieldChange(field.FieldLabel, e.target.value)}
+                                onChange={(e) => updateFieldSelection(field.FieldLabel, e.target.value)}
                                 style={{
                                   width: '100%',
                                   padding: '8px',
@@ -755,7 +720,7 @@ function PhotoAssignmentReview({
                               <input
                                 type="text"
                                 value={value}
-                                onChange={(e) => handleFieldChange(field.FieldLabel, e.target.value)}
+                                onChange={(e) => updateFieldSelection(field.FieldLabel, e.target.value)}
                                 style={{
                                   width: '100%',
                                   padding: '8px',
@@ -764,17 +729,6 @@ function PhotoAssignmentReview({
                                   borderRadius: '4px'
                                 }}
                               />
-                            )}
-                          </div>
-                        ) : (
-                          <div key={field.FieldLabel} style={{ fontSize: '14px' }}>
-                            <strong>{field.FieldLabel}:</strong> {value || 'Not set'}
-                            {selectedListing.aiResolvedFields && 
-                             selectedListing.aiResolvedFields[field.FieldLabel] && 
-                             selectedListing.aiResolvedFields[field.FieldLabel] === value && (
-                              <span style={{ marginLeft: '5px', color: '#007bff', fontSize: '12px' }}>
-                                (AI)
-                              </span>
                             )}
                           </div>
                         );

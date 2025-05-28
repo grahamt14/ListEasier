@@ -126,8 +126,8 @@ function PhotoAssignmentReview({
       
       img.onload = () => {
         try {
-          // Use OffscreenCanvas if available for better performance
-          const canvas = new OffscreenCanvas ? new OffscreenCanvas(800, 600) : document.createElement('canvas');
+          // Use regular canvas - OffscreenCanvas has compatibility issues
+          const canvas = document.createElement('canvas');
           const ctx = canvas.getContext('2d');
           
           // Calculate optimal dimensions
@@ -149,18 +149,8 @@ function PhotoAssignmentReview({
           ctx.drawImage(img, 0, 0, width, height);
           
           // Convert to base64 with optimized quality
-          if (canvas.convertToBlob) {
-            // Use blob conversion if available (more efficient)
-            canvas.convertToBlob({ type: 'image/jpeg', quality: 0.8 }).then(blob => {
-              const reader = new FileReader();
-              reader.onload = () => resolve(reader.result);
-              reader.readAsDataURL(blob);
-            });
-          } else {
-            // Fallback to dataURL
-            const base64 = canvas.toDataURL('image/jpeg', 0.8);
-            resolve(base64);
-          }
+          const base64 = canvas.toDataURL('image/jpeg', 0.8);
+          resolve(base64);
         } catch (error) {
           reject(error);
         }

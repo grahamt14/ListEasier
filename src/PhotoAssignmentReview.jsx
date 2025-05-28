@@ -2,9 +2,9 @@ import React, { useState, useEffect } from 'react';
 import { useAppState } from './StateContext';
 import { useEbayAuth } from './EbayAuthContext';
 import { getSelectedCategoryOptionsJSON } from './FormSection';
-import JSZip from 'jszip';
 import { saveAs } from 'file-saver';
 import EbayListingManager from './EbayListingManager';
+import EbayAuth from './EbayAuth';
 
 function PhotoAssignmentReview({ 
   photoListings, 
@@ -22,12 +22,14 @@ function PhotoAssignmentReview({
   const [editMode, setEditMode] = useState(false);
   const [editedListing, setEditedListing] = useState(null);
   const [showEbayListingManager, setShowEbayListingManager] = useState(false);
+  const [showEbayAuth, setShowEbayAuth] = useState(false);
   
   const { state, dispatch } = useAppState();
   const { isAuthenticated: ebayAuthenticated, selectedPolicies } = useEbayAuth();
   
   // Generate listings when component mounts
   useEffect(() => {
+    console.log('PhotoAssignmentReview mounted with categoryFields:', categoryFields);
     generateListings();
   }, []);
   
@@ -282,51 +284,6 @@ function PhotoAssignmentReview({
     saveAs(blob, `${currentBatch?.name || 'listings'}_${new Date().toISOString().split('T')[0]}.csv`);
   };
   
-  const downloadZip = async () => {
-    if (generatedListings.length === 0) return;
-    
-    const zip = new JSZip();
-    
-    // Add CSV
-    const headers = ['Title', 'Description', 'Price', 'SKU'];
-    if (categoryFields.length > 0) {
-      categoryFields.forEach(field => headers.push(field.FieldLabel));
-    }
-    
-    const rows = generatedListings.map(listing => {
-      const row = [listing.title, listing.description, listing.price, listing.sku];
-      if (categoryFields.length > 0) {
-        categoryFields.forEach(field => {
-          row.push(listing.fieldSelections[field.FieldLabel] || '');
-        });
-      }
-      return row;
-    });
-    
-    const csvContent = [
-      headers.join(','),
-      ...rows.map(row => row.map(cell => `"${cell}"`).join(','))
-    ].join('\n');
-    
-    zip.file('listings.csv', csvContent);
-    
-    // Add images for each listing
-    for (let i = 0; i < generatedListings.length; i++) {
-      const listing = generatedListings[i];
-      const folder = zip.folder(`listing_${i + 1}_${listing.sku}`);
-      
-      for (let j = 0; j < listing.photos.length; j++) {
-        const photo = listing.photos[j];
-        const response = await fetch(photo.url);
-        const blob = await response.blob();
-        folder.file(`image_${j + 1}.jpg`, blob);
-      }
-    }
-    
-    // Generate and download zip
-    const zipBlob = await zip.generateAsync({ type: 'blob' });
-    saveAs(zipBlob, `${currentBatch?.name || 'listings'}_${new Date().toISOString().split('T')[0]}.zip`);
-  };
   
   const handleEbayListingsCreated = (count) => {
     console.log(`${count} listings created on eBay`);
@@ -389,21 +346,7 @@ function PhotoAssignmentReview({
               >
                 📄 Download CSV
               </button>
-              <button
-                onClick={downloadZip}
-                style={{
-                  padding: '10px 20px',
-                  backgroundColor: '#ffc107',
-                  color: '#333',
-                  border: 'none',
-                  borderRadius: '6px',
-                  cursor: 'pointer',
-                  fontWeight: '500'
-                }}
-              >
-                📦 Download ZIP
-              </button>
-              {ebayAuthenticated && (
+              {ebayAuthenticated ? (
                 <button
                   onClick={() => setShowEbayListingManager(true)}
                   style={{
@@ -417,6 +360,21 @@ function PhotoAssignmentReview({
                   }}
                 >
                   🛒 List on eBay
+                </button>
+              ) : (
+                <button
+                  onClick={() => setShowEbayAuth(true)}
+                  style={{
+                    padding: '10px 20px',
+                    backgroundColor: '#007bff',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '6px',
+                    cursor: 'pointer',
+                    fontWeight: '500'
+                  }}
+                >
+                  🔗 Connect eBay Account
                 </button>
               )}
             </>
@@ -742,7 +700,7 @@ function PhotoAssignmentReview({
                 </div>
                 
                 {/* Category Fields */}
-                {categoryFields.length > 0 && (
+                {categoryFields && categoryFields.length > 0 && (editMode ? editedListing : selectedListing).fieldSelections && (
                   <div>
                     <h4 style={{ margin: '0 0 10px 0', fontSize: '16px', color: '#555' }}>
                       Category Fields
@@ -859,6 +817,61 @@ function PhotoAssignmentReview({
             <EbayListingManager 
               onClose={() => setShowEbayListingManager(false)}
               onListingsCreated={handleEbayListingsCreated}
+            />
+          </div>
+        </div>
+      )}
+      
+      {/* eBay Auth Modal */}
+      {showEbayAuth && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: 'rgba(0, 0, 0, 0.5)',
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center',
+          zIndex: 1001
+        }}>
+          <div style={{
+            backgroundColor: 'white',
+            borderRadius: '12px',
+            padding: '20px',
+            width: '90%',
+            maxWidth: '600px',
+            maxHeight: '90vh',
+            overflow: 'auto',
+            position: 'relative'
+          }}>
+            <button
+              onClick={() => setShowEbayAuth(false)}
+              style={{
+                position: 'absolute',
+                top: '15px',
+                right: '15px',
+                background: 'none',
+                border: 'none',
+                fontSize: '24px',
+                cursor: 'pointer',
+                color: '#666'
+              }}
+            >
+              ×
+            </button>
+            <h2 style={{ margin: '0 0 20px 0', color: '#333' }}>
+              Connect Your eBay Account
+            </h2>
+            <EbayAuth 
+              onAuthSuccess={() => {
+                console.log('eBay authentication successful');
+                setShowEbayAuth(false);
+              }}
+              onAuthError={(error) => {
+                console.error('eBay authentication error:', error);
+              }}
             />
           </div>
         </div>

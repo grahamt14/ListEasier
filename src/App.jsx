@@ -2217,8 +2217,12 @@ function BatchWizard() {
     purchasePrice: '',
     salePrice: '',
     sku: '',
-    batchDescription: ''
+    batchDescription: '',
+    categoryFieldSelections: {},
+    omittedCategoryFields: []
   });
+  const [categoryFields, setCategoryFields] = useState([]);
+  const [categoryFieldsLoading, setCategoryFieldsLoading] = useState(false);
 
   const [showTemplateModal, setShowTemplateModal] = useState(false);
   
@@ -2226,6 +2230,68 @@ function BatchWizard() {
   const { categories, categoriesLoading } = useCategories();
 
   const subcategories = categories[batchData.category] || ['--'];
+  
+  // Function to fetch category fields
+  const fetchCategoryFields = async (category, subCategory) => {
+    if (!category || category === '--' || !subCategory || subCategory === '--') {
+      setCategoryFields([]);
+      return;
+    }
+    
+    setCategoryFieldsLoading(true);
+    try {
+      // Check cache first
+      const cachedFields = cacheService.getCategoryFields(category, subCategory);
+      if (cachedFields) {
+        setCategoryFields(cachedFields);
+        setCategoryFieldsLoading(false);
+        return;
+      }
+      
+      // AWS Configuration
+      const REGION = "us-east-2";
+      const IDENTITY_POOL_ID = "us-east-2:f81d1240-32a8-4aff-87e8-940effdf5908";
+      
+      const client = new DynamoDBClient({
+        region: REGION,
+        credentials: fromCognitoIdentityPool({
+          clientConfig: { region: REGION },
+          identityPoolId: IDENTITY_POOL_ID,
+        }),
+      });
+      
+      const dynamoQuery = {
+        TableName: "CategoryFields",
+        KeyConditionExpression: "SubCategoryType = :sub",
+        ExpressionAttributeValues: {
+          ":sub": { S: subCategory }
+        },
+      };
+      
+      const command = new QueryCommand(dynamoQuery);
+      const response = await client.send(command);
+      const items = response.Items?.map(item => unmarshall(item)) || [];
+      
+      // Cache the result
+      cacheService.setCategoryFields(category, subCategory, items);
+      setCategoryFields(items);
+      
+    } catch (error) {
+      console.error('Error fetching category fields in BatchWizard:', error);
+      setCategoryFields([]);
+    } finally {
+      setCategoryFieldsLoading(false);
+    }
+  };
+  
+  // Fetch category fields when category/subcategory changes
+  useEffect(() => {
+    if (batchData.category !== '--' && batchData.subCategory !== '--') {
+      fetchCategoryFields(batchData.category, batchData.subCategory);
+    } else {
+      setCategoryFields([]);
+    }
+  }, [batchData.category, batchData.subCategory]);
 
   // Auto-select first subcategory when category changes
   useEffect(() => {
@@ -2234,16 +2300,29 @@ function BatchWizard() {
       if (availableSubcategories.length > 0 && availableSubcategories[0] !== '--') {
         setBatchData(prev => ({
           ...prev,
-          subCategory: availableSubcategories[0]
+          subCategory: availableSubcategories[0],
+          categoryFieldSelections: {}, // Clear field selections when category changes
+          omittedCategoryFields: [] // Clear omitted fields when category changes
         }));
       } else if (availableSubcategories.length > 1) {
         setBatchData(prev => ({
           ...prev,
-          subCategory: availableSubcategories[1]
+          subCategory: availableSubcategories[1],
+          categoryFieldSelections: {}, // Clear field selections when category changes
+          omittedCategoryFields: [] // Clear omitted fields when category changes
         }));
       }
     }
   }, [batchData.category, categories]);
+  
+  // Clear category field selections when subcategory changes
+  useEffect(() => {
+    setBatchData(prev => ({
+      ...prev,
+      categoryFieldSelections: {},
+      omittedCategoryFields: []
+    }));
+  }, [batchData.subCategory]);
 
   const filteredTemplates = templates.filter(template => 
     (!template.category || template.category === batchData.category) &&
@@ -2266,7 +2345,9 @@ function BatchWizard() {
         subCategory: String(batchData.subCategory || '--'),
         salePrice: String(batchData.salePrice || ''),
         sku: String(batchData.sku || ''),
-        batchDescription: String(batchData.batchDescription || '')
+        batchDescription: String(batchData.batchDescription || ''),
+        categoryFieldSelections: batchData.categoryFieldSelections || {},
+        omittedCategoryFields: batchData.omittedCategoryFields || []
       };
       
       const newBatch = createBatch(sanitizedBatchData);
@@ -2285,6 +2366,32 @@ function BatchWizard() {
     console.log('🧹 BatchWizard: Clearing app state on cancel');
     appDispatch({ type: 'CLEAR_ALL_FOR_NEW_BATCH' });
     dispatch({ type: 'SET_VIEW_MODE', payload: 'overview' });
+  };
+  
+  // Handle category field selection changes
+  const handleCategoryFieldChange = (fieldLabel, value) => {
+    setBatchData(prev => ({
+      ...prev,
+      categoryFieldSelections: {
+        ...prev.categoryFieldSelections,
+        [fieldLabel]: value
+      }
+    }));
+  };
+  
+  // Handle field omission toggle
+  const handleFieldOmitToggle = (fieldLabel) => {
+    setBatchData(prev => {
+      const isCurrentlyOmitted = prev.omittedCategoryFields.includes(fieldLabel);
+      const newOmittedFields = isCurrentlyOmitted
+        ? prev.omittedCategoryFields.filter(field => field !== fieldLabel)
+        : [...prev.omittedCategoryFields, fieldLabel];
+      
+      return {
+        ...prev,
+        omittedCategoryFields: newOmittedFields
+      };
+    });
   };
 
   const canProceed = () => {
@@ -2579,6 +2686,145 @@ function BatchWizard() {
                   rows="4"
                 />
               </div>
+              
+              {/* Category Fields Section */}
+              {(categoryFields.length > 0 || categoryFieldsLoading) && (
+                <div className="form-group">
+                  <div style={{ 
+                    display: 'flex', 
+                    justifyContent: 'space-between', 
+                    alignItems: 'center',
+                    marginBottom: '12px'
+                  }}>
+                    <label style={{ margin: 0 }}>Category Fields</label>
+                    <small style={{ color: '#666', fontSize: '0.8rem' }}>
+                      Set default values for category-specific fields
+                    </small>
+                  </div>
+                  
+                  {categoryFieldsLoading ? (
+                    <div style={{ 
+                      display: 'flex', 
+                      alignItems: 'center', 
+                      gap: '10px',
+                      padding: '20px',
+                      backgroundColor: '#f8f9fa',
+                      borderRadius: '6px',
+                      border: '1px solid #e9ecef'
+                    }}>
+                      <div className="spinner">
+                        <div className="spinner-circle"></div>
+                      </div>
+                      <span>Loading category fields...</span>
+                    </div>
+                  ) : (
+                    <div style={{
+                      backgroundColor: '#f8f9fa',
+                      borderRadius: '6px',
+                      border: '1px solid #e9ecef',
+                      padding: '15px'
+                    }}>
+                      {categoryFields.map((field) => {
+                        const isOmitted = batchData.omittedCategoryFields.includes(field.FieldLabel);
+                        const value = batchData.categoryFieldSelections[field.FieldLabel] || '';
+                        const options = field.CategoryOptions ? field.CategoryOptions.split(';').map(opt => opt.trim()) : [];
+                        
+                        return (
+                          <div key={field.FieldLabel} style={{
+                            marginBottom: '15px',
+                            opacity: isOmitted ? 0.5 : 1,
+                            transition: 'opacity 0.2s ease'
+                          }}>
+                            <div style={{
+                              display: 'flex',
+                              justifyContent: 'space-between',
+                              alignItems: 'center',
+                              marginBottom: '8px'
+                            }}>
+                              <label style={{
+                                fontSize: '0.9rem',
+                                fontWeight: '500',
+                                margin: 0,
+                                color: isOmitted ? '#999' : '#333'
+                              }}>
+                                {field.FieldLabel}
+                              </label>
+                              <button
+                                type="button"
+                                onClick={() => handleFieldOmitToggle(field.FieldLabel)}
+                                style={{
+                                  background: 'none',
+                                  border: '1px solid ' + (isOmitted ? '#28a745' : '#dc3545'),
+                                  color: isOmitted ? '#28a745' : '#dc3545',
+                                  padding: '2px 8px',
+                                  fontSize: '0.7rem',
+                                  borderRadius: '4px',
+                                  cursor: 'pointer'
+                                }}
+                                title={isOmitted ? 'Include this field' : 'Omit this field from all listings'}
+                              >
+                                {isOmitted ? '+ Include' : '✕ Omit'}
+                              </button>
+                            </div>
+                            
+                            {!isOmitted && (
+                              <div>
+                                {options.length > 0 ? (
+                                  <select
+                                    value={value}
+                                    onChange={(e) => handleCategoryFieldChange(field.FieldLabel, e.target.value)}
+                                    className="form-control"
+                                    style={{ fontSize: '0.9rem' }}
+                                  >
+                                    <option value="">-- Leave blank (can be filled by AI or manually) --</option>
+                                    {options.map((opt, idx) => (
+                                      <option key={idx} value={opt}>{opt}</option>
+                                    ))}
+                                  </select>
+                                ) : (
+                                  <input
+                                    type="text"
+                                    value={value}
+                                    onChange={(e) => handleCategoryFieldChange(field.FieldLabel, e.target.value)}
+                                    placeholder="Leave blank for AI/manual entry"
+                                    className="form-control"
+                                    style={{ fontSize: '0.9rem' }}
+                                  />
+                                )}
+                              </div>
+                            )}
+                            
+                            {isOmitted && (
+                              <div style={{
+                                fontSize: '0.8rem',
+                                color: '#666',
+                                fontStyle: 'italic',
+                                backgroundColor: '#fff3cd',
+                                padding: '6px 8px',
+                                borderRadius: '4px',
+                                border: '1px solid #ffeaa7'
+                              }}>
+                                This field will be omitted from all listings, CSV exports, and eBay listings
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                      
+                      {categoryFields.length === 0 && (
+                        <div style={{
+                          textAlign: 'center',
+                          color: '#666',
+                          fontStyle: 'italic',
+                          padding: '20px'
+                        }}>
+                          No category-specific fields available for this category
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           )}
         </div>

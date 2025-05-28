@@ -262,16 +262,43 @@ function PhotoAssignmentReview({
             fullResult: result
           });
           
-          // Merge AI resolved fields if available
+          // Start with batch category field selections, then merge AI resolved fields
           let finalFieldSelections = { ...fieldSelections };
-          if (result.aiResolvedFields) {
-            Object.entries(result.aiResolvedFields).forEach(([fieldName, aiValue]) => {
-              const currentValue = fieldSelections[fieldName];
-              if (!currentValue || currentValue === "-- Select --" || currentValue.trim() === "") {
-                if (aiValue && aiValue !== "Unknown" && aiValue !== "Not Specified") {
-                  finalFieldSelections[fieldName] = aiValue.trim();
+          
+          // Apply batch category field selections first (if available)
+          if (currentBatch?.categoryFieldSelections) {
+            Object.entries(currentBatch.categoryFieldSelections).forEach(([fieldName, batchValue]) => {
+              // Only apply batch value if current field is empty and field is not omitted
+              const isOmitted = currentBatch.omittedCategoryFields?.includes(fieldName);
+              if (!isOmitted && batchValue && batchValue.trim() !== '') {
+                const currentValue = fieldSelections[fieldName];
+                if (!currentValue || currentValue === "-- Select --" || currentValue.trim() === "") {
+                  finalFieldSelections[fieldName] = batchValue.trim();
                 }
               }
+            });
+          }
+          
+          // Then merge AI resolved fields (only for non-omitted fields)
+          if (result.aiResolvedFields && aiResolveCategoryFields) {
+            Object.entries(result.aiResolvedFields).forEach(([fieldName, aiValue]) => {
+              // Skip if field is omitted in batch settings
+              const isOmitted = currentBatch?.omittedCategoryFields?.includes(fieldName);
+              if (!isOmitted) {
+                const currentValue = finalFieldSelections[fieldName];
+                if (!currentValue || currentValue === "-- Select --" || currentValue.trim() === "") {
+                  if (aiValue && aiValue !== "Unknown" && aiValue !== "Not Specified") {
+                    finalFieldSelections[fieldName] = aiValue.trim();
+                  }
+                }
+              }
+            });
+          }
+          
+          // Remove omitted fields entirely
+          if (currentBatch?.omittedCategoryFields) {
+            currentBatch.omittedCategoryFields.forEach(fieldName => {
+              delete finalFieldSelections[fieldName];
             });
           }
           
@@ -439,16 +466,43 @@ function PhotoAssignmentReview({
             fullResult: result
           });
           
-          // Merge AI resolved fields if available
+          // Start with batch category field selections, then merge AI resolved fields
           let finalFieldSelections = { ...fieldSelections };
-          if (result.aiResolvedFields) {
-            Object.entries(result.aiResolvedFields).forEach(([fieldName, aiValue]) => {
-              const currentValue = fieldSelections[fieldName];
-              if (!currentValue || currentValue === "-- Select --" || currentValue.trim() === "") {
-                if (aiValue && aiValue !== "Unknown" && aiValue !== "Not Specified") {
-                  finalFieldSelections[fieldName] = aiValue.trim();
+          
+          // Apply batch category field selections first (if available)
+          if (currentBatch?.categoryFieldSelections) {
+            Object.entries(currentBatch.categoryFieldSelections).forEach(([fieldName, batchValue]) => {
+              // Only apply batch value if current field is empty and field is not omitted
+              const isOmitted = currentBatch.omittedCategoryFields?.includes(fieldName);
+              if (!isOmitted && batchValue && batchValue.trim() !== '') {
+                const currentValue = fieldSelections[fieldName];
+                if (!currentValue || currentValue === "-- Select --" || currentValue.trim() === "") {
+                  finalFieldSelections[fieldName] = batchValue.trim();
                 }
               }
+            });
+          }
+          
+          // Then merge AI resolved fields (only for non-omitted fields)
+          if (result.aiResolvedFields && aiResolveCategoryFields) {
+            Object.entries(result.aiResolvedFields).forEach(([fieldName, aiValue]) => {
+              // Skip if field is omitted in batch settings
+              const isOmitted = currentBatch?.omittedCategoryFields?.includes(fieldName);
+              if (!isOmitted) {
+                const currentValue = finalFieldSelections[fieldName];
+                if (!currentValue || currentValue === "-- Select --" || currentValue.trim() === "") {
+                  if (aiValue && aiValue !== "Unknown" && aiValue !== "Not Specified") {
+                    finalFieldSelections[fieldName] = aiValue.trim();
+                  }
+                }
+              }
+            });
+          }
+          
+          // Remove omitted fields entirely
+          if (currentBatch?.omittedCategoryFields) {
+            currentBatch.omittedCategoryFields.forEach(fieldName => {
+              delete finalFieldSelections[fieldName];
             });
           }
           
@@ -584,11 +638,13 @@ function PhotoAssignmentReview({
     // Create CSV header
     const headers = ['Title', 'Description', 'Price', 'SKU'];
     
-    // Add category field headers
+    // Add category field headers (exclude omitted fields)
     if (categoryFields.length > 0) {
-      categoryFields.forEach(field => {
-        headers.push(field.FieldLabel);
-      });
+      categoryFields
+        .filter(field => !currentBatch?.omittedCategoryFields?.includes(field.FieldLabel))
+        .forEach(field => {
+          headers.push(field.FieldLabel);
+        });
     }
     
     // Create CSV rows
@@ -600,12 +656,14 @@ function PhotoAssignmentReview({
         listing.sku
       ];
       
-      // Add category field values
+      // Add category field values (exclude omitted fields)
       if (categoryFields.length > 0) {
-        categoryFields.forEach(field => {
-          const value = listing.fieldSelections[field.FieldLabel] || '';
-          row.push(value);
-        });
+        categoryFields
+          .filter(field => !currentBatch?.omittedCategoryFields?.includes(field.FieldLabel))
+          .forEach(field => {
+            const value = listing.fieldSelections[field.FieldLabel] || '';
+            row.push(value);
+          });
       }
       
       return row;
@@ -974,7 +1032,9 @@ function PhotoAssignmentReview({
                       borderRadius: '6px',
                       border: '1px solid #555'
                     }}>
-                      {categoryFields.map((field) => {
+                      {categoryFields
+                        .filter(field => !currentBatch?.omittedCategoryFields?.includes(field.FieldLabel))
+                        .map((field) => {
                         const value = (selectedListing.fieldSelections && selectedListing.fieldSelections[field.FieldLabel]) || '';
                         const options = field.CategoryOptions ? field.CategoryOptions.split(';').map(opt => opt.trim()) : [];
                         

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useAppState } from './StateContext';
 import { useEbayAuth } from './EbayAuthContext';
 import { getSelectedCategoryOptionsJSON } from './FormSection';
@@ -26,6 +26,9 @@ function PhotoAssignmentReview({
   const [error, setError] = useState(null);
   const [showEbayListingManager, setShowEbayListingManager] = useState(false);
   const [showEbayAuth, setShowEbayAuth] = useState(false);
+  const [openDropdown, setOpenDropdown] = useState(null);
+  const [searchTerms, setSearchTerms] = useState({});
+  const dropdownRefs = useRef({});
   
   const { state, dispatch } = useAppState();
   const { isAuthenticated: ebayAuthenticated, selectedPolicies } = useEbayAuth();
@@ -889,8 +892,9 @@ function PhotoAssignmentReview({
                       gridTemplateColumns: '1fr',
                       gap: '15px',
                       padding: '15px',
-                      backgroundColor: '#f8f9fa',
-                      borderRadius: '6px'
+                      backgroundColor: '#34495e',
+                      borderRadius: '6px',
+                      border: '1px solid #555'
                     }}>
                       {categoryFields.map((field) => {
                         const value = (selectedListing.fieldSelections && selectedListing.fieldSelections[field.FieldLabel]) || '';
@@ -898,7 +902,7 @@ function PhotoAssignmentReview({
                         
                         return (
                           <div key={field.FieldLabel}>
-                            <label style={{ display: 'block', marginBottom: '5px', fontSize: '14px', fontWeight: '500' }}>
+                            <label style={{ display: 'block', marginBottom: '5px', fontSize: '14px', fontWeight: '500', color: 'white' }}>
                               {field.FieldLabel}
                               {selectedListing.aiResolvedFields && 
                                selectedListing.aiResolvedFields[field.FieldLabel] && 
@@ -908,38 +912,107 @@ function PhotoAssignmentReview({
                                 </span>
                               )}
                             </label>
-                            {options.length > 0 ? (
-                              <select
-                                value={value}
-                                onChange={(e) => updateFieldSelection(field.FieldLabel, e.target.value)}
-                                style={{
-                                  width: '100%',
-                                  padding: '8px',
-                                  fontSize: '14px',
-                                  border: '1px solid #ddd',
-                                  borderRadius: '4px',
-                                  backgroundColor: 'white'
-                                }}
-                              >
-                                <option value="">-- Select --</option>
-                                {options.map((opt, idx) => (
-                                  <option key={idx} value={opt}>{opt}</option>
-                                ))}
-                              </select>
-                            ) : (
+                            {/* Custom Type-ahead Dropdown */}
+                            <div style={{ position: 'relative' }}>
                               <input
+                                ref={(el) => dropdownRefs.current[field.FieldLabel] = el}
                                 type="text"
                                 value={value}
-                                onChange={(e) => updateFieldSelection(field.FieldLabel, e.target.value)}
+                                onChange={(e) => {
+                                  const newValue = e.target.value;
+                                  updateFieldSelection(field.FieldLabel, newValue);
+                                  setSearchTerms(prev => ({ ...prev, [field.FieldLabel]: newValue }));
+                                  if (options.length > 0) {
+                                    setOpenDropdown(field.FieldLabel);
+                                  }
+                                }}
+                                onFocus={() => {
+                                  if (options.length > 0) {
+                                    setOpenDropdown(field.FieldLabel);
+                                    setSearchTerms(prev => ({ ...prev, [field.FieldLabel]: value }));
+                                  }
+                                }}
+                                onBlur={() => {
+                                  // Delay closing to allow for option selection
+                                  setTimeout(() => setOpenDropdown(null), 150);
+                                }}
+                                placeholder={options.length > 0 ? "Type to search or select..." : "Enter value..."}
                                 style={{
                                   width: '100%',
                                   padding: '8px',
                                   fontSize: '14px',
-                                  border: '1px solid #ddd',
-                                  borderRadius: '4px'
+                                  border: '1px solid #555',
+                                  borderRadius: '4px',
+                                  backgroundColor: '#2c3e50',
+                                  color: 'white',
+                                  '::placeholder': {
+                                    color: '#bdc3c7'
+                                  }
                                 }}
                               />
-                            )}
+                              {options.length > 0 && openDropdown === field.FieldLabel && (
+                                <div style={{
+                                  position: 'absolute',
+                                  top: '100%',
+                                  left: 0,
+                                  right: 0,
+                                  maxHeight: '200px',
+                                  overflowY: 'auto',
+                                  backgroundColor: '#34495e',
+                                  border: '1px solid #555',
+                                  borderRadius: '4px',
+                                  borderTop: 'none',
+                                  zIndex: 1000,
+                                  boxShadow: '0 4px 8px rgba(0,0,0,0.2)'
+                                }}>
+                                  {options
+                                    .filter(opt => 
+                                      opt.toLowerCase().includes((searchTerms[field.FieldLabel] || '').toLowerCase())
+                                    )
+                                    .map((opt, idx) => (
+                                      <div
+                                        key={idx}
+                                        onMouseDown={(e) => {
+                                          e.preventDefault();
+                                          updateFieldSelection(field.FieldLabel, opt);
+                                          setOpenDropdown(null);
+                                          setSearchTerms(prev => ({ ...prev, [field.FieldLabel]: opt }));
+                                        }}
+                                        style={{
+                                          padding: '8px 12px',
+                                          cursor: 'pointer',
+                                          backgroundColor: opt === value ? '#3498db' : 'transparent',
+                                          color: 'white',
+                                          fontSize: '14px',
+                                          borderBottom: '1px solid #555'
+                                        }}
+                                        onMouseEnter={(e) => {
+                                          e.target.style.backgroundColor = '#3498db';
+                                        }}
+                                        onMouseLeave={(e) => {
+                                          e.target.style.backgroundColor = opt === value ? '#3498db' : 'transparent';
+                                        }}
+                                      >
+                                        {opt}
+                                      </div>
+                                    ))
+                                  }
+                                  {options
+                                    .filter(opt => 
+                                      opt.toLowerCase().includes((searchTerms[field.FieldLabel] || '').toLowerCase())
+                                    ).length === 0 && (
+                                    <div style={{
+                                      padding: '8px 12px',
+                                      color: '#bdc3c7',
+                                      fontSize: '14px',
+                                      fontStyle: 'italic'
+                                    }}>
+                                      No matching options (you can still type your own value)
+                                    </div>
+                                  )}
+                                </div>
+                              )}
+                            </div>
                           </div>
                         );
                       })}

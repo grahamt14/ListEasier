@@ -713,6 +713,12 @@ const compressBatchForStorage = (batch) => {
     
     // Check if this batch has photo assignment data
     const photoAssignmentState = batch.photoAssignmentState;
+    console.log('📊 BatchProvider: Calculating stats for batch:', batch.name, {
+      hasPhotoAssignmentState: !!photoAssignmentState,
+      photoListingsCount: photoAssignmentState?.photoListings?.length || 0,
+      imageGroupsCount: appState.imageGroups?.length || 0
+    });
+    
     if (photoAssignmentState && photoAssignmentState.photoListings) {
       // Photo Assignment mode - count from photoListings
       photoAssignmentState.photoListings.forEach(listing => {
@@ -721,6 +727,7 @@ const compressBatchForStorage = (batch) => {
           totalListings += 1;
         }
       });
+      console.log('📊 Photo Assignment stats:', { totalImages, totalListings });
     } else {
       // Traditional mode - count from imageGroups
       const imageGroups = appState.imageGroups || [];
@@ -729,6 +736,7 @@ const compressBatchForStorage = (batch) => {
       });
       if (appState.filesBase64?.length) totalImages += appState.filesBase64.length;
       totalListings = imageGroups.filter(g => g && g.length > 0).length;
+      console.log('📊 Traditional stats:', { totalImages, totalListings });
     }
     
     const totalProcessed = appState.responseData?.filter(item => item && !item.error).length || 0;

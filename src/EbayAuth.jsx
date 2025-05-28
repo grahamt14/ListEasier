@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import EbayOAuthService from './EbayOAuthService';
 import EbayMarketplaceSelector from './EbayMarketplaceSelector';
 
-const EbayAuth = ({ onAuthSuccess, onAuthError }) => {
+const EbayAuth = ({ onAuthSuccess, onAuthError, redirectAfterAuth = null }) => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [userProfile, setUserProfile] = useState(null);
@@ -57,12 +57,38 @@ const EbayAuth = ({ onAuthSuccess, onAuthError }) => {
     if (authCode) {
       setIsLoading(true);
       try {
+        // Verify state parameter
+        const storedState = sessionStorage.getItem('ebayAuthState');
+        if (!storedState || state !== storedState) {
+          console.warn('State parameter mismatch or missing');
+        }
+        
         await ebayService.exchangeCodeForToken(authCode);
         setIsAuthenticated(true);
         await loadUserData();
         
-        // Clean up URL
-        window.history.replaceState({}, document.title, window.location.pathname);
+        // Handle redirect
+        let redirectPath = '/';
+        if (storedState) {
+          try {
+            const stateData = JSON.parse(atob(storedState));
+            redirectPath = stateData.redirectAfterAuth || '/';
+            console.log('Redirecting after eBay auth to:', redirectPath);
+          } catch (e) {
+            console.warn('Failed to parse state data:', e);
+          }
+        }
+        
+        // Clean up
+        sessionStorage.removeItem('ebayAuthState');
+        
+        // Redirect to the original location
+        if (redirectPath !== window.location.pathname + window.location.search) {
+          window.location.href = redirectPath;
+        } else {
+          // Clean up URL if staying on same page
+          window.history.replaceState({}, document.title, window.location.pathname);
+        }
         
         onAuthSuccess?.();
       } catch (error) {
@@ -105,12 +131,19 @@ const EbayAuth = ({ onAuthSuccess, onAuthError }) => {
     setIsLoading(true);
     
     try {
-      // Generate a random state parameter for CSRF protection
-      const state = Math.random().toString(36).substring(2, 15);
+      // Generate state parameter with redirect info
+      const stateData = {
+        csrf: Math.random().toString(36).substring(2, 15),
+        redirectAfterAuth: redirectAfterAuth || window.location.pathname + window.location.search
+      };
+      const state = btoa(JSON.stringify(stateData));
+      
+      // Store state for verification
+      sessionStorage.setItem('ebayAuthState', state);
       
       // Redirect to eBay OAuth
       const authUrl = ebayService.generateAuthUrl(state);
-      console.log('Redirecting to eBay OAuth:', authUrl);
+      console.log('Redirecting to eBay OAuth with redirect info:', { redirectAfterAuth, authUrl });
       window.location.href = authUrl;
     } catch (error) {
       console.error('Error generating auth URL:', error);

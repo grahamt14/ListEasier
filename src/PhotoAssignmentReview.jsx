@@ -1120,6 +1120,7 @@ function PhotoAssignmentReview({
               onAuthError={(error) => {
                 console.error('eBay authentication error:', error);
               }}
+              redirectAfterAuth={window.location.pathname + window.location.search}
             />
           </div>
         </div>

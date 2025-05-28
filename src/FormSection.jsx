@@ -1255,6 +1255,7 @@ const fileName = `uploads/${timestamp}_${randomId}_${file.name}`;
                   <EbayAuth 
                     onAuthSuccess={handleEbayAuthSuccess}
                     onAuthError={handleEbayAuthError}
+                    redirectAfterAuth={window.location.pathname + window.location.search}
                   />
                   {ebayAuthenticated && (
                     <EbayPolicySelector onPolicyChange={handlePolicyChange} />

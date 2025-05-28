@@ -837,6 +837,7 @@ Action(SiteID=US|Country=US|Currency=USD|Version=1193|CC=UTF-8),Custom label (SK
               <EbayAuth 
                 onAuthSuccess={handleEbayAuthSuccess}
                 onAuthError={handleEbayAuthError}
+                redirectAfterAuth={window.location.pathname + window.location.search}
               />
               {ebayAuthenticated && (
                 <div style={{ marginTop: '20px' }}>

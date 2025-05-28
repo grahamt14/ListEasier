@@ -118,6 +118,59 @@ function PhotoAssignmentReview({
     setEbayCategoryID();
   }, [category, subCategory, dispatch]);
   
+  // Optimized image conversion function
+  const convertImageToBase64Optimized = (photo) => {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+      
+      img.onload = () => {
+        try {
+          // Use OffscreenCanvas if available for better performance
+          const canvas = new OffscreenCanvas ? new OffscreenCanvas(800, 600) : document.createElement('canvas');
+          const ctx = canvas.getContext('2d');
+          
+          // Calculate optimal dimensions
+          const maxSize = 800;
+          let { width, height } = img;
+          
+          if (width > maxSize || height > maxSize) {
+            const ratio = Math.min(maxSize / width, maxSize / height);
+            width *= ratio;
+            height *= ratio;
+          }
+          
+          canvas.width = width;
+          canvas.height = height;
+          
+          // Use better image rendering
+          ctx.imageSmoothingEnabled = true;
+          ctx.imageSmoothingQuality = 'high';
+          ctx.drawImage(img, 0, 0, width, height);
+          
+          // Convert to base64 with optimized quality
+          if (canvas.convertToBlob) {
+            // Use blob conversion if available (more efficient)
+            canvas.convertToBlob({ type: 'image/jpeg', quality: 0.8 }).then(blob => {
+              const reader = new FileReader();
+              reader.onload = () => resolve(reader.result);
+              reader.readAsDataURL(blob);
+            });
+          } else {
+            // Fallback to dataURL
+            const base64 = canvas.toDataURL('image/jpeg', 0.8);
+            resolve(base64);
+          }
+        } catch (error) {
+          reject(error);
+        }
+      };
+      
+      img.onerror = () => reject(new Error('Failed to load image'));
+      img.src = photo.url;
+    });
+  };
+  
   // Sync with initial generated listings when they change from parent
   useEffect(() => {
     if (initialGeneratedListings.length > 0 && initialGeneratedListings !== generatedListings) {
@@ -188,70 +241,84 @@ function PhotoAssignmentReview({
         });
       }
       
-      // Process each new photo listing
-      for (let i = 0; i < newPhotoListings.length; i++) {
-        const listing = newPhotoListings[i];
-        setGenerationProgress(Math.round(((i + 1) / totalNewListings) * 100));
-        
-        try {
-          // Convert photos to base64 for API
-          const base64Images = [];
-          for (const photo of listing.photos) {
-            const canvas = document.createElement('canvas');
-            const ctx = canvas.getContext('2d');
-            const img = new Image();
+      // Process listings in batches for better performance
+      const BATCH_SIZE = 5; // Process 5 listings at once
+      const batches = [];
+      
+      // Group listings into batches
+      for (let i = 0; i < newPhotoListings.length; i += BATCH_SIZE) {
+        batches.push(newPhotoListings.slice(i, i + BATCH_SIZE));
+      }
+      
+      let processedCount = 0;
+      
+      // Process each batch
+      for (const batch of batches) {
+        // Process all listings in the batch concurrently
+        const batchPromises = batch.map(async (listing) => {
+          try {
+            // Convert photos to base64 using the optimized function
+            const base64Images = await Promise.all(
+              listing.photos.map(photo => convertImageToBase64Optimized(photo))
+            );
             
-            await new Promise((resolve) => {
-              img.onload = () => {
-                // Resize if needed
-                const maxSize = 800;
-                let width = img.width;
-                let height = img.height;
-                
-                if (width > maxSize || height > maxSize) {
-                  const ratio = Math.min(maxSize / width, maxSize / height);
-                  width *= ratio;
-                  height *= ratio;
-                }
-                
-                canvas.width = width;
-                canvas.height = height;
-                ctx.drawImage(img, 0, 0, width, height);
-                const base64 = canvas.toDataURL('image/jpeg', 0.8);
-                base64Images.push(base64);
-                resolve();
-              };
-              img.src = photo.url;
-            });
-          }
-          
-          // Call API to generate listing
-          const response = await fetch(
-            "https://7f26uyyjs5.execute-api.us-east-2.amazonaws.com/ListEasily/ListEasilyAPI",
-            {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                category: state.category || currentBatch?.category,
-                subCategory: state.subCategory || currentBatch?.subCategory,
-                Base64Key: [base64Images],
-                SelectedCategoryOptions: {
-                  ...selectedCategoryOptions,
-                  sku: listing.sku
-                }
-              })
+            // Call API to generate listing
+            const response = await fetch(
+              "https://7f26uyyjs5.execute-api.us-east-2.amazonaws.com/ListEasily/ListEasilyAPI",
+              {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  category: state.category || currentBatch?.category,
+                  subCategory: state.subCategory || currentBatch?.subCategory,
+                  Base64Key: [base64Images],
+                  SelectedCategoryOptions: {
+                    ...selectedCategoryOptions,
+                    sku: listing.sku
+                  }
+                })
+              }
+            );
+            
+            if (!response.ok) {
+              throw new Error(`API error: ${response.status}`);
             }
-          );
-          
-          if (!response.ok) {
-            throw new Error(`API error: ${response.status}`);
+            
+            const data = await response.json();
+            let parsed = data.body;
+            if (typeof parsed === "string") parsed = JSON.parse(parsed);
+            
+            const result = Array.isArray(parsed) ? parsed[0] : parsed;
+            
+            return { listing, result, base64Images };
+          } catch (error) {
+            console.error(`Error processing listing ${listing.sku}:`, error);
+            return { listing, error: error.message };
           }
+        });
+        
+        // Wait for batch to complete
+        const batchResults = await Promise.all(batchPromises);
+        
+        // Process batch results
+        for (const { listing, result, base64Images, error } of batchResults) {
+          processedCount++;
+          setGenerationProgress(Math.round((processedCount / totalNewListings) * 100));
           
-          const data = await response.json();
-          let parsed = data.body;
-          if (typeof parsed === "string") parsed = JSON.parse(parsed);
-          
-          const result = Array.isArray(parsed) ? parsed[0] : parsed;
+          if (error) {
+            newResults.push({
+              id: listing.id,
+              title: 'Error generating title',
+              description: error,
+              price: currentBatch?.salePrice || '0.00',
+              sku: listing.sku,
+              photos: listing.photos,
+              fieldSelections: {},
+              aiResolvedFields: {},
+              error: error
+            });
+            continue;
+          }
           
           console.log('🔍 API Response for new listing:', {
             sku: listing.sku,
@@ -317,20 +384,6 @@ function PhotoAssignmentReview({
           };
           
           newResults.push(generatedListing);
-          
-        } catch (error) {
-          console.error(`Error generating listing for ${listing.sku}:`, error);
-          newResults.push({
-            id: listing.id,
-            title: 'Error generating title',
-            description: 'Error generating description',
-            price: currentBatch?.salePrice || '0.00',
-            sku: listing.sku,
-            photos: listing.photos,
-            fieldSelections: {},
-            aiResolvedFields: {},
-            error: error.message
-          });
         }
       }
       
@@ -392,42 +445,26 @@ function PhotoAssignmentReview({
         });
       }
       
-      // Process each photo listing
-      for (let i = 0; i < photoListings.length; i++) {
-        const listing = photoListings[i];
-        setGenerationProgress(Math.round(((i + 1) / totalListings) * 100));
-        
+      // Process listings in batches for better performance
+      const BATCH_SIZE = 5; // Process 5 listings at once
+      const batches = [];
+      
+      // Group listings into batches
+      for (let i = 0; i < photoListings.length; i += BATCH_SIZE) {
+        batches.push(photoListings.slice(i, i + BATCH_SIZE));
+      }
+      
+      let processedCount = 0;
+      
+      // Process each batch
+      for (const batch of batches) {
+        // Process all listings in the batch concurrently
+        const batchPromises = batch.map(async (listing, idx) => {
         try {
-          // Convert photos to base64 for API
-          const base64Images = [];
-          for (const photo of listing.photos) {
-            const canvas = document.createElement('canvas');
-            const ctx = canvas.getContext('2d');
-            const img = new Image();
-            
-            await new Promise((resolve) => {
-              img.onload = () => {
-                // Resize if needed
-                const maxSize = 800;
-                let width = img.width;
-                let height = img.height;
-                
-                if (width > maxSize || height > maxSize) {
-                  const ratio = Math.min(maxSize / width, maxSize / height);
-                  width *= ratio;
-                  height *= ratio;
-                }
-                
-                canvas.width = width;
-                canvas.height = height;
-                ctx.drawImage(img, 0, 0, width, height);
-                const base64 = canvas.toDataURL('image/jpeg', 0.8);
-                base64Images.push(base64);
-                resolve();
-              };
-              img.src = photo.url;
-            });
-          }
+          // Optimized image conversion with Promise.all for parallel processing
+          const base64Images = await Promise.all(
+            listing.photos.map(photo => convertImageToBase64Optimized(photo))
+          );
           
           // Call API to generate listing
           const response = await fetch(
@@ -519,18 +556,47 @@ function PhotoAssignmentReview({
             error: result.error || null
           });
           
+          return { listing, result, base64Images, finalFieldSelections };
         } catch (error) {
-          console.error(`Error generating listing ${i + 1}:`, error);
+          console.error(`Error processing listing ${listing.sku}:`, error);
+          return { listing, error: error.message };
+        }
+      });
+      
+      // Wait for batch to complete
+      const batchResults = await Promise.all(batchPromises);
+      
+      // Process batch results
+      for (const { listing, result, base64Images, finalFieldSelections, error } of batchResults) {
+        processedCount++;
+        setGenerationProgress(Math.round((processedCount / totalListings) * 100));
+        
+        if (error) {
           results.push({
             id: listing.id,
             sku: listing.sku,
             photos: listing.photos,
-            title: `Error: Listing ${i + 1}`,
-            description: error.message,
+            title: `Error: Listing`,
+            description: error,
             error: true
           });
+          continue;
         }
+        
+        results.push({
+          id: listing.id,
+          sku: listing.sku,
+          photos: listing.photos,
+          base64Images: base64Images,
+          title: result.title || `Listing`,
+          description: result.description || '',
+          price: state.price || currentBatch?.salePrice || '',
+          fieldSelections: finalFieldSelections || {},
+          aiResolvedFields: result.aiResolvedFields || {},
+          error: result.error || null
+        });
       }
+    }
       
       setGeneratedListings(results);
       setIsGenerating(false);

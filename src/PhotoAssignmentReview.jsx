@@ -5,6 +5,10 @@ import { getSelectedCategoryOptionsJSON } from './FormSection';
 import { saveAs } from 'file-saver';
 import EbayListingManager from './EbayListingManager';
 import EbayAuth from './EbayAuth';
+import { cacheService } from './CacheService';
+import { DynamoDBClient, QueryCommand } from '@aws-sdk/client-dynamodb';
+import { unmarshall } from '@aws-sdk/util-dynamodb';
+import { fromCognitoIdentityPool } from '@aws-sdk/credential-provider-cognito-identity';
 
 function PhotoAssignmentReview({ 
   photoListings, 
@@ -39,6 +43,80 @@ function PhotoAssignmentReview({
       dispatch({ type: 'SET_CATEGORY_ID', payload: categoryID });
     }
   }, [categoryID, state.categoryID, dispatch]);
+  
+  // Function to fetch eBay category ID (copied from FormSection)
+  const fetchEbayCategoryID = async (category, subCategory) => {
+    if (!category || category === "--" || !subCategory || subCategory === "--") {
+      return null;
+    }
+    
+    try {
+      const cacheKey = `ebay_category_${category}_${subCategory}`;
+      const cachedCategoryID = cacheService.get(cacheKey);
+      
+      if (cachedCategoryID !== null) {
+        return cachedCategoryID;
+      }
+      
+      // AWS Configuration
+      const REGION = "us-east-2";
+      const IDENTITY_POOL_ID = "us-east-2:f81d1240-32a8-4aff-87e8-940effdf5908";
+      
+      const client = new DynamoDBClient({
+        region: REGION,
+        credentials: fromCognitoIdentityPool({
+          clientConfig: { region: REGION },
+          identityPoolId: IDENTITY_POOL_ID,
+        }),
+      });
+      
+      const params = {
+        TableName: 'ListCategory',
+        KeyConditionExpression: 'CategoryName = :category AND SubcategoryName = :subCategory',
+        ExpressionAttributeValues: {
+          ':category': { S: category },
+          ':subCategory': { S: subCategory }
+        }
+      };
+      
+      const command = new QueryCommand(params);
+      const result = await client.send(command);
+      
+      if (result.Items && result.Items.length > 0) {
+        const item = unmarshall(result.Items[0]);
+        const categoryID = item.EbayCategoryID;
+        
+        // Cache for 1 hour
+        cacheService.set(cacheKey, categoryID, 60 * 60 * 1000, 'ebayCategories');
+        return categoryID;
+      }
+      
+      cacheService.set(cacheKey, null, 60 * 60 * 1000, 'ebayCategories');
+      return null;
+    } catch (error) {
+      console.error('Error in fetchEbayCategoryID:', error);
+      throw error;
+    }
+  };
+  
+  // Fetch and set eBay category ID when category/subcategory are available
+  useEffect(() => {
+    const setEbayCategoryID = async () => {
+      if (category && subCategory && category !== '--' && subCategory !== '--') {
+        try {
+          console.log('🔍 PhotoAssignmentReview: Fetching eBay categoryID for:', { category, subCategory });
+          const ebayCategoryID = await fetchEbayCategoryID(category, subCategory);
+          console.log('📋 PhotoAssignmentReview: eBay categoryID fetched:', ebayCategoryID);
+          dispatch({ type: 'SET_CATEGORY_ID', payload: ebayCategoryID });
+        } catch (error) {
+          console.error('Error fetching eBay category ID in PhotoAssignmentReview:', error);
+          dispatch({ type: 'SET_CATEGORY_ID', payload: null });
+        }
+      }
+    };
+    
+    setEbayCategoryID();
+  }, [category, subCategory, dispatch]);
   
   // Sync with initial generated listings when they change from parent
   useEffect(() => {

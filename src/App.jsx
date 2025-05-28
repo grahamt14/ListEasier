@@ -708,6 +708,7 @@ const compressBatchForStorage = (batch) => {
     
     // Calculate stats for the main record
     const appState = batch.appState || {};
+    const imageGroups = appState.imageGroups || []; // Always define imageGroups for later use
     let totalImages = 0;
     let totalListings = 0;
     
@@ -716,7 +717,7 @@ const compressBatchForStorage = (batch) => {
     console.log('📊 BatchProvider: Calculating stats for batch:', batch.name, {
       hasPhotoAssignmentState: !!photoAssignmentState,
       photoListingsCount: photoAssignmentState?.photoListings?.length || 0,
-      imageGroupsCount: appState.imageGroups?.length || 0
+      imageGroupsCount: imageGroups.length
     });
     
     if (photoAssignmentState && photoAssignmentState.photoListings) {
@@ -730,7 +731,6 @@ const compressBatchForStorage = (batch) => {
       console.log('📊 Photo Assignment stats:', { totalImages, totalListings });
     } else {
       // Traditional mode - count from imageGroups
-      const imageGroups = appState.imageGroups || [];
       imageGroups.forEach(group => {
         if (Array.isArray(group)) totalImages += group.length;
       });

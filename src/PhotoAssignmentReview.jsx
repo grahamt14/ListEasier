@@ -37,13 +37,29 @@ function PhotoAssignmentReview({
     }
   }, [categoryID, state.categoryID, dispatch]);
   
-  // Generate listings when component mounts (only if we don't have saved listings)
+  // Sync with initial generated listings when they change from parent
+  useEffect(() => {
+    if (initialGeneratedListings.length > 0 && initialGeneratedListings !== generatedListings) {
+      setGeneratedListings(initialGeneratedListings);
+    }
+  }, [initialGeneratedListings]);
+  
+  // Generate listings when component mounts or when photoListings change
   useEffect(() => {
     console.log('PhotoAssignmentReview mounted with categoryFields:', categoryFields);
-    if (initialGeneratedListings.length === 0) {
+    console.log('Initial generated listings:', initialGeneratedListings.length);
+    console.log('Photo listings:', photoListings.length);
+    
+    // Check if we need to generate listings for new photoListings
+    const existingListingIds = new Set(generatedListings.map(listing => listing.id));
+    const newPhotoListings = photoListings.filter(photoListing => !existingListingIds.has(photoListing.id));
+    
+    if (newPhotoListings.length > 0) {
+      generateListingsForNew(newPhotoListings);
+    } else if (initialGeneratedListings.length === 0 && photoListings.length > 0) {
       generateListings();
     }
-  }, []);
+  }, [photoListings]);
   
   // Update parent when generatedListings change
   useEffect(() => {
@@ -59,6 +75,149 @@ function PhotoAssignmentReview({
       setSelectedListingIndex(0);
     }
   }, [generatedListings]);
+  
+  // Generate listings for new photo listings (incremental)
+  const generateListingsForNew = async (newPhotoListings) => {
+    if (newPhotoListings.length === 0) return;
+    
+    setIsGenerating(true);
+    setGenerationProgress(0);
+    setError(null);
+    
+    try {
+      const newResults = [];
+      const totalNewListings = newPhotoListings.length;
+      
+      // Prepare field selections with AI resolution if enabled
+      const fieldSelections = state.fieldSelections || {};
+      const selectedCategoryOptions = getSelectedCategoryOptionsJSON(
+        fieldSelections,
+        state.price || currentBatch?.salePrice || '',
+        '', // SKU will be set per listing
+        ebayAuthenticated ? selectedPolicies : null
+      );
+      
+      if (aiResolveCategoryFields) {
+        selectedCategoryOptions._aiResolveCategoryFields = true;
+        selectedCategoryOptions._categoryFields = categoryFields;
+      }
+      
+      // Process each new photo listing
+      for (let i = 0; i < newPhotoListings.length; i++) {
+        const listing = newPhotoListings[i];
+        setGenerationProgress(Math.round(((i + 1) / totalNewListings) * 100));
+        
+        try {
+          // Convert photos to base64 for API
+          const base64Images = [];
+          for (const photo of listing.photos) {
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d');
+            const img = new Image();
+            
+            await new Promise((resolve) => {
+              img.onload = () => {
+                // Resize if needed
+                const maxSize = 800;
+                let width = img.width;
+                let height = img.height;
+                
+                if (width > maxSize || height > maxSize) {
+                  const ratio = Math.min(maxSize / width, maxSize / height);
+                  width *= ratio;
+                  height *= ratio;
+                }
+                
+                canvas.width = width;
+                canvas.height = height;
+                ctx.drawImage(img, 0, 0, width, height);
+                const base64 = canvas.toDataURL('image/jpeg', 0.8);
+                base64Images.push(base64);
+                resolve();
+              };
+              img.src = photo.url;
+            });
+          }
+          
+          // Call API to generate listing
+          const response = await fetch(
+            "https://7f26uyyjs5.execute-api.us-east-2.amazonaws.com/ListEasily/ListEasilyAPI",
+            {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                images: base64Images,
+                categoryOptions: selectedCategoryOptions
+              }),
+            }
+          );
+          
+          if (!response.ok) {
+            throw new Error(`API request failed: ${response.status}`);
+          }
+          
+          const result = await response.json();
+          
+          // Create the listing object
+          const generatedListing = {
+            id: listing.id,
+            title: result.title || 'Generated Title',
+            description: result.description || 'Generated description',
+            price: result.price || currentBatch?.salePrice || '0.00',
+            sku: listing.sku,
+            photos: listing.photos,
+            fieldSelections: result.fieldSelections || {},
+            aiResolvedFields: result.aiResolvedFields || {},
+            error: null
+          };
+          
+          newResults.push(generatedListing);
+          
+        } catch (error) {
+          console.error(`Error generating listing for ${listing.sku}:`, error);
+          newResults.push({
+            id: listing.id,
+            title: 'Error generating title',
+            description: 'Error generating description',
+            price: currentBatch?.salePrice || '0.00',
+            sku: listing.sku,
+            photos: listing.photos,
+            fieldSelections: {},
+            aiResolvedFields: {},
+            error: error.message
+          });
+        }
+      }
+      
+      // Merge new results with existing listings
+      const mergedResults = [...generatedListings, ...newResults];
+      setGeneratedListings(mergedResults);
+      setIsGenerating(false);
+      
+      // Update app state with all listings
+      const responseData = mergedResults.map(listing => ({
+        title: listing.title,
+        description: listing.description,
+        price: listing.price,
+        sku: listing.sku,
+        storedFieldSelections: listing.fieldSelections,
+        aiResolvedFields: listing.aiResolvedFields,
+        error: listing.error
+      }));
+      
+      dispatch({ type: 'SET_RESPONSE_DATA', payload: responseData });
+      
+      // Also update the parent component
+      if (onGeneratedListingsChange) {
+        onGeneratedListingsChange(mergedResults);
+      }
+      
+    } catch (error) {
+      console.error('Error generating new listings:', error);
+      setError(error.message);
+      setIsGenerating(false);
+    }
+  };
   
   const generateListings = async () => {
     setIsGenerating(true);

@@ -2736,6 +2736,77 @@ function BatchEditor() {
     };
   }, [state, currentBatch, updateBatch]);
 
+  // Fetch category fields for Photo Assignment mode
+  useEffect(() => {
+    const fetchCategoryFields = async () => {
+      if (!currentBatch || !currentBatch.category || !currentBatch.subCategory) {
+        setCategoryFields([]);
+        return;
+      }
+      
+      if (currentBatch.category === '--' || currentBatch.subCategory === '--') {
+        setCategoryFields([]);
+        return;
+      }
+      
+      try {
+        // AWS Configuration (same as FormSection)
+        const REGION = "us-east-2";
+        const IDENTITY_POOL_ID = "us-east-2:f81d1240-32a8-4aff-87e8-940effdf5908";
+        
+        const client = new DynamoDBClient({
+          region: REGION,
+          credentials: fromCognitoIdentityPool({
+            clientConfig: { region: REGION },
+            identityPoolId: IDENTITY_POOL_ID,
+          }),
+        });
+        
+        // Check cache first
+        const cachedFields = cacheService.getCategoryFields(currentBatch.category, currentBatch.subCategory);
+        if (cachedFields) {
+          setCategoryFields(cachedFields);
+          return;
+        }
+        
+        // Fetch from DynamoDB
+        const dynamoQuery = {
+          TableName: "Category",
+          KeyConditionExpression: "CategoryName = :categoryName AND SubcategoryName = :subcategoryName",
+          ExpressionAttributeValues: {
+            ":categoryName": { S: currentBatch.category },
+            ":subcategoryName": { S: currentBatch.subCategory }
+          },
+        };
+        
+        const command = new QueryCommand(dynamoQuery);
+        const response = await client.send(command);
+        const items = response.Items?.map(item => unmarshall(item)) || [];
+        
+        // Cache the result
+        cacheService.setCategoryFields(currentBatch.category, currentBatch.subCategory, items);
+        setCategoryFields(items);
+        
+        // Initialize field selections
+        const initialSelections = {};
+        items.forEach(item => {
+          initialSelections[item.FieldLabel] = "";
+        });
+        dispatch({ type: 'SET_FIELD_SELECTIONS', payload: initialSelections });
+        
+      } catch (error) {
+        console.error('Error fetching category fields for Photo Assignment:', error);
+        setCategoryFields([]);
+        dispatch({ type: 'SET_FIELD_SELECTIONS', payload: {} });
+      }
+    };
+    
+    // Only fetch category fields when in Photo Assignment mode
+    if (viewMode === 'assignment' && currentBatch) {
+      fetchCategoryFields();
+    }
+  }, [currentBatch?.category, currentBatch?.subCategory, viewMode, dispatch]);
+
   // Photo assignment interface methods
   const handleFileUpload = (files) => {
     const newPhotos = Array.from(files).map((file, index) => ({
@@ -3769,6 +3840,14 @@ function BatchEditor() {
               </div>
             </div>
           </div>
+          
+          {/* Batch Preview Section for Photo Assignment */}
+          <BatchPreviewSection 
+            onShowListingManager={handleShowEbayListingManager}
+            currentBatch={currentBatch}
+            onCsvDownload={handleCsvDownload}
+            onEbayListingsCreated={handleEbayListingsCreated}
+          />
         </div>
       ) : showPhotoReview ? (
         <PhotoAssignmentReview

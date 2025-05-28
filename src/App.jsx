@@ -2771,11 +2771,10 @@ function BatchEditor() {
         
         // Fetch from DynamoDB
         const dynamoQuery = {
-          TableName: "ListCategory",
-          KeyConditionExpression: "CategoryName = :categoryName AND SubcategoryName = :subcategoryName",
+          TableName: "CategoryFields",
+          KeyConditionExpression: "SubCategoryType = :sub",
           ExpressionAttributeValues: {
-            ":categoryName": { S: currentBatch.category },
-            ":subcategoryName": { S: currentBatch.subCategory }
+            ":sub": { S: currentBatch.subCategory }
           },
         };
         

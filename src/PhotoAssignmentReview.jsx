@@ -242,7 +242,8 @@ function PhotoAssignmentReview({
       }
       
       // Process listings in batches for better performance
-      const BATCH_SIZE = 5; // Process 5 listings at once
+      // Adjust batch size based on total listings for optimal performance
+      const BATCH_SIZE = Math.min(10, Math.max(3, Math.ceil(newPhotoListings.length / 10))); // 3-10 listings per batch
       const batches = [];
       
       // Group listings into batches
@@ -446,7 +447,8 @@ function PhotoAssignmentReview({
       }
       
       // Process listings in batches for better performance
-      const BATCH_SIZE = 5; // Process 5 listings at once
+      // Adjust batch size based on total listings for optimal performance
+      const BATCH_SIZE = Math.min(10, Math.max(3, Math.ceil(newPhotoListings.length / 10))); // 3-10 listings per batch
       const batches = [];
       
       // Group listings into batches

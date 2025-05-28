@@ -709,13 +709,28 @@ const compressBatchForStorage = (batch) => {
     // Calculate stats for the main record
     const appState = batch.appState || {};
     let totalImages = 0;
-    const imageGroups = appState.imageGroups || [];
-    imageGroups.forEach(group => {
-      if (Array.isArray(group)) totalImages += group.length;
-    });
-    if (appState.filesBase64?.length) totalImages += appState.filesBase64.length;
+    let totalListings = 0;
     
-    const totalListings = imageGroups.filter(g => g && g.length > 0).length;
+    // Check if this batch has photo assignment data
+    const photoAssignmentState = batch.photoAssignmentState;
+    if (photoAssignmentState && photoAssignmentState.photoListings) {
+      // Photo Assignment mode - count from photoListings
+      photoAssignmentState.photoListings.forEach(listing => {
+        if (listing.photos && listing.photos.length > 0) {
+          totalImages += listing.photos.length;
+          totalListings += 1;
+        }
+      });
+    } else {
+      // Traditional mode - count from imageGroups
+      const imageGroups = appState.imageGroups || [];
+      imageGroups.forEach(group => {
+        if (Array.isArray(group)) totalImages += group.length;
+      });
+      if (appState.filesBase64?.length) totalImages += appState.filesBase64.length;
+      totalListings = imageGroups.filter(g => g && g.length > 0).length;
+    }
+    
     const totalProcessed = appState.responseData?.filter(item => item && !item.error).length || 0;
     
     // Prepare items to save

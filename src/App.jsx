@@ -2461,7 +2461,7 @@ function BatchEditor() {
   const [draggedFromListing, setDraggedFromListing] = useState(null);
   const [currentSku, setCurrentSku] = useState('');
   const [showSkuDialog, setShowSkuDialog] = useState(false);
-  const [viewMode, setViewMode] = useState('traditional'); // 'traditional', 'assignment', or 'review'
+  const [viewMode, setViewMode] = useState('assignment'); // 'traditional', 'assignment', or 'review'
   const [showPhotoReview, setShowPhotoReview] = useState(false);
   const [aiResolveCategoryFields, setAiResolveCategoryFields] = useState(false);
   const [categoryFields, setCategoryFields] = useState([]);
@@ -3248,21 +3248,54 @@ function BatchEditor() {
         🎯 Photo Assignment
       </button>
       {photoListings.length > 0 && viewMode === 'assignment' && (
-        <button
-          onClick={convertPhotoListingsToTraditional}
-          style={{
-            padding: '10px 20px',
-            backgroundColor: '#28a745',
-            color: 'white',
-            border: 'none',
-            borderRadius: '6px',
+        <div style={{
+          marginLeft: 'auto',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '20px'
+        }}>
+          <label style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
             cursor: 'pointer',
-            fontWeight: '500',
-            marginLeft: 'auto'
-          }}
-        >
-          ➡️ Convert to Traditional ({photoListings.length} listings)
-        </button>
+            fontSize: '14px',
+            color: '#333'
+          }}>
+            <input
+              type="checkbox"
+              checked={aiResolveCategoryFields}
+              onChange={(e) => setAiResolveCategoryFields(e.target.checked)}
+              style={{
+                width: '18px',
+                height: '18px',
+                cursor: 'pointer'
+              }}
+            />
+            <span style={{ fontWeight: '500' }}>
+              🤖 AI Category Fields
+            </span>
+          </label>
+          
+          <button
+            onClick={() => setShowPhotoReview(true)}
+            style={{
+              padding: '10px 20px',
+              backgroundColor: '#28a745',
+              color: 'white',
+              border: 'none',
+              borderRadius: '6px',
+              cursor: 'pointer',
+              fontWeight: '500',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px'
+            }}
+          >
+            Review & Finalize
+            <span style={{ fontSize: '16px' }}>→</span>
+          </button>
+        </div>
       )}
     </div>
   );
@@ -3651,85 +3684,6 @@ function BatchEditor() {
                   </div>
                 )}
               </div>
-              
-              {/* Generate Listings Button Section */}
-              {photoListings.length > 0 && (
-                <div style={{
-                  marginTop: '20px',
-                  padding: '20px',
-                  backgroundColor: '#f8f9fa',
-                  borderRadius: '8px',
-                  border: '1px solid #e0e0e0'
-                }}>
-                  <div style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    flexWrap: 'wrap',
-                    gap: '15px'
-                  }}>
-                    <div style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '15px'
-                    }}>
-                      <label style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '8px',
-                        cursor: 'pointer',
-                        fontSize: '14px',
-                        color: '#333'
-                      }}>
-                        <input
-                          type="checkbox"
-                          checked={aiResolveCategoryFields}
-                          onChange={(e) => setAiResolveCategoryFields(e.target.checked)}
-                          style={{
-                            width: '18px',
-                            height: '18px',
-                            cursor: 'pointer'
-                          }}
-                        />
-                        <span style={{ fontWeight: '500' }}>
-                          🤖 Let AI determine empty category fields from images
-                        </span>
-                      </label>
-                    </div>
-                    
-                    <button
-                      onClick={() => setShowPhotoReview(true)}
-                      style={{
-                        padding: '12px 24px',
-                        backgroundColor: '#007bff',
-                        color: 'white',
-                        border: 'none',
-                        borderRadius: '6px',
-                        cursor: 'pointer',
-                        fontSize: '16px',
-                        fontWeight: '600',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '8px'
-                      }}
-                    >
-                      Review & Finalize Listings
-                      <span style={{ fontSize: '20px' }}>→</span>
-                    </button>
-                  </div>
-                  
-                  {aiResolveCategoryFields && (
-                    <p style={{
-                      margin: '10px 0 0 0',
-                      fontSize: '12px',
-                      color: '#666',
-                      paddingLeft: '26px'
-                    }}>
-                      AI will analyze images to suggest values for unfilled category fields. You can review and edit suggestions after generation.
-                    </p>
-                  )}
-                </div>
-              )}
             </div>
           </div>
         </div>
@@ -3738,7 +3692,6 @@ function BatchEditor() {
           photoListings={photoListings}
           onBack={() => {
             setShowPhotoReview(false);
-            setViewMode('traditional');
           }}
           currentBatch={currentBatch}
           categoryFields={categoryFields}

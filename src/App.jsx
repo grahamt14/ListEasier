@@ -2465,6 +2465,7 @@ function BatchEditor() {
   const [showPhotoReview, setShowPhotoReview] = useState(false);
   const [aiResolveCategoryFields, setAiResolveCategoryFields] = useState(false);
   const [categoryFields, setCategoryFields] = useState([]);
+  const [generatedListings, setGeneratedListings] = useState([]);
   const fileInputRef = useRef(null);
   
   // Existing BatchEditor states and refs
@@ -2487,6 +2488,35 @@ function BatchEditor() {
       
       // Load the entire appState from the saved batch
       appDispatch({ type: 'LOAD_BATCH_STATE', payload: currentBatch.appState });
+    }
+    
+    // Restore photo assignment state if it exists
+    if (currentBatch && currentBatch.photoAssignmentState) {
+      console.log('🔄 BatchEditor: Restoring photo assignment state');
+      const { 
+        uploadedPhotos: savedUploadedPhotos, 
+        photoListings: savedPhotoListings,
+        viewMode: savedViewMode,
+        showPhotoReview: savedShowPhotoReview,
+        currentSku: savedCurrentSku,
+        aiResolveCategoryFields: savedAiResolveCategoryFields,
+        generatedListings: savedGeneratedListings
+      } = currentBatch.photoAssignmentState;
+      
+      if (savedUploadedPhotos) setUploadedPhotos(savedUploadedPhotos);
+      if (savedPhotoListings) setPhotoListings(savedPhotoListings);
+      if (savedCurrentSku) setCurrentSku(savedCurrentSku);
+      if (savedAiResolveCategoryFields !== undefined) setAiResolveCategoryFields(savedAiResolveCategoryFields);
+      if (savedGeneratedListings) setGeneratedListings(savedGeneratedListings);
+      
+      // Restore the view mode to where the user left off
+      if (currentBatch.lastViewMode === 'review') {
+        setViewMode('assignment');
+        setShowPhotoReview(true);
+      } else if (savedViewMode) {
+        setViewMode(savedViewMode);
+        setShowPhotoReview(false);
+      }
     }
   }, [currentBatch?.id]); // Only run when batch ID changes
 
@@ -2569,6 +2599,38 @@ function BatchEditor() {
     }
   };
 }, [state, currentBatch, updateBatch]); // Watch entire state, not just selected fields
+
+  // Save photo assignment state when it changes
+  useEffect(() => {
+    if (currentBatch && (uploadedPhotos.length > 0 || photoListings.length > 0 || generatedListings.length > 0)) {
+      const photoAssignmentState = {
+        uploadedPhotos,
+        photoListings,
+        viewMode,
+        showPhotoReview,
+        currentSku,
+        aiResolveCategoryFields,
+        generatedListings
+      };
+      
+      // Update batch with photo assignment state
+      const updatedBatch = {
+        ...currentBatch,
+        photoAssignmentState,
+        lastViewMode: showPhotoReview ? 'review' : viewMode
+      };
+      
+      // Debounce the update
+      if (updateTimeoutRef.current) {
+        clearTimeout(updateTimeoutRef.current);
+      }
+      
+      updateTimeoutRef.current = setTimeout(() => {
+        console.log('💾 BatchEditor: Saving photo assignment state');
+        updateBatch(updatedBatch);
+      }, 1000);
+    }
+  }, [uploadedPhotos, photoListings, viewMode, showPhotoReview, currentSku, aiResolveCategoryFields, generatedListings, currentBatch]);
 
   // Throttled batch update logic
   useEffect(() => {
@@ -3168,6 +3230,27 @@ function BatchEditor() {
       clearTimeout(updateTimeoutRef.current);
     }
     
+    // Save current photo assignment state before leaving
+    if (currentBatch && (uploadedPhotos.length > 0 || photoListings.length > 0 || generatedListings.length > 0)) {
+      const photoAssignmentState = {
+        uploadedPhotos,
+        photoListings,
+        viewMode,
+        showPhotoReview,
+        currentSku,
+        aiResolveCategoryFields,
+        generatedListings
+      };
+      
+      const updatedBatch = {
+        ...currentBatch,
+        photoAssignmentState,
+        lastViewMode: showPhotoReview ? 'review' : viewMode
+      };
+      
+      updateBatch(updatedBatch);
+    }
+    
     console.log('🧹 BatchEditor: Clearing app state on back to overview');
     appDispatch({ type: 'CLEAR_ALL_FOR_NEW_BATCH' });
     
@@ -3690,8 +3773,30 @@ function BatchEditor() {
       ) : showPhotoReview ? (
         <PhotoAssignmentReview
           photoListings={photoListings}
+          generatedListings={generatedListings}
+          onGeneratedListingsChange={setGeneratedListings}
           onBack={() => {
             setShowPhotoReview(false);
+            // Save the current state when going back from review
+            if (currentBatch) {
+              const photoAssignmentState = {
+                uploadedPhotos,
+                photoListings,
+                viewMode,
+                showPhotoReview: false,
+                currentSku,
+                aiResolveCategoryFields,
+                generatedListings
+              };
+              
+              const updatedBatch = {
+                ...currentBatch,
+                photoAssignmentState,
+                lastViewMode: 'assignment'
+              };
+              
+              updateBatch(updatedBatch);
+            }
           }}
           currentBatch={currentBatch}
           categoryFields={categoryFields}

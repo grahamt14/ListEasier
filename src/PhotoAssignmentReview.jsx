@@ -11,11 +11,13 @@ function PhotoAssignmentReview({
   onBack, 
   currentBatch,
   categoryFields = [],
-  aiResolveCategoryFields = false 
+  aiResolveCategoryFields = false,
+  generatedListings: initialGeneratedListings = [],
+  onGeneratedListingsChange
 }) {
   const [selectedListing, setSelectedListing] = useState(null);
   const [selectedListingIndex, setSelectedListingIndex] = useState(null);
-  const [generatedListings, setGeneratedListings] = useState([]);
+  const [generatedListings, setGeneratedListings] = useState(initialGeneratedListings);
   const [isGenerating, setIsGenerating] = useState(false);
   const [generationProgress, setGenerationProgress] = useState(0);
   const [error, setError] = useState(null);
@@ -27,11 +29,20 @@ function PhotoAssignmentReview({
   const { state, dispatch } = useAppState();
   const { isAuthenticated: ebayAuthenticated, selectedPolicies } = useEbayAuth();
   
-  // Generate listings when component mounts
+  // Generate listings when component mounts (only if we don't have saved listings)
   useEffect(() => {
     console.log('PhotoAssignmentReview mounted with categoryFields:', categoryFields);
-    generateListings();
+    if (initialGeneratedListings.length === 0) {
+      generateListings();
+    }
   }, []);
+  
+  // Update parent when generatedListings change
+  useEffect(() => {
+    if (onGeneratedListingsChange && generatedListings.length > 0) {
+      onGeneratedListingsChange(generatedListings);
+    }
+  }, [generatedListings, onGeneratedListingsChange]);
   
   // Select first listing by default when generated
   useEffect(() => {

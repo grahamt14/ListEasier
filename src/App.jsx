@@ -20,6 +20,7 @@ import { cacheService } from './CacheService';
 import AuthenticationWrapper from './AuthenticationWrapper';
 import LandingPage from './LandingPage';
 import LoadingSpinner from './LoadingSpinner';
+import PhotoAssignmentReview from './PhotoAssignmentReview';
 
 // Auth0 Configuration
 const AUTH0_DOMAIN = process.env.REACT_APP_AUTH0_DOMAIN || 'listeasier.us.auth0.com';
@@ -2460,7 +2461,10 @@ function BatchEditor() {
   const [draggedFromListing, setDraggedFromListing] = useState(null);
   const [currentSku, setCurrentSku] = useState('');
   const [showSkuDialog, setShowSkuDialog] = useState(false);
-  const [viewMode, setViewMode] = useState('traditional'); // 'traditional' or 'assignment'
+  const [viewMode, setViewMode] = useState('traditional'); // 'traditional', 'assignment', or 'review'
+  const [showPhotoReview, setShowPhotoReview] = useState(false);
+  const [aiResolveCategoryFields, setAiResolveCategoryFields] = useState(false);
+  const [categoryFields, setCategoryFields] = useState([]);
   const fileInputRef = useRef(null);
   
   // Existing BatchEditor states and refs
@@ -3199,7 +3203,7 @@ function BatchEditor() {
   }
 
   // Render view mode selector
-  const ViewModeSelector = () => (
+  const ViewModeSelector = () => showPhotoReview ? null : (
     <div style={{
       display: 'flex',
       gap: '10px',
@@ -3210,7 +3214,10 @@ function BatchEditor() {
       boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
     }}>
       <button
-        onClick={() => setViewMode('traditional')}
+        onClick={() => {
+          setViewMode('traditional');
+          setShowPhotoReview(false);
+        }}
         style={{
           padding: '10px 20px',
           backgroundColor: viewMode === 'traditional' ? '#007bff' : '#f8f9fa',
@@ -3224,7 +3231,10 @@ function BatchEditor() {
         📋 Traditional View
       </button>
       <button
-        onClick={() => setViewMode('assignment')}
+        onClick={() => {
+          setViewMode('assignment');
+          setShowPhotoReview(false);
+        }}
         style={{
           padding: '10px 20px',
           backgroundColor: viewMode === 'assignment' ? '#007bff' : '#f8f9fa',
@@ -3280,6 +3290,7 @@ function BatchEditor() {
         <main className="main-card">
           <FormSection 
             onGenerateListing={handleGenerateListing}
+            onCategoryFieldsChange={setCategoryFields}
             batchMode={true}
             currentBatch={currentBatch}
           />
@@ -3290,7 +3301,7 @@ function BatchEditor() {
             onEbayListingsCreated={handleEbayListingsCreated}
           />
         </main>
-      ) : (
+      ) : viewMode === 'assignment' && !showPhotoReview ? (
         // Photo Assignment Interface
         <div style={{ 
           padding: '0',
@@ -3640,10 +3651,100 @@ function BatchEditor() {
                   </div>
                 )}
               </div>
+              
+              {/* Generate Listings Button Section */}
+              {photoListings.length > 0 && (
+                <div style={{
+                  marginTop: '20px',
+                  padding: '20px',
+                  backgroundColor: '#f8f9fa',
+                  borderRadius: '8px',
+                  border: '1px solid #e0e0e0'
+                }}>
+                  <div style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    flexWrap: 'wrap',
+                    gap: '15px'
+                  }}>
+                    <div style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '15px'
+                    }}>
+                      <label style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '8px',
+                        cursor: 'pointer',
+                        fontSize: '14px',
+                        color: '#333'
+                      }}>
+                        <input
+                          type="checkbox"
+                          checked={aiResolveCategoryFields}
+                          onChange={(e) => setAiResolveCategoryFields(e.target.checked)}
+                          style={{
+                            width: '18px',
+                            height: '18px',
+                            cursor: 'pointer'
+                          }}
+                        />
+                        <span style={{ fontWeight: '500' }}>
+                          🤖 Let AI determine empty category fields from images
+                        </span>
+                      </label>
+                    </div>
+                    
+                    <button
+                      onClick={() => setShowPhotoReview(true)}
+                      style={{
+                        padding: '12px 24px',
+                        backgroundColor: '#007bff',
+                        color: 'white',
+                        border: 'none',
+                        borderRadius: '6px',
+                        cursor: 'pointer',
+                        fontSize: '16px',
+                        fontWeight: '600',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '8px'
+                      }}
+                    >
+                      Review & Finalize Listings
+                      <span style={{ fontSize: '20px' }}>→</span>
+                    </button>
+                  </div>
+                  
+                  {aiResolveCategoryFields && (
+                    <p style={{
+                      margin: '10px 0 0 0',
+                      fontSize: '12px',
+                      color: '#666',
+                      paddingLeft: '26px'
+                    }}>
+                      AI will analyze images to suggest values for unfilled category fields. You can review and edit suggestions after generation.
+                    </p>
+                  )}
+                </div>
+              )}
             </div>
           </div>
         </div>
-      )}
+      ) : showPhotoReview ? (
+        <PhotoAssignmentReview
+          photoListings={photoListings}
+          onBack={() => {
+            setShowPhotoReview(false);
+            setViewMode('traditional');
+          }}
+          currentBatch={currentBatch}
+          categoryFields={categoryFields}
+          aiResolveCategoryFields={aiResolveCategoryFields}
+        />
+      ) : null}
 
       {showListingManager && (
         <div className="listing-modal-overlay">

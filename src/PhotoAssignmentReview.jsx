@@ -859,11 +859,18 @@ function PhotoAssignmentReview({
         }}>
           <div style={{ textAlign: 'center' }}>
             <div style={{ 
-              fontSize: '48px', 
               marginBottom: '20px',
-              animation: 'spin 2s linear infinite',
               display: 'inline-block'
-            }}>⚙️</div>
+            }}>
+              <div style={{
+                width: '60px',
+                height: '60px',
+                border: '6px solid #f3f3f3',
+                borderTop: '6px solid #007bff',
+                borderRadius: '50%',
+                animation: 'spin 1s linear infinite'
+              }} />
+            </div>
             <h3>Generating Listings...</h3>
             <div style={{
               width: '300px',

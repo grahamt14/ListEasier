@@ -2849,6 +2849,46 @@ function BatchWizard() {
         </div>
       </div>
 
+      {/* Floating Create Batch Button */}
+      {currentStep === 1 && (
+        <button
+          onClick={handleNext}
+          disabled={!canProceed()}
+          style={{
+            position: 'fixed',
+            bottom: '30px',
+            right: '30px',
+            padding: '16px 32px',
+            backgroundColor: canProceed() ? '#28a745' : '#6c757d',
+            color: 'white',
+            border: 'none',
+            borderRadius: '50px',
+            fontSize: '16px',
+            fontWeight: '600',
+            cursor: canProceed() ? 'pointer' : 'not-allowed',
+            boxShadow: '0 4px 16px rgba(0,0,0,0.2)',
+            zIndex: 1000,
+            transition: 'all 0.3s ease',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px'
+          }}
+          onMouseEnter={(e) => {
+            if (canProceed()) {
+              e.target.style.transform = 'translateY(-2px)';
+              e.target.style.boxShadow = '0 6px 20px rgba(0,0,0,0.3)';
+            }
+          }}
+          onMouseLeave={(e) => {
+            e.target.style.transform = 'translateY(0)';
+            e.target.style.boxShadow = '0 4px 16px rgba(0,0,0,0.2)';
+          }}
+        >
+          <span style={{ fontSize: '20px' }}>✨</span>
+          Create Batch
+        </button>
+      )}
+
       <TemplateModal
         isOpen={showTemplateModal}
         onClose={() => setShowTemplateModal(false)}

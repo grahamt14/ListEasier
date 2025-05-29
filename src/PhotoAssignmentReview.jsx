@@ -361,11 +361,13 @@ function PhotoAssignmentReview({
         const batchResults = await Promise.all(batchPromises);
         
         // Process batch results
+        console.log('🔄 PhotoAssignmentReview: Processing batch results, count:', batchResults.length);
         for (const { listing, result, base64Images, error } of batchResults) {
           processedCount++;
           setGenerationProgress(Math.round((processedCount / totalNewListings) * 100));
           
           if (error) {
+            console.log('❌ PhotoAssignmentReview: Processing error for listing:', listing.sku, error);
             newResults.push({
               id: listing.id,
               title: 'Error generating title',
@@ -691,6 +693,7 @@ function PhotoAssignmentReview({
       }
     }
       
+      console.log('🔍 PhotoAssignmentReview: Finished processing all results, total:', results.length);
       console.log('🎉 PhotoAssignmentReview: Setting generated listings:', results.length);
       setGeneratedListings(results);
       console.log('🔄 PhotoAssignmentReview: Setting isGenerating to false');

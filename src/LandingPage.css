@@ -922,3 +922,155 @@ button:disabled {
     padding: 1.5rem;
   }
 }
+
+/* ===== UNDER CONSTRUCTION STYLES ===== */
+.landing-page.under-construction {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background: #f8f9fa;
+}
+
+.landing-header.minimal {
+  position: relative;
+  background: white;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.construction-section {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4rem 20px;
+  text-align: center;
+}
+
+.construction-content {
+  max-width: 600px;
+  margin: 0 auto;
+}
+
+/* Giant Spinning Cog Wheel */
+.giant-cog-wrapper {
+  margin: 0 auto 3rem;
+  width: 250px;
+  height: 250px;
+}
+
+.giant-cog {
+  width: 100%;
+  height: 100%;
+  animation: spin 4s linear infinite;
+}
+
+.cog-svg {
+  width: 100%;
+  height: 100%;
+  filter: drop-shadow(0 4px 12px rgba(0, 123, 255, 0.3));
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Construction Text */
+.construction-title {
+  font-size: 3rem;
+  font-weight: 800;
+  color: #1f2937;
+  margin: 0 0 1rem;
+  letter-spacing: -0.03em;
+}
+
+.construction-subtitle {
+  font-size: 1.25rem;
+  color: #6b7280;
+  margin: 0 0 0.5rem;
+}
+
+.construction-message {
+  font-size: 1.1rem;
+  color: #6b7280;
+  margin: 0 0 3rem;
+}
+
+/* Coming Soon Features */
+.coming-soon {
+  background: white;
+  border-radius: 12px;
+  padding: 2rem;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+  margin: 0 auto 3rem;
+  max-width: 400px;
+}
+
+.coming-soon h3 {
+  font-size: 1.25rem;
+  color: #1f2937;
+  margin: 0 0 1rem;
+}
+
+.feature-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  text-align: left;
+}
+
+.feature-list li {
+  padding: 0.75rem 0;
+  border-bottom: 1px solid #f3f4f6;
+  font-size: 1rem;
+  color: #4b5563;
+}
+
+.feature-list li:last-child {
+  border-bottom: none;
+}
+
+/* Construction CTA */
+.construction-cta {
+  margin-top: 2rem;
+}
+
+.construction-cta p {
+  font-size: 1rem;
+  color: #6b7280;
+  margin: 0 0 1rem;
+}
+
+/* Minimal Footer */
+.landing-footer.minimal {
+  background: white;
+  border-top: 1px solid #e5e7eb;
+  padding: 2rem 0;
+}
+
+.landing-footer.minimal .footer-bottom {
+  margin: 0;
+  padding: 0;
+  border: none;
+  color: #6b7280;
+}
+
+/* Responsive adjustments for construction page */
+@media (max-width: 768px) {
+  .giant-cog-wrapper {
+    width: 180px;
+    height: 180px;
+  }
+  
+  .construction-title {
+    font-size: 2rem;
+  }
+  
+  .construction-subtitle {
+    font-size: 1.1rem;
+  }
+}

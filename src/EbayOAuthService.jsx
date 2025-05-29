@@ -1,28 +1,19 @@
 // EbayOAuthService.js - Updated with better error handling and debugging
+import EbayConfigService from './EbayConfigService';
+
 class EbayOAuthService {
   constructor() {
-    // eBay API Configuration
-    this.config = {
-      // Production URLs
-      production: {
-        authUrl: 'https://auth.ebay.com/oauth2/authorize',
-        tokenUrl: 'https://api.ebay.com/identity/v1/oauth2/token',
-        apiUrl: 'https://api.ebay.com'
-      },
-      // Sandbox URLs for testing
-      sandbox: {
-        authUrl: 'https://auth.sandbox.ebay.com/oauth2/authorize',
-        tokenUrl: 'https://api.sandbox.ebay.com/identity/v1/oauth2/token',
-        apiUrl: 'https://api.sandbox.ebay.com'
-      }
-    };
+    // Initialize configuration service
+    this.configService = new EbayConfigService();
     
-    // Set environment (change to 'production' for live)
-    this.environment = 'production'; // or 'production'
+    // Get configuration from config service
+    this.config = this.configService.getPublicConfig().urls;
+    this.environment = this.configService.getEnvironment();
     
-    // Lambda function URLs
-    this.lambdaTokenEndpoint = 'https://xospzjj5da.execute-api.us-east-2.amazonaws.com/prod/ebay-token-exchange';
-    this.lambdaApiProxyEndpoint = 'https://xospzjj5da.execute-api.us-east-2.amazonaws.com/prod/ebay-api-proxy';
+    // Get Lambda endpoints from config service
+    const lambdaEndpoints = this.configService.getLambdaEndpoints();
+    this.lambdaTokenEndpoint = lambdaEndpoints.tokenExchange;
+    this.lambdaApiProxyEndpoint = lambdaEndpoints.apiProxy;
     
     // eBay Marketplace configurations
     this.marketplaces = {
@@ -45,41 +36,31 @@ class EbayOAuthService {
     // Default marketplace (can be overridden)
     this.selectedMarketplace = 'EBAY_US';
     
-    // Debug environment variables
-    console.log('Environment Variables Debug:');
-    console.log('REACT_APP_EBAY_CLIENT_ID:', process.env.REACT_APP_EBAY_CLIENT_ID);
-    console.log('REACT_APP_EBAY_CLIENT_SECRET:', process.env.REACT_APP_EBAY_CLIENT_SECRET ? '[SET]' : '[NOT SET]');
-    console.log('REACT_APP_EBAY_REDIRECT_URI:', process.env.REACT_APP_EBAY_REDIRECT_URI);
-    console.log('REACT_APP_EBAY_RU_NAME:', process.env.REACT_APP_EBAY_RU_NAME);
+    // Get public configuration
+    const publicConfig = this.configService.getPublicConfig();
     
+    // IMPORTANT: Credentials are no longer stored in frontend
+    // They are securely managed by Lambda functions
     this.credentials = {
-      clientId: 'DavidJac-ListEasi-PRD-f25542f2e-e59a4169',
-      clientSecret: 'PRD-25542f2e41cd-def8-4e59-b24f-3570',
-      redirectUri: 'https://main.dhpq8vit86dyp.amplifyapp.com/ebay/callback',
-      ruName: 'David_Jacobs-DavidJac-ListEa-iypllngrr'
+      // Client ID and Secret are handled by Lambda
+      clientId: null,  // Retrieved from Lambda when needed
+      clientSecret: null,  // Never exposed to frontend
+      redirectUri: publicConfig.redirectUri,
+      ruName: null  // Retrieved from Lambda when needed
     };
     
-this.scopes = [
-  'https://api.ebay.com/oauth/api_scope/sell.account.readonly',
-  'https://api.ebay.com/oauth/api_scope/commerce.identity.readonly',
-  'https://api.ebay.com/oauth/api_scope/sell.inventory',
-  'https://api.ebay.com/oauth/api_scope/sell.account',
-  // Add this scope for full listing management:
-  'https://api.ebay.com/oauth/api_scope/sell.inventory.readonly'
-];
+    this.scopes = publicConfig.scopes;
     
-    // Debug logging
+    // Debug logging (no sensitive data)
     console.log('eBay OAuth Service Configuration:');
     console.log('Environment:', this.environment);
-    console.log('Client ID:', this.credentials.clientId);
-    console.log('Client Secret:', this.credentials.clientSecret ? '[SET]' : '[NOT SET]');
     console.log('Redirect URI:', this.credentials.redirectUri);
-    console.log('RuName:', this.credentials.ruName);
     console.log('Scopes:', this.scopes);
     console.log('Lambda Token Endpoint:', this.lambdaTokenEndpoint);
     console.log('Lambda API Proxy Endpoint:', this.lambdaApiProxyEndpoint);
+    console.log('Secure Mode: Credentials managed by Lambda');
     
-    // Validate configuration on construction
+    // Validate configuration
     this.validateConfiguration();
   }
 
@@ -123,48 +104,47 @@ this.scopes = [
   }
 
   /**
-   * Validate that all required credentials are configured
+   * Validate that all required configuration is present
    */
   validateConfiguration() {
-    const required = ['clientId', 'clientSecret', 'redirectUri'];
-    const missing = required.filter(key => {
-      const value = this.credentials[key];
-      return !value || 
-             value === '' ||
-             value.startsWith('YOUR_') ||
-             value.startsWith('PASTE_YOUR_');
-    });
+    const missing = [];
+    
+    // Check redirect URI
+    if (!this.credentials.redirectUri || 
+        this.credentials.redirectUri === '' ||
+        this.credentials.redirectUri.includes('YOUR_')) {
+      missing.push('redirectUri');
+    }
     
     // Check if Lambda endpoints are configured
-    if (this.lambdaTokenEndpoint.includes('YOUR_')) {
+    if (!this.lambdaTokenEndpoint || this.lambdaTokenEndpoint.includes('YOUR_')) {
       console.warn('Lambda token endpoint not configured - token exchange will fail');
       missing.push('lambdaTokenEndpoint');
     }
 
-    if (this.lambdaApiProxyEndpoint.includes('YOUR_')) {
+    if (!this.lambdaApiProxyEndpoint || this.lambdaApiProxyEndpoint.includes('YOUR_')) {
       console.warn('Lambda API proxy endpoint not configured - API calls will fail');
       missing.push('lambdaApiProxyEndpoint');
     }
     
-    // RuName validation
-    if (!this.credentials.ruName || 
-        this.credentials.ruName.startsWith('YOUR_') ||
-        this.credentials.ruName.startsWith('PASTE_YOUR_')) {
-      console.warn('RuName not properly set - this might be required depending on your eBay app configuration');
-      missing.push('ruName');
+    // Verify config service is properly initialized
+    if (!this.configService || !this.configService.isConfigured()) {
+      console.warn('Configuration service is not properly initialized');
+      missing.push('configService');
     }
     
     if (missing.length > 0) {
-      console.error('eBay OAuth Configuration Error: Missing or invalid credentials:', missing);
-      console.error('Please check your eBay Developer Account and update the following:');
-      missing.forEach(key => {
-        console.error(`- ${key}: ${this.credentials[key]}`);
-      });
+      console.error('eBay OAuth Configuration Error: Missing configuration:', missing);
+      console.error('Please ensure the following environment variables are set:');
+      console.error('- REACT_APP_EBAY_REDIRECT_URI');
+      console.error('- REACT_APP_LAMBDA_TOKEN_ENDPOINT');
+      console.error('- REACT_APP_LAMBDA_API_PROXY_ENDPOINT');
+      console.error('Note: eBay credentials are now securely managed by Lambda functions');
       
       this.configurationValid = false;
     } else {
       this.configurationValid = true;
-      console.log('eBay OAuth configuration validated successfully');
+      console.log('eBay OAuth configuration validated successfully (secure mode)');
     }
   }
 
@@ -179,25 +159,7 @@ this.scopes = [
    * Get configuration instructions for the user
    */
   getConfigurationInstructions() {
-    return {
-      step1: "Go to https://developer.ebay.com/my/keys",
-      step2: "Create a new application or use an existing one",
-      step3: "Copy your Client ID and Client Secret",
-      step4: "Create a RuName (Redirect URL Name) with your callback URL",
-      step5: "Deploy the Lambda functions for token exchange and API proxy",
-      environment: this.environment,
-      redirectUri: this.credentials.redirectUri,
-      lambdaTokenEndpoint: this.lambdaTokenEndpoint,
-      lambdaApiProxyEndpoint: this.lambdaApiProxyEndpoint,
-      requiredEnvVars: [
-        'REACT_APP_EBAY_CLIENT_ID',
-        'REACT_APP_EBAY_CLIENT_SECRET', 
-        'REACT_APP_EBAY_REDIRECT_URI',
-        'REACT_APP_EBAY_RU_NAME',
-        'REACT_APP_LAMBDA_TOKEN_ENDPOINT',
-        'REACT_APP_LAMBDA_API_PROXY_ENDPOINT'
-      ]
-    };
+    return this.configService.getSecureSetupInstructions();
   }
 
   /**
@@ -208,48 +170,27 @@ this.scopes = [
   }
 
   /**
-   * Generate the eBay OAuth authorization URL with better parameter validation
+   * Generate the eBay OAuth authorization URL using Lambda service
    */
-  generateAuthUrl(state = null) {
+  async generateAuthUrl(state = null) {
     if (!this.isConfigured()) {
-      throw new Error('eBay OAuth service is not properly configured. Please check your credentials.');
+      throw new Error('eBay OAuth service is not properly configured. Please check your configuration.');
     }
 
-    const urls = this.getApiUrls();
-    
-    // Validate redirect URI format
-    if (!this.credentials.redirectUri.startsWith('http')) {
-      throw new Error('Redirect URI must be a valid HTTP/HTTPS URL');
+    try {
+      console.log('=== GENERATING AUTH URL ===');
+      console.log('Environment:', this.environment);
+      console.log('State:', state);
+      
+      // Use config service to get auth URL from Lambda
+      const authUrl = await this.configService.getAuthorizationUrl(state);
+      
+      console.log('Authorization URL generated successfully');
+      return authUrl;
+    } catch (error) {
+      console.error('Error generating authorization URL:', error);
+      throw new Error('Failed to generate authorization URL. Please check your configuration.');
     }
-    
-    // Build parameters object
-    const params = {
-      client_id: this.credentials.clientId,
-      redirect_uri: this.credentials.redirectUri,
-      response_type: 'code',
-      scope: this.scopes.join(' ')
-    };
-    
-    // Only add state if provided
-    if (state) {
-      params.state = state;
-    }
-    
-    // Debug the parameters being sent
-    console.log('eBay OAuth Parameters:');
-    console.log('Auth URL:', urls.authUrl);
-    console.log('Parameters:', params);
-    
-    // Create URL with proper encoding
-    const urlParams = new URLSearchParams();
-    Object.entries(params).forEach(([key, value]) => {
-      urlParams.append(key, value);
-    });
-    
-    const authUrl = `${urls.authUrl}?${urlParams.toString()}`;
-    console.log('Generated eBay auth URL:', authUrl);
-    
-    return authUrl;
   }
 
   /**

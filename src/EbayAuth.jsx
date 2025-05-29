@@ -121,7 +121,7 @@ const EbayAuth = ({ onAuthSuccess, onAuthError, redirectAfterAuth = null }) => {
     }
   };
 
-  const handleLogin = () => {
+  const handleLogin = async () => {
     if (!ebayService.isConfigured()) {
       setError('eBay OAuth service is not properly configured. Please check your credentials.');
       return;
@@ -141,8 +141,8 @@ const EbayAuth = ({ onAuthSuccess, onAuthError, redirectAfterAuth = null }) => {
       // Store state for verification
       sessionStorage.setItem('ebayAuthState', state);
       
-      // Redirect to eBay OAuth
-      const authUrl = ebayService.generateAuthUrl(state);
+      // Generate auth URL using secure method
+      const authUrl = await ebayService.generateAuthUrl(state);
       console.log('Redirecting to eBay OAuth with redirect info:', { redirectAfterAuth, authUrl });
       window.location.href = authUrl;
     } catch (error) {

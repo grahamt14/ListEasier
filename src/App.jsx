@@ -2999,7 +2999,7 @@ function BatchEditor() {
         setShowPhotoReview(false);
       }
     }
-  }, [currentBatch]); // Changed: Watch entire currentBatch object, not just ID
+  }, [currentBatch?.id]); // Only run when batch ID changes, not on every update
 
   // Load batch state into app state
  useEffect(() => {
@@ -3927,6 +3927,16 @@ function BatchEditor() {
           <button
             onClick={() => {
               console.log('🔍 Review & Finalize clicked, setting showPhotoReview to true');
+              
+              // Ensure s3ImageGroups is populated from photoListings
+              if (photoListings.length > 0) {
+                const s3ImageGroups = photoListings.map(listing => 
+                  listing.photos ? listing.photos.map(photo => photo.url) : []
+                );
+                console.log('📤 Setting s3ImageGroups before review:', s3ImageGroups.length);
+                appDispatch({ type: 'SET_S3_IMAGE_GROUPS', payload: s3ImageGroups });
+              }
+              
               setShowPhotoReview(true);
             }}
             style={{

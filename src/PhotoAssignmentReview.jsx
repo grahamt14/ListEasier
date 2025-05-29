@@ -172,6 +172,15 @@ function PhotoAssignmentReview({
   useEffect(() => {
     if (initialGeneratedListings.length > 0 && initialGeneratedListings !== generatedListings) {
       setGeneratedListings(initialGeneratedListings);
+      
+      // Also sync s3ImageGroups if we have generated listings with photos
+      const s3ImageGroups = initialGeneratedListings.map(listing => 
+        listing.photos ? listing.photos.map(photo => photo.url) : []
+      );
+      if (s3ImageGroups.some(group => group.length > 0)) {
+        console.log('📤 PhotoAssignmentReview: Setting initial s3ImageGroups with count:', s3ImageGroups.length);
+        dispatch({ type: 'SET_S3_IMAGE_GROUPS', payload: s3ImageGroups });
+      }
     }
   }, [initialGeneratedListings]);
   
@@ -180,6 +189,15 @@ function PhotoAssignmentReview({
     console.log('PhotoAssignmentReview mounted with categoryFields:', categoryFields);
     console.log('Initial generated listings:', initialGeneratedListings.length);
     console.log('Photo listings:', photoListings.length);
+    
+    // Set s3ImageGroups from photoListings if not already set
+    if (photoListings.length > 0 && (!state.s3ImageGroups || state.s3ImageGroups.length === 0)) {
+      const s3ImageGroups = photoListings.map(listing => 
+        listing.photos ? listing.photos.map(photo => photo.url) : []
+      );
+      console.log('📤 PhotoAssignmentReview: Setting s3ImageGroups from photoListings:', s3ImageGroups.length);
+      dispatch({ type: 'SET_S3_IMAGE_GROUPS', payload: s3ImageGroups });
+    }
     
     // Check if we need to generate listings for new photoListings
     const existingListingIds = new Set(generatedListings.map(listing => listing.id));
@@ -461,6 +479,13 @@ function PhotoAssignmentReview({
       
       console.log('📤 PhotoAssignmentReview: Dispatching SET_RESPONSE_DATA with count:', responseData.length);
       dispatch({ type: 'SET_RESPONSE_DATA', payload: responseData });
+      
+      // Also update s3ImageGroups from the photo listings for BatchPreviewSection
+      const s3ImageGroups = mergedResults.map(listing => 
+        listing.photos ? listing.photos.map(photo => photo.url) : []
+      );
+      console.log('📤 PhotoAssignmentReview: Setting s3ImageGroups with count:', s3ImageGroups.length);
+      dispatch({ type: 'SET_S3_IMAGE_GROUPS', payload: s3ImageGroups });
       
       // Also update the parent component
       console.log('👆 PhotoAssignmentReview: Calling onGeneratedListingsChange');

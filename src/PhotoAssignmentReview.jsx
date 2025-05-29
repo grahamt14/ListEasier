@@ -96,10 +96,10 @@ function PhotoAssignmentReview({
       
       const params = {
         TableName: 'ListCategory',
-        KeyConditionExpression: 'CategoryName = :category AND SubcategoryName = :subCategory',
+        KeyConditionExpression: 'Category = :cat AND SubCategory = :sub',
         ExpressionAttributeValues: {
-          ':category': { S: category },
-          ':subCategory': { S: subCategory }
+          ':cat': { S: category },
+          ':sub': { S: subCategory }
         }
       };
       
@@ -108,11 +108,31 @@ function PhotoAssignmentReview({
       
       if (result.Items && result.Items.length > 0) {
         const item = unmarshall(result.Items[0]);
-        const categoryID = item.EbayCategoryID;
+        const categoryID = item.EbayCategoryID || null;
         
         // Cache for 1 hour
         cacheService.set(cacheKey, categoryID, 60 * 60 * 1000, 'ebayCategories');
         return categoryID;
+      }
+      
+      // Fallback: try with just category
+      const fallbackParams = {
+        TableName: 'ListCategory',
+        KeyConditionExpression: 'Category = :cat',
+        ExpressionAttributeValues: {
+          ':cat': { S: category }
+        },
+        Limit: 1
+      };
+      
+      const fallbackCommand = new QueryCommand(fallbackParams);
+      const fallbackResult = await client.send(fallbackCommand);
+      
+      if (fallbackResult.Items && fallbackResult.Items.length > 0) {
+        const fallbackItem = unmarshall(fallbackResult.Items[0]);
+        const fallbackCategoryID = fallbackItem.EbayCategoryID || null;
+        cacheService.set(cacheKey, fallbackCategoryID, 60 * 60 * 1000, 'ebayCategories');
+        return fallbackCategoryID;
       }
       
       cacheService.set(cacheKey, null, 60 * 60 * 1000, 'ebayCategories');

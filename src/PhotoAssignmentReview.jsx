@@ -691,7 +691,9 @@ function PhotoAssignmentReview({
       }
     }
       
+      console.log('🎉 PhotoAssignmentReview: Setting generated listings:', results.length);
       setGeneratedListings(results);
+      console.log('🔄 PhotoAssignmentReview: Setting isGenerating to false');
       setIsGenerating(false);
       
       // Update app state with generated listings
@@ -705,12 +707,15 @@ function PhotoAssignmentReview({
         error: listing.error
       }));
       
+      console.log('📤 PhotoAssignmentReview: Dispatching SET_RESPONSE_DATA');
       dispatch({ type: 'SET_RESPONSE_DATA', payload: responseData });
       
       // Also update the parent component
+      console.log('👆 PhotoAssignmentReview: Calling onGeneratedListingsChange');
       if (onGeneratedListingsChange) {
         onGeneratedListingsChange(results);
       }
+      console.log('✅ PhotoAssignmentReview: Listing generation completed successfully');
       
       // Increment quota after successful generation
       if (user?.sub && results.length > 0) {

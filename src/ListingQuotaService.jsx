@@ -33,6 +33,11 @@ export const SUBSCRIPTION_TIERS = {
     name: 'Growth',
     monthlyLimit: 10000,
     isLifetime: false
+  },
+  UNLIMITED: {
+    name: 'UNLIMITED',
+    monthlyLimit: 1000000,
+    isLifetime: false
   }
 };
 

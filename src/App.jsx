@@ -2927,6 +2927,7 @@ function BatchEditor() {
   const updateTimeoutRef = useRef(null);
   const lastUpdateRef = useRef(null);
   const lastSaveTimeRef = useRef(0);
+  const lastLoadedBatchRef = useRef(null);
   const SAVE_THROTTLE_MS = 10000;
 
   // Initialize current SKU from batch data
@@ -2938,11 +2939,36 @@ function BatchEditor() {
 
   // Load batch state into app state when component mounts or batch changes
   useEffect(() => {
-    if (currentBatch && currentBatch.appState) {
+    if (currentBatch && currentBatch.appState && lastLoadedBatchRef.current !== currentBatch.id) {
       console.log('🔄 BatchEditor: Loading batch state from:', currentBatch.name);
+      console.log('🔄 BatchEditor: Batch has images:', {
+        filesBase64Count: currentBatch.appState.filesBase64?.length || 0,
+        imageGroupsCount: currentBatch.appState.imageGroups?.length || 0,
+        firstGroupSize: currentBatch.appState.imageGroups?.[0]?.length || 0,
+        hasNonEmptyGroups: currentBatch.appState.imageGroups?.some(group => group && group.length > 0)
+      });
       
-      // Load the entire appState from the saved batch
+      // Force clear state first to ensure clean load
+      appDispatch({ type: 'CLEAR_ALL_FOR_NEW_BATCH' });
+      
+      // Then load the entire appState from the saved batch
       appDispatch({ type: 'LOAD_BATCH_STATE', payload: currentBatch.appState });
+      
+      // Track that we've loaded this batch
+      lastLoadedBatchRef.current = currentBatch.id;
+      
+      console.log('✅ BatchEditor: Batch state loaded successfully');
+      
+      // Verify state was loaded (on next tick)
+      setTimeout(() => {
+        console.log('🔍 BatchEditor: Current state after load:', {
+          filesBase64Count: state.filesBase64?.length || 0,
+          imageGroupsCount: state.imageGroups?.length || 0,
+          firstGroupSize: state.imageGroups?.[0]?.length || 0
+        });
+      }, 100);
+    } else if (currentBatch) {
+      console.log('⚠️ BatchEditor: Batch loaded but no appState found or already loaded');
     }
     
     // Restore photo assignment state if it exists
@@ -2973,7 +2999,7 @@ function BatchEditor() {
         setShowPhotoReview(false);
       }
     }
-  }, [currentBatch?.id]); // Only run when batch ID changes
+  }, [currentBatch]); // Changed: Watch entire currentBatch object, not just ID
 
   // Load batch state into app state
  useEffect(() => {

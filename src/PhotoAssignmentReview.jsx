@@ -48,7 +48,11 @@ function PhotoAssignmentReview({
   
   // Ensure categoryID is set in the state when component mounts
   useEffect(() => {
+    console.log('📋 PhotoAssignmentReview: Props received - categoryID:', categoryID, 'category:', category, 'subCategory:', subCategory);
+    console.log('📋 PhotoAssignmentReview: Current state categoryID:', state.categoryID);
+    
     if (categoryID && state.categoryID !== categoryID) {
+      console.log('✅ PhotoAssignmentReview: Setting categoryID from props:', categoryID);
       dispatch({ type: 'SET_CATEGORY_ID', payload: categoryID });
     }
   }, [categoryID, state.categoryID, dispatch]);
@@ -119,11 +123,24 @@ function PhotoAssignmentReview({
     }
   };
   
-  // TEMPORARILY DISABLED: Category fetch causing interference with listing generation
+  // Fetch eBay category ID if not already set
   useEffect(() => {
-    console.log('🔍 PhotoAssignmentReview: Skipping eBay categoryID fetch (temporarily disabled to fix listing generation)');
-    dispatch({ type: 'SET_CATEGORY_ID', payload: null });
-  }, [category, subCategory, dispatch]);
+    const updateCategoryID = async () => {
+      if (category && subCategory && !state.categoryID) {
+        console.log('🔍 PhotoAssignmentReview: Fetching eBay categoryID for:', category, subCategory);
+        try {
+          const fetchedCategoryID = await fetchEbayCategoryID(category, subCategory);
+          if (fetchedCategoryID) {
+            console.log('✅ PhotoAssignmentReview: Setting categoryID:', fetchedCategoryID);
+            dispatch({ type: 'SET_CATEGORY_ID', payload: fetchedCategoryID });
+          }
+        } catch (error) {
+          console.error('Error fetching eBay category ID:', error);
+        }
+      }
+    };
+    updateCategoryID();
+  }, [category, subCategory, state.categoryID, dispatch]);
   
   // Optimized image conversion function
   const convertImageToBase64Optimized = (photo) => {

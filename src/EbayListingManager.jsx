@@ -18,6 +18,16 @@ const EbayListingManager = ({ onClose, onListingsCreated }) => {
   });
   
   const listingService = new EbayListingService();
+  
+  // Debug state
+  console.log('🔍 EbayListingManager: Current state categoryID:', state.categoryID);
+  console.log('🔍 EbayListingManager: Full state:', {
+    categoryID: state.categoryID,
+    category: state.category,
+    subCategory: state.subCategory,
+    responseDataLength: state.responseData?.length,
+    s3ImageGroupsLength: state.s3ImageGroups?.length
+  });
 
   // Get environment-aware eBay URLs
   const getEbayUrls = () => {

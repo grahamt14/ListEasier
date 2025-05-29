@@ -136,7 +136,8 @@ case 'SET_PROCESSING_STATUS':
       return { ...state, sku: action.payload, isDirty: true };
       
     case 'SET_CATEGORY_ID':
-      return { ...state, categoryID: action.payload };
+      console.log('🔧 StateContext: SET_CATEGORY_ID action received with payload:', action.payload);
+      return { ...state, categoryID: action.payload, isDirty: true };
       
     case 'SET_FIELD_SELECTIONS':
       return { 

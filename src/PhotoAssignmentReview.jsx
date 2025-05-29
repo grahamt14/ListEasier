@@ -391,6 +391,7 @@ function PhotoAssignmentReview({
             fullResult: result
           });
           
+          console.log('🔧 PhotoAssignmentReview: Starting field selection processing');
           // Start with batch category field selections, then merge AI resolved fields
           let finalFieldSelections = { ...fieldSelections };
           
@@ -431,6 +432,7 @@ function PhotoAssignmentReview({
             });
           }
           
+          console.log('🏗️ PhotoAssignmentReview: Creating listing object for:', listing.sku);
           // Create the listing object
           const generatedListing = {
             id: listing.id,
@@ -445,6 +447,7 @@ function PhotoAssignmentReview({
             error: null
           };
           
+          console.log('✅ PhotoAssignmentReview: Created listing object, adding to results');
           newResults.push(generatedListing);
         }
       }

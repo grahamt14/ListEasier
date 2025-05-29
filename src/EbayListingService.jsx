@@ -8,12 +8,59 @@ class EbayListingService {
     this.createListingEndpoint = 'https://xospzjj5da.execute-api.us-east-2.amazonaws.com/prod/ebay-create-listing';
     this.batchSize = 3; // Process fewer at once to avoid rate limits
     this.delayBetweenListings = 2000; // 2 second delay between listings
+    this.userLocation = null; // Cache user location
+  }
+  
+  // Get user location from profile or use default
+  async getUserLocation() {
+    // Return cached location if available
+    if (this.userLocation) {
+      return this.userLocation;
+    }
+    
+    try {
+      // Try to get user profile
+      const userProfile = await this.ebayOAuthService.getUserProfile();
+      const extractedLocation = this.ebayOAuthService.extractUserLocation(userProfile);
+      
+      if (extractedLocation && extractedLocation.postalCode) {
+        console.log('Using location from eBay profile:', extractedLocation);
+        this.userLocation = extractedLocation;
+        return extractedLocation;
+      }
+    } catch (error) {
+      console.warn('Could not retrieve user location from profile:', error);
+    }
+    
+    // Check if location is stored in localStorage (user preference)
+    const storedLocation = localStorage.getItem('ebaySellerLocation');
+    if (storedLocation) {
+      try {
+        const parsed = JSON.parse(storedLocation);
+        console.log('Using stored seller location:', parsed);
+        this.userLocation = parsed;
+        return parsed;
+      } catch (e) {
+        console.warn('Invalid stored location:', e);
+      }
+    }
+    
+    // Default fallback location
+    const defaultLocation = {
+      country: 'US',
+      postalCode: '90210',
+      city: 'Beverly Hills',
+      stateOrProvince: 'CA'
+    };
+    
+    console.log('Using default location:', defaultLocation);
+    return defaultLocation;
   }
 
   /**
    * Format listing data for eBay API
    */
-  formatListingForEbay(listing, imageUrls, metadata, categoryId, selectedPolicies) {
+  async formatListingForEbay(listing, imageUrls, metadata, categoryId, selectedPolicies) {
     // Clean and validate image URLs
     const validImageUrls = imageUrls
       .filter(url => url && typeof url === 'string' && url.includes('http'))
@@ -34,11 +81,19 @@ class EbayListingService {
     }
 
     // Clean and validate required fields
-    const title = (listing.title || 'No Title').substring(0, 255); // eBay title limit
+    const title = (listing.title || 'No Title').substring(0, 80); // eBay title limit
     const description = listing.description || 'No Description';
     const price = parseFloat(metadata.price) || 9.99;
     const sku = metadata.sku || `SKU-${Date.now()}`;
+    
+    // Ensure we have valid category ID
+    if (!categoryId || categoryId === 'null' || categoryId === 'undefined') {
+      throw new Error('Valid category ID is required for eBay listing');
+    }
 
+    // Get dynamic location
+    const location = await this.getUserLocation();
+    
     return {
       sku: sku,
       title: title,
@@ -54,10 +109,7 @@ class EbayListingService {
         returnPolicyId: selectedPolicies.returnPolicyId || null
       },
       aspectsData: aspectsData,
-      location: {
-        country: 'US',
-        postalCode: '90210' // Default - should be configurable
-      }
+      location: location
     };
   }
 
@@ -325,7 +377,7 @@ class EbayListingService {
         console.log('Image URLs count:', imageUrls.length);
         console.log('First image URL:', imageUrls[0]);
         
-        const listingData = this.formatListingForEbay(
+        const listingData = await this.formatListingForEbay(
           response,
           imageUrls,
           metadata,
@@ -472,7 +524,7 @@ class EbayListingService {
       throw new Error('No valid image URLs available for this listing');
     }
 
-    const listingData = this.formatListingForEbay(
+    const listingData = await this.formatListingForEbay(
       listing,
       imageUrls,
       metadata,

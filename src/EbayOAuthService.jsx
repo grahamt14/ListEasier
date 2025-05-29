@@ -670,11 +670,51 @@ class EbayOAuthService {
         }
       });
       
+      console.log('User profile response:', response);
       return response;
     } catch (error) {
       console.error('Error fetching user profile:', error);
       throw error;
     }
+  }
+  
+  // Extract location from user profile
+  extractUserLocation(userProfile) {
+    if (!userProfile) return null;
+    
+    // Try business account address first
+    if (userProfile.businessAccount?.address) {
+      const addr = userProfile.businessAccount.address;
+      return {
+        country: addr.country || 'US',
+        postalCode: addr.postalCode,
+        city: addr.city,
+        stateOrProvince: addr.stateOrProvince
+      };
+    }
+    
+    // Try individual account registration address
+    if (userProfile.individualAccount?.registrationAddress) {
+      const addr = userProfile.individualAccount.registrationAddress;
+      return {
+        country: addr.country || 'US',
+        postalCode: addr.postalCode,
+        city: addr.city,
+        stateOrProvince: addr.stateOrProvince
+      };
+    }
+    
+    // Try any address field
+    if (userProfile.address) {
+      return {
+        country: userProfile.address.country || 'US',
+        postalCode: userProfile.address.postalCode,
+        city: userProfile.address.city,
+        stateOrProvince: userProfile.address.stateOrProvince
+      };
+    }
+    
+    return null;
   }
 }
 

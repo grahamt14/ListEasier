@@ -9,6 +9,9 @@ import { cacheService } from './CacheService';
 import { DynamoDBClient, QueryCommand } from '@aws-sdk/client-dynamodb';
 import { unmarshall } from '@aws-sdk/util-dynamodb';
 import { fromCognitoIdentityPool } from '@aws-sdk/credential-provider-cognito-identity';
+import { listingQuotaService } from './ListingQuotaService';
+import { useAuth0 } from '@auth0/auth0-react';
+import ListingQuotaDisplay from './ListingQuotaDisplay';
 
 function PhotoAssignmentReview({ 
   photoListings, 
@@ -32,10 +35,13 @@ function PhotoAssignmentReview({
   const [showEbayAuth, setShowEbayAuth] = useState(false);
   const [openDropdown, setOpenDropdown] = useState(null);
   const [searchTerms, setSearchTerms] = useState({});
+  const [quotaExceeded, setQuotaExceeded] = useState(false);
+  const [quotaInfo, setQuotaInfo] = useState(null);
   const dropdownRefs = useRef({});
   
   const { state, dispatch } = useAppState();
   const { isAuthenticated: ebayAuthenticated, selectedPolicies } = useEbayAuth();
+  const { user } = useAuth0();
   
   // Ensure categoryID is set in the state when component mounts
   useEffect(() => {
@@ -203,6 +209,18 @@ function PhotoAssignmentReview({
   // Generate listings for new photo listings (incremental)
   const generateListingsForNew = async (newPhotoListings) => {
     if (newPhotoListings.length === 0) return;
+    
+    // Check quota before generating
+    if (user?.sub) {
+      const quotaCheck = await listingQuotaService.canGenerateListings(user.sub, newPhotoListings.length);
+      setQuotaInfo(quotaCheck);
+      
+      if (!quotaCheck.allowed) {
+        setQuotaExceeded(true);
+        setError(`Listing quota exceeded. You have ${quotaCheck.remaining} listings remaining ${quotaCheck.isLifetime ? '' : 'this month'}. Upgrade your plan to generate more listings.`);
+        return;
+      }
+    }
     
     setIsGenerating(true);
     setGenerationProgress(0);
@@ -401,6 +419,18 @@ function PhotoAssignmentReview({
         onGeneratedListingsChange(mergedResults);
       }
       
+      // Increment quota after successful generation
+      if (user?.sub && newResults.length > 0) {
+        try {
+          await listingQuotaService.incrementListingCount(user.sub, newResults.length);
+          // Refresh quota info
+          const updatedQuota = await listingQuotaService.getUsageStats(user.sub);
+          setQuotaInfo(updatedQuota);
+        } catch (quotaError) {
+          console.error('Error updating listing quota:', quotaError);
+        }
+      }
+      
     } catch (error) {
       console.error('Error generating new listings:', error);
       setError(error.message);
@@ -409,6 +439,18 @@ function PhotoAssignmentReview({
   };
   
   const generateListings = async () => {
+    // Check quota before generating
+    if (user?.sub) {
+      const quotaCheck = await listingQuotaService.canGenerateListings(user.sub, photoListings.length);
+      setQuotaInfo(quotaCheck);
+      
+      if (!quotaCheck.allowed) {
+        setQuotaExceeded(true);
+        setError(`Listing quota exceeded. You have ${quotaCheck.remaining} listings remaining ${quotaCheck.isLifetime ? '' : 'this month'}. Upgrade your plan to generate more listings.`);
+        return;
+      }
+    }
+    
     setIsGenerating(true);
     setGenerationProgress(0);
     setError(null);
@@ -438,7 +480,7 @@ function PhotoAssignmentReview({
       
       // Process listings in batches for better performance
       // Adjust batch size based on total listings for optimal performance
-      const BATCH_SIZE = Math.min(10, Math.max(3, Math.ceil(newPhotoListings.length / 10))); // 3-10 listings per batch
+      const BATCH_SIZE = Math.min(10, Math.max(3, Math.ceil(photoListings.length / 10))); // 3-10 listings per batch
       const batches = [];
       
       // Group listings into batches
@@ -611,6 +653,21 @@ function PhotoAssignmentReview({
         onGeneratedListingsChange(results);
       }
       
+      // Increment quota after successful generation
+      if (user?.sub && results.length > 0) {
+        try {
+          const validResults = results.filter(r => !r.error);
+          if (validResults.length > 0) {
+            await listingQuotaService.incrementListingCount(user.sub, validResults.length);
+            // Refresh quota info
+            const updatedQuota = await listingQuotaService.getUsageStats(user.sub);
+            setQuotaInfo(updatedQuota);
+          }
+        } catch (quotaError) {
+          console.error('Error updating listing quota:', quotaError);
+        }
+      }
+      
     } catch (error) {
       console.error('Error generating listings:', error);
       setError(error.message);
@@ -768,6 +825,11 @@ function PhotoAssignmentReview({
               ? `Generating listings... ${generationProgress}%` 
               : `${generatedListings.length} listings ready`}
           </p>
+          {quotaInfo && !quotaInfo.error && (
+            <p style={{ margin: '5px 0 0 0', fontSize: '12px', color: quotaInfo.remaining < 5 ? '#dc3545' : '#666' }}>
+              {quotaInfo.remaining} listings remaining {quotaInfo.isLifetime ? '' : 'this month'}
+            </p>
+          )}
         </div>
         <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
           <button

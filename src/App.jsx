@@ -22,6 +22,7 @@ import AuthenticationWrapper from './AuthenticationWrapper';
 import LandingPage from './LandingPage';
 import LoadingSpinner from './LoadingSpinner';
 import PhotoAssignmentReview from './PhotoAssignmentReview';
+import ListingQuotaDisplay from './ListingQuotaDisplay';
 
 // Auth0 Configuration
 const AUTH0_DOMAIN = process.env.REACT_APP_AUTH0_DOMAIN || 'listeasier.us.auth0.com';
@@ -1852,6 +1853,7 @@ function MainHeader() {
         <h1 className="page-title">{getPageTitle()}</h1>
       </div>
       <div className="header-right">
+        <ListingQuotaDisplay compact={true} />
         {viewMode === 'overview' && (
           <button 
             onClick={() => dispatch({ type: 'SET_VIEW_MODE', payload: 'create' })}

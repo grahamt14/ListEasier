@@ -119,23 +119,10 @@ function PhotoAssignmentReview({
     }
   };
   
-  // Fetch and set eBay category ID when category/subcategory are available
+  // TEMPORARILY DISABLED: Category fetch causing interference with listing generation
   useEffect(() => {
-    const setEbayCategoryID = async () => {
-      if (category && subCategory && category !== '--' && subCategory !== '--') {
-        try {
-          console.log('🔍 PhotoAssignmentReview: Fetching eBay categoryID for:', { category, subCategory });
-          const ebayCategoryID = await fetchEbayCategoryID(category, subCategory);
-          console.log('📋 PhotoAssignmentReview: eBay categoryID fetched:', ebayCategoryID);
-          dispatch({ type: 'SET_CATEGORY_ID', payload: ebayCategoryID });
-        } catch (error) {
-          console.error('Error fetching eBay category ID in PhotoAssignmentReview:', error);
-          dispatch({ type: 'SET_CATEGORY_ID', payload: null });
-        }
-      }
-    };
-    
-    setEbayCategoryID();
+    console.log('🔍 PhotoAssignmentReview: Skipping eBay categoryID fetch (temporarily disabled to fix listing generation)');
+    dispatch({ type: 'SET_CATEGORY_ID', payload: null });
   }, [category, subCategory, dispatch]);
   
   // Optimized image conversion function
@@ -450,11 +437,15 @@ function PhotoAssignmentReview({
           console.log('✅ PhotoAssignmentReview: Created listing object, adding to results');
           newResults.push(generatedListing);
         }
+        console.log('🏁 PhotoAssignmentReview: Finished processing batch results for batch');
       }
       
+      console.log('🏆 PhotoAssignmentReview: Completed all batches, newResults length:', newResults.length);
       // Merge new results with existing listings
       const mergedResults = [...generatedListings, ...newResults];
+      console.log('🔄 PhotoAssignmentReview: Setting generated listings with merged results, count:', mergedResults.length);
       setGeneratedListings(mergedResults);
+      console.log('🔄 PhotoAssignmentReview: Setting isGenerating to false');
       setIsGenerating(false);
       
       // Update app state with all listings
@@ -468,12 +459,15 @@ function PhotoAssignmentReview({
         error: listing.error
       }));
       
+      console.log('📤 PhotoAssignmentReview: Dispatching SET_RESPONSE_DATA with count:', responseData.length);
       dispatch({ type: 'SET_RESPONSE_DATA', payload: responseData });
       
       // Also update the parent component
+      console.log('👆 PhotoAssignmentReview: Calling onGeneratedListingsChange');
       if (onGeneratedListingsChange) {
         onGeneratedListingsChange(mergedResults);
       }
+      console.log('✅ PhotoAssignmentReview: Listing generation completed successfully');
       
       // Increment quota after successful generation
       if (user?.sub && newResults.length > 0) {
@@ -696,6 +690,7 @@ function PhotoAssignmentReview({
       }
     }
       
+      console.log('🏁 PhotoAssignmentReview: Completed all batch processing loops');
       console.log('🔍 PhotoAssignmentReview: Finished processing all results, total:', results.length);
       console.log('🎉 PhotoAssignmentReview: Setting generated listings:', results.length);
       setGeneratedListings(results);

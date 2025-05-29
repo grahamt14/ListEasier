@@ -1,10 +1,10 @@
 // index.mjs - Secure AWS Lambda function for eBay OAuth token exchange
 import https from 'https';
 import { URLSearchParams } from 'url';
-import AWS from 'aws-sdk';
+import { SecretsManagerClient, GetSecretValueCommand } from '@aws-sdk/client-secrets-manager';
 
 // AWS Secrets Manager client
-const secretsManager = new AWS.SecretsManager();
+const secretsManager = new SecretsManagerClient();
 
 // Cache for credentials
 let cachedCredentials = null;
@@ -20,12 +20,12 @@ async function getEbayCredentials(environment) {
     }
 
     try {
-        const params = {
+        const command = new GetSecretValueCommand({
             SecretId: process.env.EBAY_CREDENTIALS_SECRET_NAME || 'ebay-api-credentials'
-        };
+        });
         
         console.log('Retrieving credentials from Secrets Manager...');
-        const data = await secretsManager.getSecretValue(params).promise();
+        const data = await secretsManager.send(command);
         const credentials = JSON.parse(data.SecretString);
         
         // Cache for 5 minutes

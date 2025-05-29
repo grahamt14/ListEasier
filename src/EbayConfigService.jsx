@@ -2,7 +2,7 @@
 class EbayConfigService {
   constructor() {
     // Environment configuration
-    this.environment = process.env.REACT_APP_EBAY_ENVIRONMENT || 'sandbox';
+    this.environment = process.env.REACT_APP_EBAY_ENVIRONMENT || 'production';
     
     // Lambda endpoints (these are safe to have in frontend)
     this.lambdaEndpoints = {

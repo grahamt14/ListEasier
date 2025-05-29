@@ -91,8 +91,13 @@ class EbayListingService {
       throw new Error('Valid category ID is required for eBay listing');
     }
 
-    // Get dynamic location
+    // Get dynamic location but format it correctly for eBay
     const location = await this.getUserLocation();
+    
+    // Validate fulfillment policy is present
+    if (!selectedPolicies.fulfillmentPolicyId) {
+      throw new Error('Fulfillment policy is required for eBay listing');
+    }
     
     return {
       sku: sku,
@@ -105,11 +110,21 @@ class EbayListingService {
       condition: 'NEW',
       policies: {
         paymentPolicyId: selectedPolicies.paymentPolicyId || null,
-        fulfillmentPolicyId: selectedPolicies.fulfillmentPolicyId || null,
+        fulfillmentPolicyId: selectedPolicies.fulfillmentPolicyId,
         returnPolicyId: selectedPolicies.returnPolicyId || null
       },
       aspectsData: aspectsData,
-      location: location
+      // Try different location format
+      availability: {
+        shipToLocationAvailability: {
+          quantity: 1
+        }
+      },
+      // Add location as pickupAtLocationAvailability instead
+      location: {
+        countryCode: location.country,
+        postalCode: location.postalCode
+      }
     };
   }
 

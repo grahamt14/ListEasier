@@ -210,6 +210,7 @@ class EbayOAuthService {
       const requestBody = {
         authorizationCode: authorizationCode,
         environment: this.environment,
+        redirectUri: this.credentials.redirectUri,
         timestamp: new Date().toISOString()
       };
       

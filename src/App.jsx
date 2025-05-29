@@ -2722,7 +2722,10 @@ function BatchWizard() {
                       backgroundColor: '#f8f9fa',
                       borderRadius: '6px',
                       border: '1px solid #e9ecef',
-                      padding: '15px'
+                      padding: '15px',
+                      display: 'grid',
+                      gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))',
+                      gap: '15px'
                     }}>
                       {categoryFields.map((field) => {
                         const isOmitted = batchData.omittedCategoryFields.includes(field.FieldLabel);
@@ -2731,7 +2734,6 @@ function BatchWizard() {
                         
                         return (
                           <div key={field.FieldLabel} style={{
-                            marginBottom: '15px',
                             opacity: isOmitted ? 0.5 : 1,
                             transition: 'opacity 0.2s ease'
                           }}>
@@ -3224,7 +3226,20 @@ function BatchEditor() {
       url: URL.createObjectURL(file),
       name: file.name
     }));
-    setUploadedPhotos(prev => [...prev, ...newPhotos]);
+    setUploadedPhotos(prev => {
+      const updated = [...prev, ...newPhotos];
+      // Adjust autoAssignCount if it's no longer a valid divisor
+      if (updated.length > 0 && updated.length % autoAssignCount !== 0) {
+        // Find the closest valid divisor
+        for (let i = autoAssignCount; i >= 1; i--) {
+          if (updated.length % i === 0) {
+            setAutoAssignCount(i);
+            break;
+          }
+        }
+      }
+      return updated;
+    });
   };
 
   const handleFileDrop = (e) => {
@@ -3996,9 +4011,18 @@ function BatchEditor() {
                       border: '1px solid #ccc'
                     }}
                   >
-                    {[1,2,3,4,5,6,8,10,12].map(n => (
-                      <option key={n} value={n}>{n}</option>
-                    ))}
+                    {(() => {
+                      const divisors = [];
+                      const totalPhotos = uploadedPhotos.length;
+                      for (let i = 1; i <= Math.min(totalPhotos, 12); i++) {
+                        if (totalPhotos % i === 0) {
+                          divisors.push(i);
+                        }
+                      }
+                      return divisors.map(n => (
+                        <option key={n} value={n}>{n}</option>
+                      ));
+                    })()}
                   </select>
                   <label style={{ fontSize: '14px', fontWeight: '500' }}>photos to listings</label>
                   <button

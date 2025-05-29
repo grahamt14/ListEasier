@@ -451,7 +451,7 @@ function PhotoAssignmentReview({
       // Process each batch
       for (const batch of batches) {
         // Process all listings in the batch concurrently
-        const batchPromises = batch.map(async (listing, idx) => {
+        const batchPromises = batch.map(async (listing) => {
         try {
           // Optimized image conversion with Promise.all for parallel processing
           const base64Images = await Promise.all(
@@ -858,7 +858,12 @@ function PhotoAssignmentReview({
           boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
         }}>
           <div style={{ textAlign: 'center' }}>
-            <div style={{ fontSize: '48px', marginBottom: '20px' }}>⚙️</div>
+            <div style={{ 
+              fontSize: '48px', 
+              marginBottom: '20px',
+              animation: 'spin 2s linear infinite',
+              display: 'inline-block'
+            }}>⚙️</div>
             <h3>Generating Listings...</h3>
             <div style={{
               width: '300px',
@@ -1083,7 +1088,7 @@ function PhotoAssignmentReview({
                     </h4>
                     <div style={{
                       display: 'grid',
-                      gridTemplateColumns: '1fr',
+                      gridTemplateColumns: 'repeat(auto-fill, minmax(250px, 1fr))',
                       gap: '15px',
                       padding: '15px',
                       backgroundColor: '#34495e',

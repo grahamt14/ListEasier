@@ -9,6 +9,7 @@ import { cacheService } from './CacheService';
 import { DynamoDBClient, QueryCommand } from '@aws-sdk/client-dynamodb';
 import { unmarshall } from '@aws-sdk/util-dynamodb';
 import { fromCognitoIdentityPool } from '@aws-sdk/credential-provider-cognito-identity';
+import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
 import { useAuth0 } from '@auth0/auth0-react';
 import ListingQuotaDisplay from './ListingQuotaDisplay';
 import { useQuota } from './QuotaContext';
@@ -203,6 +204,58 @@ function PhotoAssignmentReview({
       img.onerror = () => reject(new Error('Failed to load image'));
       img.src = photo.url;
     });
+  };
+  
+  // Upload blob URL to S3
+  const uploadBlobToS3 = async (blobUrl, fileName = 'image.jpg') => {
+    try {
+      // Fetch the blob from the blob URL
+      const response = await fetch(blobUrl);
+      const blob = await response.blob();
+      
+      // Convert blob to array buffer
+      const arrayBuffer = await blob.arrayBuffer();
+      
+      // Generate unique filename
+      const timestamp = Date.now();
+      const randomId = Math.random().toString(36).substring(7);
+      const s3Key = `uploads/${timestamp}_${randomId}_${fileName}`;
+      
+      // AWS Configuration
+      const REGION = "us-east-2";
+      const BUCKET_NAME = "listeasier";
+      const IDENTITY_POOL_ID = "us-east-2:f81d1240-32a8-4aff-87e8-940effdf5908";
+      
+      // Create S3 client
+      const s3Client = new S3Client({
+        region: REGION,
+        credentials: fromCognitoIdentityPool({
+          clientConfig: { region: REGION },
+          identityPoolId: IDENTITY_POOL_ID,
+        }),
+      });
+      
+      // Upload to S3
+      const uploadParams = {
+        Bucket: BUCKET_NAME,
+        Key: s3Key,
+        Body: new Uint8Array(arrayBuffer),
+        ContentType: blob.type || 'image/jpeg',
+        ACL: "public-read",
+        CacheControl: "max-age=31536000",
+      };
+      
+      console.log('📤 Uploading blob to S3:', s3Key);
+      const command = new PutObjectCommand(uploadParams);
+      await s3Client.send(command);
+      
+      const s3Url = `https://${BUCKET_NAME}.s3.${REGION}.amazonaws.com/${s3Key}`;
+      console.log('✅ S3 upload successful:', s3Url);
+      return s3Url;
+    } catch (error) {
+      console.error("❌ Error uploading blob to S3:", error);
+      throw error;
+    }
   };
   
   // Sync with initial generated listings when they change from parent
@@ -517,11 +570,35 @@ function PhotoAssignmentReview({
       console.log('📤 PhotoAssignmentReview: Dispatching SET_RESPONSE_DATA with count:', responseData.length);
       dispatch({ type: 'SET_RESPONSE_DATA', payload: responseData });
       
-      // Also update s3ImageGroups from the photo listings for BatchPreviewSection
-      const s3ImageGroups = mergedResults.map(listing => 
-        listing.photos ? listing.photos.map(photo => photo.url) : []
-      );
+      // Upload blob images to S3 and update s3ImageGroups
+      console.log('🔄 PhotoAssignmentReview: Uploading images to S3...');
+      const s3ImageGroups = [];
+      
+      for (const listing of mergedResults) {
+        const s3Urls = [];
+        if (listing.photos && listing.photos.length > 0) {
+          for (const photo of listing.photos) {
+            try {
+              // Check if it's a blob URL that needs uploading
+              if (photo.url && photo.url.startsWith('blob:')) {
+                console.log(`📤 Uploading blob image for ${listing.sku}: ${photo.name}`);
+                const s3Url = await uploadBlobToS3(photo.url, photo.name || 'photo.jpg');
+                s3Urls.push(s3Url);
+              } else if (photo.url && photo.url.includes('http')) {
+                // Already an S3 URL
+                s3Urls.push(photo.url);
+              }
+            } catch (error) {
+              console.error(`❌ Failed to upload image for ${listing.sku}:`, error);
+              // Continue with other images
+            }
+          }
+        }
+        s3ImageGroups.push(s3Urls);
+      }
+      
       console.log('📤 PhotoAssignmentReview: Setting s3ImageGroups with count:', s3ImageGroups.length);
+      console.log('📤 PhotoAssignmentReview: First group S3 URLs:', s3ImageGroups[0]);
       dispatch({ type: 'SET_S3_IMAGE_GROUPS', payload: s3ImageGroups });
       
       // Also update the parent component

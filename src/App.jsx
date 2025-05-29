@@ -23,6 +23,7 @@ import LandingPage from './LandingPage';
 import LoadingSpinner from './LoadingSpinner';
 import PhotoAssignmentReview from './PhotoAssignmentReview';
 import ListingQuotaDisplay from './ListingQuotaDisplay';
+import { QuotaProvider } from './QuotaContext';
 
 // Auth0 Configuration
 const AUTH0_DOMAIN = process.env.REACT_APP_AUTH0_DOMAIN || 'listeasier.us.auth0.com';
@@ -4562,15 +4563,17 @@ function App() {
       useRefreshTokens={true}
     >
       <AuthenticationWrapper>
-        <CategoryProvider>
-          <EbayAuthProvider>
-            <AppStateProvider>
-              <BatchProvider>
-                <AppContent />
-              </BatchProvider>
-            </AppStateProvider>
-          </EbayAuthProvider>
-        </CategoryProvider>
+        <QuotaProvider>
+          <CategoryProvider>
+            <EbayAuthProvider>
+              <AppStateProvider>
+                <BatchProvider>
+                  <AppContent />
+                </BatchProvider>
+              </AppStateProvider>
+            </EbayAuthProvider>
+          </CategoryProvider>
+        </QuotaProvider>
       </AuthenticationWrapper>
     </Auth0Provider>
   );

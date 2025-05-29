@@ -9,9 +9,9 @@ import { cacheService } from './CacheService';
 import { DynamoDBClient, QueryCommand } from '@aws-sdk/client-dynamodb';
 import { unmarshall } from '@aws-sdk/util-dynamodb';
 import { fromCognitoIdentityPool } from '@aws-sdk/credential-provider-cognito-identity';
-import { listingQuotaService } from './ListingQuotaService';
 import { useAuth0 } from '@auth0/auth0-react';
 import ListingQuotaDisplay from './ListingQuotaDisplay';
+import { useQuota } from './QuotaContext';
 
 function PhotoAssignmentReview({ 
   photoListings, 
@@ -42,6 +42,7 @@ function PhotoAssignmentReview({
   const { state, dispatch } = useAppState();
   const { isAuthenticated: ebayAuthenticated, selectedPolicies } = useEbayAuth();
   const { user } = useAuth0();
+  const { checkQuotaForGeneration, updateQuotaAfterGeneration, refreshQuota } = useQuota();
   
   // Ensure categoryID is set in the state when component mounts
   useEffect(() => {
@@ -49,6 +50,17 @@ function PhotoAssignmentReview({
       dispatch({ type: 'SET_CATEGORY_ID', payload: categoryID });
     }
   }, [categoryID, state.categoryID, dispatch]);
+  
+  // Check quota on mount
+  useEffect(() => {
+    const checkInitialQuota = async () => {
+      if (user?.sub && photoListings.length > 0) {
+        const quotaCheck = await checkQuotaForGeneration(photoListings.length);
+        setQuotaInfo(quotaCheck);
+      }
+    };
+    checkInitialQuota();
+  }, [user, photoListings.length]);
   
   // Function to fetch eBay category ID (copied from FormSection)
   const fetchEbayCategoryID = async (category, subCategory) => {
@@ -184,11 +196,12 @@ function PhotoAssignmentReview({
     const existingListingIds = new Set(generatedListings.map(listing => listing.id));
     const newPhotoListings = photoListings.filter(photoListing => !existingListingIds.has(photoListing.id));
     
-    if (newPhotoListings.length > 0) {
-      generateListingsForNew(newPhotoListings);
-    } else if (initialGeneratedListings.length === 0 && photoListings.length > 0) {
-      generateListings();
-    }
+    // Don't auto-generate - let user click button to generate
+    // if (newPhotoListings.length > 0) {
+    //   generateListingsForNew(newPhotoListings);
+    // } else if (initialGeneratedListings.length === 0 && photoListings.length > 0) {
+    //   generateListings();
+    // }
   }, [photoListings]);
   
   // Update parent when generatedListings change
@@ -207,6 +220,48 @@ function PhotoAssignmentReview({
   }, [generatedListings]);
   
   // Generate listings for new photo listings (incremental)
+  const generateRemainingListings = async () => {
+    // Get the non-generated listings
+    let remainingListings = photoListings.filter(listing => {
+      return !generatedListings.some(gen => gen.id === listing.id);
+    });
+    
+    if (remainingListings.length === 0) {
+      alert('All listings have already been generated.');
+      return;
+    }
+    
+    // Check quota before generating
+    if (user?.sub) {
+      const quotaCheck = await checkQuotaForGeneration(remainingListings.length);
+      setQuotaInfo(quotaCheck);
+      
+      if (!quotaCheck.allowed && !quotaCheck.canGeneratePartial) {
+        setQuotaExceeded(true);
+        setError(`Listing quota exceeded. You have ${quotaCheck.remaining} listings remaining ${quotaCheck.isLifetime ? '' : 'this month'}. Upgrade your plan to generate more listings.`);
+        return;
+      }
+      
+      // Handle partial generation
+      if (quotaCheck.canGeneratePartial) {
+        const confirmPartial = window.confirm(
+          `You have ${quotaCheck.remaining} listings remaining in your quota. ` +
+          `Would you like to generate ${quotaCheck.remaining} out of ${remainingListings.length} remaining listings?`
+        );
+        
+        if (!confirmPartial) {
+          return;
+        }
+        
+        // Only process the number of listings allowed by quota
+        remainingListings = remainingListings.slice(0, quotaCheck.remaining);
+      }
+    }
+    
+    // Use the existing generateListingsForNew function
+    await generateListingsForNew(remainingListings);
+  };
+
   const generateListingsForNew = async (newPhotoListings) => {
     if (newPhotoListings.length === 0) return;
     
@@ -422,10 +477,7 @@ function PhotoAssignmentReview({
       // Increment quota after successful generation
       if (user?.sub && newResults.length > 0) {
         try {
-          await listingQuotaService.incrementListingCount(user.sub, newResults.length);
-          // Refresh quota info
-          const updatedQuota = await listingQuotaService.getUsageStats(user.sub);
-          setQuotaInfo(updatedQuota);
+          await updateQuotaAfterGeneration(newResults.length);
         } catch (quotaError) {
           console.error('Error updating listing quota:', quotaError);
         }
@@ -441,13 +493,29 @@ function PhotoAssignmentReview({
   const generateListings = async () => {
     // Check quota before generating
     if (user?.sub) {
-      const quotaCheck = await listingQuotaService.canGenerateListings(user.sub, photoListings.length);
+      const quotaCheck = await checkQuotaForGeneration(photoListings.length);
       setQuotaInfo(quotaCheck);
       
-      if (!quotaCheck.allowed) {
+      if (!quotaCheck.allowed && !quotaCheck.canGeneratePartial) {
         setQuotaExceeded(true);
         setError(`Listing quota exceeded. You have ${quotaCheck.remaining} listings remaining ${quotaCheck.isLifetime ? '' : 'this month'}. Upgrade your plan to generate more listings.`);
         return;
+      }
+      
+      // Handle partial generation
+      if (quotaCheck.canGeneratePartial) {
+        const confirmPartial = window.confirm(
+          `You have ${quotaCheck.remaining} listings remaining in your quota. ` +
+          `Would you like to generate ${quotaCheck.remaining} out of ${photoListings.length} listings?`
+        );
+        
+        if (!confirmPartial) {
+          return;
+        }
+        
+        // Only process the number of listings allowed by quota
+        const listingsToProcess = photoListings.slice(0, quotaCheck.remaining);
+        photoListings = listingsToProcess;
       }
     }
     
@@ -658,10 +726,7 @@ function PhotoAssignmentReview({
         try {
           const validResults = results.filter(r => !r.error);
           if (validResults.length > 0) {
-            await listingQuotaService.incrementListingCount(user.sub, validResults.length);
-            // Refresh quota info
-            const updatedQuota = await listingQuotaService.getUsageStats(user.sub);
-            setQuotaInfo(updatedQuota);
+            await updateQuotaAfterGeneration(validResults.length);
           }
         } catch (quotaError) {
           console.error('Error updating listing quota:', quotaError);
@@ -823,7 +888,7 @@ function PhotoAssignmentReview({
           <p style={{ margin: 0, color: '#666', fontSize: '14px' }}>
             {isGenerating 
               ? `Generating listings... ${generationProgress}%` 
-              : `${generatedListings.length} listings ready`}
+              : `${generatedListings.length} of ${photoListings.length} listings generated`}
           </p>
           {quotaInfo && !quotaInfo.error && (
             <p style={{ margin: '5px 0 0 0', fontSize: '12px', color: quotaInfo.remaining < 5 ? '#dc3545' : '#666' }}>
@@ -846,6 +911,22 @@ function PhotoAssignmentReview({
           >
             ← Back to Photo Assignment
           </button>
+          {!isGenerating && generatedListings.length < photoListings.length && (
+            <button
+              onClick={generateRemainingListings}
+              style={{
+                padding: '10px 20px',
+                backgroundColor: '#ffc107',
+                color: '#000',
+                border: 'none',
+                borderRadius: '6px',
+                cursor: 'pointer',
+                fontWeight: '500'
+              }}
+            >
+              🔄 Generate Remaining ({photoListings.length - generatedListings.length})
+            </button>
+          )}
           {!isGenerating && generatedListings.length > 0 && (
             <>
               <button
@@ -908,6 +989,68 @@ function PhotoAssignmentReview({
           marginBottom: '20px'
         }}>
           <strong>Error:</strong> {error}
+        </div>
+      ) : generatedListings.length === 0 && photoListings.length > 0 ? (
+        <div style={{
+          flex: 1,
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center',
+          backgroundColor: 'white',
+          borderRadius: '12px',
+          boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
+        }}>
+          <div style={{ textAlign: 'center', padding: '40px' }}>
+            <div style={{ fontSize: '64px', marginBottom: '20px' }}>📝</div>
+            <h3 style={{ marginBottom: '10px', color: '#333' }}>Ready to Generate Listings</h3>
+            <p style={{ marginBottom: '30px', color: '#666', maxWidth: '400px' }}>
+              You have {photoListings.length} photo groups ready to be converted into listings. 
+              Click the button below to generate AI-powered descriptions for all your items.
+            </p>
+            {quotaInfo && quotaInfo.remaining < photoListings.length && (
+              <div style={{
+                backgroundColor: '#fff3cd',
+                border: '1px solid #ffeaa7',
+                borderRadius: '6px',
+                padding: '12px 20px',
+                marginBottom: '20px',
+                color: '#856404',
+                fontSize: '14px'
+              }}>
+                ⚠️ You have {quotaInfo.remaining} listings remaining in your quota. 
+                Only the first {quotaInfo.remaining} listings will be generated.
+              </div>
+            )}
+            <button
+              onClick={generateListings}
+              style={{
+                padding: '16px 32px',
+                backgroundColor: '#007bff',
+                color: 'white',
+                border: 'none',
+                borderRadius: '8px',
+                fontSize: '16px',
+                fontWeight: '600',
+                cursor: 'pointer',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '8px',
+                boxShadow: '0 4px 12px rgba(0,123,255,0.3)',
+                transition: 'all 0.2s ease'
+              }}
+              onMouseEnter={(e) => {
+                e.target.style.transform = 'translateY(-2px)';
+                e.target.style.boxShadow = '0 6px 16px rgba(0,123,255,0.4)';
+              }}
+              onMouseLeave={(e) => {
+                e.target.style.transform = 'translateY(0)';
+                e.target.style.boxShadow = '0 4px 12px rgba(0,123,255,0.3)';
+              }}
+            >
+              <span>🚀</span>
+              Generate All Listings
+            </button>
+          </div>
         </div>
       ) : isGenerating ? (
         <div style={{

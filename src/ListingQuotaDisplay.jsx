@@ -1,36 +1,8 @@
-import React, { useState, useEffect } from 'react';
-import { listingQuotaService } from './ListingQuotaService';
-import { useAuth0 } from '@auth0/auth0-react';
+import React from 'react';
+import { useQuota } from './QuotaContext';
 
 function ListingQuotaDisplay({ compact = false }) {
-  const { user } = useAuth0();
-  const [quotaInfo, setQuotaInfo] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-
-  useEffect(() => {
-    const fetchQuotaInfo = async () => {
-      if (!user?.sub) return;
-
-      try {
-        setLoading(true);
-        const stats = await listingQuotaService.getUsageStats(user.sub);
-        setQuotaInfo(stats);
-        setError(null);
-      } catch (err) {
-        console.error('Error fetching quota info:', err);
-        setError('Failed to load quota information');
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchQuotaInfo();
-    
-    // Refresh every 30 seconds
-    const interval = setInterval(fetchQuotaInfo, 30000);
-    return () => clearInterval(interval);
-  }, [user]);
+  const { quotaInfo, loading, error } = useQuota();
 
   if (loading || !quotaInfo) {
     return null;

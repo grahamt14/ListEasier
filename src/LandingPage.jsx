@@ -59,7 +59,7 @@ const LandingPage = () => {
               We're working hard to bring you the best eBay listing experience.
             </p>
             <p className="construction-message">
-              Our platform will help you create listings 10x faster with AI-powered descriptions.
+              Our platform will help you create listings 57x faster with AI-powered descriptions.
             </p>
 
             {/* Coming Soon Features */}
@@ -92,7 +92,7 @@ const LandingPage = () => {
       <footer className="landing-footer minimal">
         <div className="container">
           <div className="footer-bottom">
-            <p>&copy; 2024 ListEasier. All rights reserved.</p>
+            <p>&copy; 2025 ListEasier. All rights reserved.</p>
           </div>
         </div>
       </footer>

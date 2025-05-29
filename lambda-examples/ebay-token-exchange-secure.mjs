@@ -26,7 +26,15 @@ async function getEbayCredentials(environment) {
         
         console.log('Retrieving credentials from Secrets Manager...');
         const data = await secretsManager.send(command);
-        const credentials = JSON.parse(data.SecretString);
+        console.log('Raw secret string:', data.SecretString);
+        
+        let credentials = JSON.parse(data.SecretString);
+        
+        // Check if the secret is wrapped in a key-value format
+        if (credentials['ebay-api-credentials']) {
+            console.log('Secret is in key-value format, extracting value...');
+            credentials = credentials['ebay-api-credentials'];
+        }
         
         // Cache for 5 minutes
         cachedCredentials = credentials;
@@ -102,7 +110,8 @@ export const handler = async (event) => {
         // Get credentials from Secrets Manager
         const credentials = await getEbayCredentials(environment);
         console.log('Retrieved credentials for environment:', environment);
-        console.log('Client ID:', credentials.clientId ? `${credentials.clientId.substring(0, 10)}...` : 'Not set');
+        console.log('Credentials object:', JSON.stringify(credentials));
+        console.log('Client ID:', credentials && credentials.clientId ? `${credentials.clientId.substring(0, 10)}...` : 'Not set');
 
         // Handle different actions
         if (body.action === 'getAuthUrl') {

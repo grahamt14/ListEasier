@@ -67,20 +67,43 @@ class EbayListingService {
   async createSingleListing(listingData) {
     try {
       console.log('=== CREATING EBAY LISTING ===');
+      console.log('Timestamp:', new Date().toISOString());
       console.log('SKU:', listingData.sku);
       console.log('Title:', listingData.title);
+      console.log('Description Length:', listingData.description.length);
       console.log('Price:', listingData.price);
-      console.log('Images:', listingData.imageUrls.length);
+      console.log('Quantity:', listingData.quantity);
+      console.log('Condition:', listingData.condition);
       console.log('Category ID:', listingData.categoryId);
-      console.log('Policies:', listingData.policies);
+      console.log('Location:', JSON.stringify(listingData.location));
+      
+      // Log images
+      console.log('Image URLs:', listingData.imageUrls.length);
+      listingData.imageUrls.forEach((url, index) => {
+        console.log(`  Image ${index + 1}: ${url.substring(0, 100)}...`);
+      });
+      
+      // Log policies
+      console.log('Business Policies:');
+      console.log('  Payment Policy ID:', listingData.policies.paymentPolicyId || 'Not set');
+      console.log('  Fulfillment Policy ID:', listingData.policies.fulfillmentPolicyId || 'Not set');
+      console.log('  Return Policy ID:', listingData.policies.returnPolicyId || 'Not set');
+      
+      // Log aspects
+      console.log('Aspects Data:', JSON.stringify(listingData.aspectsData, null, 2));
       
       const accessToken = await this.ebayOAuthService.getValidAccessToken();
       const environment = this.ebayOAuthService.environment;
       const marketplaceId = this.ebayOAuthService.getMarketplace();
+      const marketplaceDetails = this.ebayOAuthService.getMarketplaceDetails();
 
-      console.log('Environment:', environment);
-      console.log('Marketplace:', marketplaceId);
-      console.log('Lambda endpoint:', this.createListingEndpoint);
+      console.log('Authentication Details:');
+      console.log('  Environment:', environment);
+      console.log('  Marketplace ID:', marketplaceId);
+      console.log('  Marketplace Name:', marketplaceDetails.name);
+      console.log('  Currency:', marketplaceDetails.currency);
+      console.log('  Access Token Present:', !!accessToken);
+      console.log('  Lambda Endpoint:', this.createListingEndpoint);
 
       const requestPayload = {
         accessToken,
@@ -89,8 +112,10 @@ class EbayListingService {
         listingData
       };
 
-      console.log('Sending request to Lambda...');
+      console.log('Request Payload Size:', JSON.stringify(requestPayload).length, 'bytes');
+      console.log('Sending request to Lambda at:', new Date().toISOString());
 
+      const startTime = Date.now();
       const response = await fetch(this.createListingEndpoint, {
         method: 'POST',
         headers: {
@@ -99,33 +124,77 @@ class EbayListingService {
         },
         body: JSON.stringify(requestPayload)
       });
+      const responseTime = Date.now() - startTime;
 
-      console.log('Lambda response status:', response.status);
+      console.log(`Lambda response received in ${responseTime}ms`);
+      console.log('Lambda response status:', response.status, response.statusText);
       console.log('Lambda response headers:', Object.fromEntries(response.headers.entries()));
       
       if (!response.ok) {
+        console.error('=== LAMBDA HTTP ERROR ===');
         const errorText = await response.text();
-        console.error('Lambda HTTP error:', errorText);
+        console.error('Error Status:', response.status);
+        console.error('Error Text:', errorText);
+        console.error('Request ID:', response.headers.get('x-amzn-requestid'));
+        
+        // Try to parse error as JSON
+        try {
+          const errorJson = JSON.parse(errorText);
+          console.error('Parsed Error:', JSON.stringify(errorJson, null, 2));
+        } catch (e) {
+          console.error('Error text is not JSON');
+        }
+        
         throw new Error(`Lambda HTTP error: ${response.status} - ${errorText}`);
       }
 
-      const result = await response.json();
-      console.log('Lambda response body:', JSON.stringify(result, null, 2));
+      const resultText = await response.text();
+      console.log('Raw response length:', resultText.length, 'characters');
+      
+      let result;
+      try {
+        result = JSON.parse(resultText);
+      } catch (e) {
+        console.error('Failed to parse Lambda response as JSON:', e);
+        console.error('Raw response:', resultText.substring(0, 1000));
+        throw new Error('Invalid JSON response from Lambda');
+      }
+      
+      console.log('Lambda response structure:');
+      console.log('  Keys:', Object.keys(result));
+      console.log('  Status Code:', result.statusCode);
+      console.log('  Body Type:', typeof result.body);
 
       // Handle Lambda response format (it might be wrapped in a body property)
       let actualResult = result;
       if (result.body && typeof result.body === 'string') {
+        console.log('Response body is string, parsing...');
         try {
           actualResult = JSON.parse(result.body);
-          console.log('Parsed Lambda body:', JSON.stringify(actualResult, null, 2));
+          console.log('Parsed Lambda body successfully');
+          console.log('  Success:', actualResult.success);
+          console.log('  Keys:', Object.keys(actualResult));
         } catch (e) {
           console.error('Failed to parse Lambda response body:', e);
+          console.error('Body preview:', result.body.substring(0, 500));
           actualResult = result;
         }
+      } else if (result.body && typeof result.body === 'object') {
+        console.log('Response body is already an object');
+        actualResult = result.body;
       }
 
       if (!actualResult.success) {
-        console.error('Lambda returned failure:', actualResult);
+        console.error('=== LISTING CREATION FAILED ===');
+        console.error('Failure Response:', JSON.stringify(actualResult, null, 2));
+        console.error('Error:', actualResult.error);
+        console.error('Step:', actualResult.step);
+        console.error('Details:', actualResult.details);
+        
+        if (actualResult.ebayError) {
+          console.error('eBay Error Details:', JSON.stringify(actualResult.ebayError, null, 2));
+        }
+        
         return {
           success: false,
           error: actualResult.error || 'Unknown error occurred',
@@ -133,15 +202,21 @@ class EbayListingService {
           isDraft: actualResult.isDraft || false,
           sku: listingData.sku,
           offerId: actualResult.offerId || null,
-          step: actualResult.step || 'unknown'
+          step: actualResult.step || 'unknown',
+          ebayError: actualResult.ebayError || null,
+          timestamp: new Date().toISOString()
         };
       }
 
       // Success response
       console.log('=== LISTING CREATED SUCCESSFULLY ===');
+      console.log('Success Response:', JSON.stringify(actualResult, null, 2));
       console.log('Listing ID:', actualResult.listingId);
       console.log('Offer ID:', actualResult.offerId);
       console.log('Is Draft:', actualResult.isDraft);
+      console.log('SKU:', actualResult.sku);
+      console.log('Message:', actualResult.message);
+      console.log('Business Policy Status:', actualResult.businessPolicyStatus);
       
       return {
         success: true,
@@ -153,20 +228,31 @@ class EbayListingService {
         isDraft: actualResult.isDraft || false,
         environment: environment,
         categoryUsed: actualResult.categoryUsed || listingData.categoryId,
-        businessPolicyStatus: actualResult.businessPolicyStatus
+        businessPolicyStatus: actualResult.businessPolicyStatus,
+        timestamp: new Date().toISOString()
       };
 
     } catch (error) {
       console.error('=== ERROR IN CREATE SINGLE LISTING ===');
-      console.error('Error type:', error.constructor.name);
-      console.error('Error message:', error.message);
-      console.error('Error stack:', error.stack);
+      console.error('Timestamp:', new Date().toISOString());
+      console.error('Error Type:', error.constructor.name);
+      console.error('Error Message:', error.message);
+      console.error('Error Stack:', error.stack);
+      console.error('SKU:', listingData.sku);
+      console.error('Title:', listingData.title);
+      
+      // Log network details if available
+      if (error.cause) {
+        console.error('Error Cause:', error.cause);
+      }
       
       return {
         success: false,
         error: error.message,
         sku: listingData.sku,
-        step: 'network_error'
+        step: 'network_error',
+        errorType: error.constructor.name,
+        timestamp: new Date().toISOString()
       };
     }
   }

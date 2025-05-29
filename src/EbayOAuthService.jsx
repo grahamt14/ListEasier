@@ -18,7 +18,7 @@ class EbayOAuthService {
     };
     
     // Set environment (change to 'production' for live)
-    this.environment = 'sandbox'; // or 'production'
+    this.environment = 'production'; // or 'production'
     
     // Lambda function URLs
     this.lambdaTokenEndpoint = 'https://xospzjj5da.execute-api.us-east-2.amazonaws.com/prod/ebay-token-exchange';
@@ -53,10 +53,10 @@ class EbayOAuthService {
     console.log('REACT_APP_EBAY_RU_NAME:', process.env.REACT_APP_EBAY_RU_NAME);
     
     this.credentials = {
-      clientId: 'DavidJac-ListEasi-SBX-50e7167ce-0d788b93',
-      clientSecret: 'SBX-0e7167ce5ea2-8b89-4ac9-ba7f-5818',
+      clientId: 'DavidJac-ListEasi-PRD-f25542f2e-e59a4169',
+      clientSecret: 'PRD-25542f2e41cd-def8-4e59-b24f-3570',
       redirectUri: 'https://main.dhpq8vit86dyp.amplifyapp.com/ebay/callback',
-      ruName: 'David_Jacobs-DavidJac-ListEa-gkelan'
+      ruName: 'David_Jacobs-DavidJac-ListEa-iypllngrr'
     };
     
 this.scopes = [
@@ -478,7 +478,12 @@ this.scopes = [
     try {
       const accessToken = await this.getValidAccessToken();
       
-      console.log(`Making eBay API request via Lambda proxy to: ${endpoint}`);
+      console.log('=== EBAY API REQUEST ===');
+      console.log(`Endpoint: ${endpoint}`);
+      console.log(`Method: ${options.method || 'GET'}`);
+      console.log(`Environment: ${this.environment}`);
+      console.log(`Marketplace: ${this.getMarketplace()}`);
+      console.log(`Lambda Proxy: ${this.lambdaApiProxyEndpoint}`);
       
       const proxyRequest = {
         endpoint: endpoint,
@@ -492,6 +497,13 @@ this.scopes = [
         requestBody: options.body || null
       };
 
+      // Log request details (sanitize sensitive data)
+      console.log('Proxy Request Headers:', proxyRequest.headers);
+      if (proxyRequest.requestBody) {
+        console.log('Request Body Preview:', JSON.stringify(proxyRequest.requestBody, null, 2).substring(0, 500) + '...');
+      }
+
+      const startTime = Date.now();
       const response = await fetch(this.lambdaApiProxyEndpoint, {
         method: 'POST',
         headers: {
@@ -500,35 +512,68 @@ this.scopes = [
         },
         body: JSON.stringify(proxyRequest)
       });
+      const responseTime = Date.now() - startTime;
 
-      console.log('Lambda proxy response status:', response.status);
+      console.log(`Lambda proxy response: ${response.status} ${response.statusText} (${responseTime}ms)`);
+      console.log('Response Headers:', Object.fromEntries(response.headers.entries()));
 
       if (!response.ok) {
+        console.error('=== LAMBDA PROXY ERROR ===');
         let errorMessage = `API proxy request failed: ${response.status}`;
+        let errorBody = null;
         try {
-          const errorData = await response.json();
+          errorBody = await response.text();
+          console.error('Error Response Body:', errorBody);
+          const errorData = JSON.parse(errorBody);
           errorMessage = `API proxy request failed: ${errorData.error || errorData.message || response.statusText}`;
         } catch (e) {
-          // If we can't parse the error, use the default message
+          console.error('Failed to parse error response:', e);
+          if (errorBody) {
+            console.error('Raw error body:', errorBody);
+          }
         }
         
-        console.error('API proxy request error:', errorMessage);
         throw new Error(errorMessage);
       }
 
-      const proxyResponse = await response.json();
+      const responseText = await response.text();
+      console.log('Response body length:', responseText.length);
       
-      // LOG THE FULL RESPONSE FOR DEBUGGING
-      console.log('Full proxy response:', JSON.stringify(proxyResponse, null, 2));
+      let proxyResponse;
+      try {
+        proxyResponse = JSON.parse(responseText);
+      } catch (e) {
+        console.error('Failed to parse proxy response as JSON:', e);
+        console.error('Raw response text:', responseText.substring(0, 1000));
+        throw new Error('Invalid JSON response from Lambda proxy');
+      }
+      
+      // Log the full response structure for debugging
+      console.log('=== PROXY RESPONSE STRUCTURE ===');
+      console.log('Success:', proxyResponse.success);
+      console.log('Status Code:', proxyResponse.statusCode);
+      if (proxyResponse.error) {
+        console.log('Error:', proxyResponse.error);
+      }
+      if (proxyResponse.data) {
+        console.log('Data keys:', Object.keys(proxyResponse.data));
+        console.log('Data preview:', JSON.stringify(proxyResponse.data, null, 2).substring(0, 500) + '...');
+      }
       
       // Check if the proxied request was successful
       if (!proxyResponse.success) {
+        console.error('=== EBAY API ERROR ===');
+        console.error('Status Code:', proxyResponse.statusCode);
+        console.error('Error:', proxyResponse.error);
+        console.error('Full Error Data:', JSON.stringify(proxyResponse.data, null, 2));
+        
         // Check for auth errors
         if (proxyResponse.statusCode === 401) {
-          console.log('Received 401 from eBay, attempting token refresh...');
+          console.log('Authentication error detected, attempting token refresh...');
           
           try {
             await this.refreshAccessToken();
+            console.log('Token refresh successful, retrying original request...');
             // Retry the request with new token
             return this.makeApiRequest(endpoint, options);
           } catch (refreshError) {
@@ -537,23 +582,41 @@ this.scopes = [
           }
         }
         
-        // LOG MORE DETAILS ABOUT THE ERROR
-        console.error('eBay API error details:', {
-          statusCode: proxyResponse.statusCode,
-          error: proxyResponse.error,
-          data: proxyResponse.data
-        });
+        // Extract detailed error information
+        let detailedError = proxyResponse.error || 'Unknown error';
+        if (proxyResponse.data) {
+          if (proxyResponse.data.errors && Array.isArray(proxyResponse.data.errors)) {
+            const errorDetails = proxyResponse.data.errors.map(e => ({
+              errorId: e.errorId,
+              category: e.category,
+              message: e.message || e.longMessage,
+              parameters: e.parameters
+            }));
+            console.error('eBay API Errors:', errorDetails);
+            detailedError = errorDetails.map(e => e.message).join('; ');
+          } else if (proxyResponse.data.error_description) {
+            detailedError = proxyResponse.data.error_description;
+          }
+        }
         
-        const error = new Error(`eBay API error: ${proxyResponse.error || JSON.stringify(proxyResponse.data) || 'Unknown error'}`);
+        const error = new Error(`eBay API error: ${detailedError}`);
         error.statusCode = proxyResponse.statusCode;
         error.data = proxyResponse.data;
+        error.endpoint = endpoint;
         throw error;
       }
 
-      console.log('API request successful');
+      console.log('=== API REQUEST SUCCESSFUL ===');
+      console.log(`Total request time: ${responseTime}ms`);
       return proxyResponse.data;
     } catch (error) {
-      console.error('API request error:', error);
+      console.error('=== API REQUEST EXCEPTION ===');
+      console.error('Error Type:', error.constructor.name);
+      console.error('Error Message:', error.message);
+      console.error('Error Stack:', error.stack);
+      if (error.data) {
+        console.error('Error Data:', JSON.stringify(error.data, null, 2));
+      }
       throw error;
     }
   }

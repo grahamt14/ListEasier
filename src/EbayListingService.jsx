@@ -91,10 +91,8 @@ class EbayListingService {
       throw new Error('Valid category ID is required for eBay listing');
     }
 
-    // Get dynamic location but format it correctly for eBay
-    const location = await this.getUserLocation();
-    
     // Auto-select business policies if not provided
+    // Note: Location will come from eBay fulfillment policy, not from separate location field
     let finalPolicies = { ...selectedPolicies };
     
     if (!finalPolicies.fulfillmentPolicyId || !finalPolicies.paymentPolicyId || !finalPolicies.returnPolicyId) {
@@ -141,18 +139,8 @@ class EbayListingService {
         fulfillmentPolicyId: finalPolicies.fulfillmentPolicyId,
         returnPolicyId: finalPolicies.returnPolicyId || null
       },
-      aspectsData: aspectsData,
-      // Try different location format
-      availability: {
-        shipToLocationAvailability: {
-          quantity: 1
-        }
-      },
-      // Add location as pickupAtLocationAvailability instead
-      location: {
-        countryCode: location.country,
-        postalCode: location.postalCode
-      }
+      aspectsData: aspectsData
+      // Removed location field - eBay should get location from fulfillment policy or merchant account
     };
   }
 

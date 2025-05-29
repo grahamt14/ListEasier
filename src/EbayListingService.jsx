@@ -94,9 +94,37 @@ class EbayListingService {
     // Get dynamic location but format it correctly for eBay
     const location = await this.getUserLocation();
     
-    // Validate fulfillment policy is present
-    if (!selectedPolicies.fulfillmentPolicyId) {
-      throw new Error('Fulfillment policy is required for eBay listing');
+    // Auto-select business policies if not provided
+    let finalPolicies = { ...selectedPolicies };
+    
+    if (!finalPolicies.fulfillmentPolicyId || !finalPolicies.paymentPolicyId || !finalPolicies.returnPolicyId) {
+      console.log('Missing business policies, attempting to auto-select...');
+      try {
+        const businessPolicies = await this.ebayOAuthService.getBusinessPolicies();
+        
+        // Auto-select first available policy of each type
+        if (!finalPolicies.paymentPolicyId && businessPolicies.paymentPolicies?.length > 0) {
+          finalPolicies.paymentPolicyId = businessPolicies.paymentPolicies[0].paymentPolicyId;
+          console.log('Auto-selected payment policy:', finalPolicies.paymentPolicyId);
+        }
+        
+        if (!finalPolicies.fulfillmentPolicyId && businessPolicies.fulfillmentPolicies?.length > 0) {
+          finalPolicies.fulfillmentPolicyId = businessPolicies.fulfillmentPolicies[0].fulfillmentPolicyId;
+          console.log('Auto-selected fulfillment policy:', finalPolicies.fulfillmentPolicyId);
+        }
+        
+        if (!finalPolicies.returnPolicyId && businessPolicies.returnPolicies?.length > 0) {
+          finalPolicies.returnPolicyId = businessPolicies.returnPolicies[0].returnPolicyId;
+          console.log('Auto-selected return policy:', finalPolicies.returnPolicyId);
+        }
+      } catch (error) {
+        console.warn('Could not auto-select business policies:', error);
+      }
+    }
+    
+    // Fulfillment policy is required by eBay
+    if (!finalPolicies.fulfillmentPolicyId) {
+      throw new Error('No fulfillment policy available. Please set up business policies in your eBay account first.');
     }
     
     return {
@@ -109,9 +137,9 @@ class EbayListingService {
       imageUrls: validImageUrls,
       condition: 'NEW',
       policies: {
-        paymentPolicyId: selectedPolicies.paymentPolicyId || null,
-        fulfillmentPolicyId: selectedPolicies.fulfillmentPolicyId,
-        returnPolicyId: selectedPolicies.returnPolicyId || null
+        paymentPolicyId: finalPolicies.paymentPolicyId || null,
+        fulfillmentPolicyId: finalPolicies.fulfillmentPolicyId,
+        returnPolicyId: finalPolicies.returnPolicyId || null
       },
       aspectsData: aspectsData,
       // Try different location format

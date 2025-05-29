@@ -19,7 +19,10 @@ function BatchPreviewSection({ onShowListingManager, currentBatch, onCsvDownload
   // Updated function to check if eBay listings can be created
   const canCreateEbayListings = () => {
     const hasValidListings = responseData.some(item => item && !item.error);
-    const hasImages = imageGroups.some(group => group && group.length > 0);
+    // In batch mode with photo assignment, check s3ImageGroups instead of imageGroups
+    const hasImages = currentBatch && s3ImageGroups ? 
+      s3ImageGroups.some(group => group && group.length > 0) :
+      imageGroups.some(group => group && group.length > 0);
     
     // In batch mode, we don't require categoryID since it can be set differently
     if (currentBatch) {
@@ -714,6 +717,7 @@ Action(SiteID=US|Country=US|Currency=USD|Version=1193|CC=UTF-8),Custom label (SK
     ebayAuthenticated,
     hasValidListings,
     hasImages: imageGroups.some(group => group && group.length > 0),
+    hasS3Images: s3ImageGroups && s3ImageGroups.some(group => group && group.length > 0),
     categoryID,
     currentBatch: !!currentBatch,
     canCreateEbayListings: canCreateEbayListings()

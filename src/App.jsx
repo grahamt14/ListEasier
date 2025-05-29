@@ -3925,7 +3925,10 @@ function BatchEditor() {
           </label>
           
           <button
-            onClick={() => setShowPhotoReview(true)}
+            onClick={() => {
+              console.log('🔍 Review & Finalize clicked, setting showPhotoReview to true');
+              setShowPhotoReview(true);
+            }}
             style={{
               padding: '10px 20px',
               backgroundColor: '#28a745',
@@ -3981,7 +3984,7 @@ function BatchEditor() {
             onEbayListingsCreated={handleEbayListingsCreated}
           />
         </main>
-      ) : viewMode === 'assignment' && !showPhotoReview ? (
+      ) : (console.log('🔍 Render check: viewMode=', viewMode, 'showPhotoReview=', showPhotoReview), viewMode === 'assignment' && !showPhotoReview) ? (
         // Photo Assignment Interface
         <div style={{ 
           padding: '0',
@@ -4351,7 +4354,7 @@ function BatchEditor() {
             onEbayListingsCreated={handleEbayListingsCreated}
           />
         </div>
-      ) : showPhotoReview ? (
+      ) : (console.log('🔍 Checking showPhotoReview condition:', showPhotoReview), showPhotoReview) ? (
         <PhotoAssignmentReview
           photoListings={photoListings}
           generatedListings={generatedListings}

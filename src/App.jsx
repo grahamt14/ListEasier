@@ -499,6 +499,7 @@ const compressBatchForStorage = (batch) => {
           batch.appState.fieldSelections = items.settings.fieldSelections || {};
           batch.appState.processedGroupIndices = items.settings.processedGroupIndices || [];
           batch.appState.categoryID = items.settings.categoryID || null;
+          batch.appState.categoryTemplate = items.settings.categoryTemplate || null;
           batch.appState.imageRotations = items.settings.imageRotations || {};
         }
         
@@ -658,6 +659,7 @@ const compressBatchForStorage = (batch) => {
         price: String(batchData.salePrice || ''),
         sku: String(batchData.sku || ''),
         categoryID: null,
+        categoryTemplate: null,
         isLoading: false,
         isDirty: false,
         totalChunks: 0,
@@ -922,6 +924,7 @@ const compressBatchForStorage = (batch) => {
             fieldSelections: appState.fieldSelections,
             processedGroupIndices: appState.processedGroupIndices || [],
             categoryID: appState.categoryID || null,
+            categoryTemplate: appState.categoryTemplate || null,
             imageRotations: appState.imageRotations || {},
             ttl: mainItem.ttl
           })

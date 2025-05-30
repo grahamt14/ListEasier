@@ -84,6 +84,7 @@ const EbayListingManager = ({ onClose, onListingsCreated }) => {
         s3ImageGroups: state.s3ImageGroups,
         groupMetadata: state.groupMetadata,
         categoryId: state.categoryID,
+        categoryTemplate: state.categoryTemplate,
         selectedPolicies: selectedPolicies,
         progressCallback: (current, total) => {
           setListingStatus(prev => ({

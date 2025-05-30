@@ -139,6 +139,10 @@ case 'SET_PROCESSING_STATUS':
       console.log('🔧 StateContext: SET_CATEGORY_ID action received with payload:', action.payload);
       return { ...state, categoryID: action.payload, isDirty: true };
       
+    case 'SET_CATEGORY_TEMPLATE':
+      console.log('🔧 StateContext: SET_CATEGORY_TEMPLATE action received');
+      return { ...state, categoryTemplate: action.payload, isDirty: true };
+      
     case 'SET_FIELD_SELECTIONS':
       return { 
         ...state, 

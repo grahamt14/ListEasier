@@ -60,7 +60,7 @@ class EbayListingService {
   /**
    * Format listing data for eBay API
    */
-  async formatListingForEbay(listing, imageUrls, metadata, categoryId, selectedPolicies) {
+  async formatListingForEbay(listing, imageUrls, metadata, categoryId, selectedPolicies, categoryTemplate) {
     // Clean and validate image URLs
     const validImageUrls = imageUrls
       .filter(url => url && typeof url === 'string' && url.includes('http'))
@@ -139,7 +139,8 @@ class EbayListingService {
         fulfillmentPolicyId: finalPolicies.fulfillmentPolicyId,
         returnPolicyId: finalPolicies.returnPolicyId || null
       },
-      aspectsData: aspectsData
+      aspectsData: aspectsData,
+      categoryTemplate: categoryTemplate || null
       // Removed location field - eBay should get location from fulfillment policy or merchant account
     };
   }
@@ -195,6 +196,11 @@ class EbayListingService {
         listingData
       };
 
+      console.log('=== COMPLETE REQUEST PAYLOAD ===');
+      console.log('Full payload being sent to eBay:');
+      console.log(JSON.stringify(requestPayload, null, 2));
+      console.log('=== END PAYLOAD ===');
+      
       console.log('Request Payload Size:', JSON.stringify(requestPayload).length, 'bytes');
       console.log('Sending request to Lambda at:', new Date().toISOString());
 
@@ -349,6 +355,7 @@ class EbayListingService {
     s3ImageGroups,
     groupMetadata,
     categoryId,
+    categoryTemplate,
     selectedPolicies,
     progressCallback = () => {}
   }) {
@@ -413,7 +420,8 @@ class EbayListingService {
           imageUrls,
           metadata,
           categoryId,
-          selectedPolicies
+          selectedPolicies,
+          categoryTemplate
         );
 
         console.log('Formatted listing data for eBay:', {
@@ -529,6 +537,7 @@ class EbayListingService {
       s3ImageGroups,
       groupMetadata,
       categoryID,
+      categoryTemplate,
       selectedPolicies
     } = appState;
 
@@ -560,7 +569,8 @@ class EbayListingService {
       imageUrls,
       metadata,
       categoryID,
-      selectedPolicies
+      selectedPolicies,
+      categoryTemplate
     );
 
     return this.createSingleListing(listingData);

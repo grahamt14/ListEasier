@@ -69,18 +69,18 @@ function PhotoAssignmentReview({
     checkInitialQuota();
   }, [user, photoListings.length]);
   
-  // Function to fetch eBay category ID (copied from FormSection)
-  const fetchEbayCategoryID = async (category, subCategory) => {
+  // Function to fetch eBay category data including ID and CSV template
+  const fetchEbayCategoryData = async (category, subCategory) => {
     if (!category || category === "--" || !subCategory || subCategory === "--") {
       return null;
     }
     
     try {
-      const cacheKey = `ebay_category_${category}_${subCategory}`;
-      const cachedCategoryID = cacheService.get(cacheKey);
+      const cacheKey = `ebay_category_data_${category}_${subCategory}`;
+      const cachedCategoryData = cacheService.get(cacheKey);
       
-      if (cachedCategoryID !== null) {
-        return cachedCategoryID;
+      if (cachedCategoryData !== null) {
+        return cachedCategoryData;
       }
       
       // AWS Configuration
@@ -109,11 +109,14 @@ function PhotoAssignmentReview({
       
       if (result.Items && result.Items.length > 0) {
         const item = unmarshall(result.Items[0]);
-        const categoryID = item.EbayCategoryID || null;
+        const categoryData = {
+          categoryID: item.EbayCategoryID || null,
+          exportCSV: item.ExportCSV || null
+        };
         
         // Cache for 1 hour
-        cacheService.set(cacheKey, categoryID, 60 * 60 * 1000, 'ebayCategories');
-        return categoryID;
+        cacheService.set(cacheKey, categoryData, 60 * 60 * 1000, 'ebayCategories');
+        return categoryData;
       }
       
       // Fallback: try with just category
@@ -131,15 +134,18 @@ function PhotoAssignmentReview({
       
       if (fallbackResult.Items && fallbackResult.Items.length > 0) {
         const fallbackItem = unmarshall(fallbackResult.Items[0]);
-        const fallbackCategoryID = fallbackItem.EbayCategoryID || null;
-        cacheService.set(cacheKey, fallbackCategoryID, 60 * 60 * 1000, 'ebayCategories');
-        return fallbackCategoryID;
+        const fallbackCategoryData = {
+          categoryID: fallbackItem.EbayCategoryID || null,
+          exportCSV: fallbackItem.ExportCSV || null
+        };
+        cacheService.set(cacheKey, fallbackCategoryData, 60 * 60 * 1000, 'ebayCategories');
+        return fallbackCategoryData;
       }
       
       cacheService.set(cacheKey, null, 60 * 60 * 1000, 'ebayCategories');
       return null;
     } catch (error) {
-      console.error('Error in fetchEbayCategoryID:', error);
+      console.error('Error in fetchEbayCategoryData:', error);
       throw error;
     }
   };
@@ -150,10 +156,16 @@ function PhotoAssignmentReview({
       if (category && subCategory && !state.categoryID) {
         console.log('🔍 PhotoAssignmentReview: Fetching eBay categoryID for:', category, subCategory);
         try {
-          const fetchedCategoryID = await fetchEbayCategoryID(category, subCategory);
+          const categoryData = await fetchEbayCategoryData(category, subCategory);
+          const fetchedCategoryID = categoryData?.categoryID;
+          const categoryTemplate = categoryData?.exportCSV;
           if (fetchedCategoryID) {
             console.log('✅ PhotoAssignmentReview: Setting categoryID:', fetchedCategoryID);
             dispatch({ type: 'SET_CATEGORY_ID', payload: fetchedCategoryID });
+          }
+          if (categoryTemplate) {
+            console.log('✅ PhotoAssignmentReview: Setting categoryTemplate');
+            dispatch({ type: 'SET_CATEGORY_TEMPLATE', payload: categoryTemplate });
           }
         } catch (error) {
           console.error('Error fetching eBay category ID:', error);

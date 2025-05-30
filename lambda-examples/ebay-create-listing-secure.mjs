@@ -443,9 +443,29 @@ export const handler = async (event) => {
             listingEnhancements: []
         };
 
-        // Only add merchantLocationKey if one was found/created
+        // IMPORTANT: merchantLocationKey is REQUIRED for publishing to work
+        // Without this, you'll get "No Item.Country exists" error
         if (merchantLocationResult.merchantLocationKey) {
             offer.merchantLocationKey = merchantLocationResult.merchantLocationKey;
+            console.log('Setting merchantLocationKey on offer:', merchantLocationResult.merchantLocationKey);
+        } else {
+            console.error('WARNING: No merchantLocationKey available - this WILL cause publish to fail!');
+            console.error('The "No Item.Country exists" error occurs when merchantLocationKey is missing');
+            // Cannot publish without a merchant location
+            // Return error immediately instead of trying to continue
+            return {
+                statusCode: 400,
+                headers: corsHeaders,
+                body: JSON.stringify({
+                    success: false,
+                    error: 'Unable to create or find a merchant location. eBay requires a valid location to publish listings.',
+                    details: {
+                        message: 'Merchant location setup failed',
+                        suggestion: 'Please create at least one merchant location in your eBay account before creating listings'
+                    },
+                    step: 'merchant_location_setup'
+                })
+            };
         }
 
         // Add business policies only if available and valid
@@ -1010,20 +1030,25 @@ async function setupMerchantLocation(hostname, accessToken, marketplaceId, locat
         console.log('No merchant locations found, attempting to create default US location...');
         const timestamp = Date.now();
         const defaultLocation = {
-            name: `Auto Location ${timestamp}`,
             merchantLocationKey: `AUTO_LOC_${timestamp}`,
+            name: `Auto Location ${timestamp}`,
             locationTypes: ['WAREHOUSE'],
-            address: {
-                addressLine1: '123 Main St',
-                city: 'New York',
-                stateOrProvince: 'NY',
-                postalCode: '10001',
-                country: 'US'
+            location: {
+                address: {
+                    addressLine1: '123 Main St',
+                    city: 'New York',
+                    stateOrProvince: 'NY',
+                    postalCode: '10001',
+                    country: 'US'
+                }
             },
-            phone: '555-123-4567',
-            locationInstructions: 'Auto-generated location for eBay listings'
+            locationInstructions: 'Auto-generated location for eBay listings',
+            locationAdditionalInformation: 'Default location for eBay listings',
+            locationWebUrl: '',
+            phone: '555-123-4567'
         };
 
+        console.log('Creating merchant location with key:', defaultLocation.merchantLocationKey);
         const createLocationResponse = await makeEbayRequestWithRetry({
             hostname,
             path: '/sell/inventory/v1/location/' + encodeURIComponent(defaultLocation.merchantLocationKey),

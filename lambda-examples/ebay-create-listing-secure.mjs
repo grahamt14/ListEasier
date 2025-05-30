@@ -69,24 +69,32 @@ function parseCategoryTemplate(csvTemplate) {
             return { aspects: {}, requiredFields: [] };
         }
         
+        // The CSV template format from eBay has 3 lines:
+        // Line 1: Headers (field names)
+        // Line 2: Required fields marked with "Required"
+        // Line 3: Default values (usually empty)
         const headers = lines[0].split(',').map(h => h.trim());
-        const values = lines[1].split(',').map(v => v.trim());
+        const requiredLine = lines.length > 1 ? lines[1].split(',').map(v => v.trim()) : [];
+        const values = lines.length > 2 ? lines[2].split(',').map(v => v.trim()) : [];
         
         const aspects = {};
         const requiredFields = [];
         
         headers.forEach((header, index) => {
-            const cleanHeader = header.replace(/"/g, '');
-            const isRequired = cleanHeader.includes('*');
-            const fieldName = cleanHeader.replace('*', '').trim();
+            const cleanHeader = header.replace(/"/g, '').replace('*', '').trim();
+            
+            // Check if this field is required (marked with * in header or "Required" in requiredLine)
+            const isRequiredByAsterisk = header.includes('*');
+            const isRequiredByLine = requiredLine[index]?.toLowerCase().includes('required');
+            const isRequired = isRequiredByAsterisk || isRequiredByLine;
             
             if (isRequired) {
-                requiredFields.push(fieldName);
+                requiredFields.push(cleanHeader);
             }
             
             // Check if this is a custom aspect (starts with 'C:')
-            if (fieldName.startsWith('C:')) {
-                const aspectName = fieldName.substring(2); // Remove 'C:' prefix
+            if (cleanHeader.startsWith('C:')) {
+                const aspectName = cleanHeader.substring(2); // Remove 'C:' prefix
                 const value = values[index]?.replace(/"/g, '').trim();
                 
                 // Only add aspect if it has a value
@@ -292,15 +300,25 @@ export const handler = async (event) => {
         // Parse the CSV template to get dynamic aspects
         const { aspects: templateAspects, requiredFields } = parseCategoryTemplate(categoryTemplate);
         
-        // Merge template aspects with provided aspects (template aspects take precedence)
+        // Log template parsing results
+        console.log('Template parsing results:', {
+            hasTemplate: !!categoryTemplate,
+            templateAspectsCount: Object.keys(templateAspects).length,
+            templateAspects: templateAspects
+        });
+        
+        // Merge template aspects with provided aspects (provided aspects take precedence for user data)
         const mergedAspects = {
-            ...aspectsData,
-            ...templateAspects
+            ...templateAspects,  // Template defaults first
+            ...aspectsData       // User-provided data overwrites template defaults
         };
         
-        // Add default aspects if not provided by template
-        if (!mergedAspects['Country/Region of Manufacture'] && !mergedAspects['Country']) {
+        // Add default aspects if not provided by template or user
+        // eBay requires both 'Country' and 'Country/Region of Manufacture' for some categories
+        if (!mergedAspects['Country/Region of Manufacture']) {
             mergedAspects['Country/Region of Manufacture'] = ['United States'];
+        }
+        if (!mergedAspects['Country']) {
             mergedAspects['Country'] = ['United States'];
         }
         
@@ -347,8 +365,10 @@ export const handler = async (event) => {
                 imageUrls: validImageUrls,
                 aspects: mergedAspects
             },
-            // Add location information to inventory item
+            // Add location and country information to inventory item
             locale: 'en_US',
+            // Add country field that eBay might be looking for
+            country: 'US',
             packageWeightAndSize: {
                 dimensions: {
                     height: 1,
@@ -488,7 +508,7 @@ export const handler = async (event) => {
                     {
                         type: 'STRING', 
                         name: 'Country',
-                        value: 'US'
+                        value: 'United States'
                     }
                 ]
             };
@@ -522,7 +542,7 @@ export const handler = async (event) => {
                     {
                         type: 'STRING', 
                         name: 'Country',
-                        value: 'US'
+                        value: 'United States'
                     }
                 ]
             };
@@ -540,6 +560,9 @@ export const handler = async (event) => {
         console.log('=== OFFER PAYLOAD BEING SENT TO EBAY ===');
         console.log('Full offer object:');
         console.log(JSON.stringify(offer, null, 2));
+        console.log('Inventory item aspects:', JSON.stringify(mergedAspects, null, 2));
+        console.log('Has Country aspect:', !!mergedAspects['Country']);
+        console.log('Country aspect value:', mergedAspects['Country']);
         console.log('=== END OFFER PAYLOAD ===');
 
         const offerResponse = await makeEbayRequestWithRetry({
@@ -616,6 +639,13 @@ export const handler = async (event) => {
 
         // Step 9: Publish offer (create listing)
         console.log('Step 9: Publishing offer...');
+        console.log('Publishing offer with ID:', offerId);
+        console.log('Inventory item had country:', inventoryItem.country);
+        console.log('Inventory aspects had Country:', mergedAspects['Country']);
+        console.log('Inventory aspects had Country/Region:', mergedAspects['Country/Region of Manufacture']);
+        
+        // The publish endpoint typically requires an empty body
+        const publishBody = {};
         
         const publishResponse = await makeEbayRequestWithRetry({
             hostname,
@@ -628,7 +658,7 @@ export const handler = async (event) => {
                 'X-EBAY-C-MARKETPLACE-ID': marketplaceId,
                 'Content-Language': 'en-US'
             },
-            body: {}
+            body: publishBody
         });
         
         if (!publishResponse.success) {
